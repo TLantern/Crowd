@@ -35,16 +35,6 @@
 			path = Crowd;
 			sourceTree = "<group>";
 		};
-		3549F84E2EA49FF000AADFB0 /* CrowdTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = CrowdTests;
-			sourceTree = "<group>";
-		};
-		3549F8582EA49FF000AADFB0 /* CrowdUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = CrowdUITests;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,8 +66,6 @@
 			isa = PBXGroup;
 			children = (
 				3549F8402EA49FED00AADFB0 /* Crowd */,
-				3549F84E2EA49FF000AADFB0 /* CrowdTests */,
-				3549F8582EA49FF000AADFB0 /* CrowdUITests */,
 				3549F83F2EA49FED00AADFB0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -130,9 +118,6 @@
 			dependencies = (
 				3549F84D2EA49FF000AADFB0 /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				3549F84E2EA49FF000AADFB0 /* CrowdTests */,
-			);
 			name = CrowdTests;
 			packageProductDependencies = (
 			);
@@ -152,9 +137,6 @@
 			);
 			dependencies = (
 				3549F8572EA49FF000AADFB0 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				3549F8582EA49FF000AADFB0 /* CrowdUITests */,
 			);
 			name = CrowdUITests;
 			packageProductDependencies = (
