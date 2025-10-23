@@ -52,7 +52,7 @@ struct UserCardView: View {
                 }) {
                     Image(systemName: "person.badge.plus")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 36, height: 36)
                         .background(.ultraThinMaterial, in: Circle())
                 }

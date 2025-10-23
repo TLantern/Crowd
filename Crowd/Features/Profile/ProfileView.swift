@@ -41,31 +41,81 @@ private struct Presentation75Detent: ViewModifier {
 struct ProfileView: View {
     @ObservedObject var viewModel: ProfileViewModel
     @State private var showShareSheet = false
+    @State private var showInterestPicker = false
+    @State private var showImagePicker = false
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 20) {
-                identityBlock
-                statsRow
-                tagsSection
-                interactionBar
-                mutualsSection
-                gallerySection
-                suggestedConnectionsSection
+        ZStack(alignment: .topTrailing) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
+                    identityBlock
+                    statsRow
+                    tagsSection
+                    interactionBar
+                    mutualsSection
+                    gallerySection
+                    suggestedConnectionsSection
+                }
+                .padding(16)
+            }
+            
+            // Edit Mode Toggle Button
+            Button(action: {
+                viewModel.toggleEditMode()
+            }) {
+                Image(systemName: viewModel.isEditMode ? "checkmark.circle.fill" : "pencil.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(viewModel.isEditMode ? Color.green : Color.accentColor)
+                    .background(Circle().fill(.ultraThinMaterial).frame(width: 44, height: 44))
             }
             .padding(16)
+        }
+        .sheet(isPresented: $showImagePicker) {
+            ProfileImagePicker(selectedImage: $viewModel.profileImage)
+        }
+        .sheet(isPresented: $showInterestPicker) {
+            InterestPickerView(viewModel: viewModel)
         }
     }
 
     // MARK: - Identity Block (Header)
     private var identityBlock: some View {
         VStack(spacing: 10) {
-            AvatarView(
-                name: viewModel.displayName,
-                color: viewModel.avatarColor,
-                size: 90,
-                showOnlineStatus: viewModel.isActiveNow
-            )
+            ZStack(alignment: .bottom) {
+                if let profileImage = viewModel.profileImage {
+                    Image(uiImage: profileImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 90, height: 90)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 2))
+                } else {
+                    AvatarView(
+                        name: viewModel.displayName,
+                        color: viewModel.avatarColor,
+                        size: 90,
+                        showOnlineStatus: viewModel.isActiveNow
+                    )
+                }
+                
+                if viewModel.isEditMode {
+                    Button(action: {
+                        showImagePicker = true
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 10))
+                            Text("Edit")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.7), in: Capsule())
+                    }
+                    .offset(y: 8)
+                }
+            }
             
             Text(viewModel.handle)
                 .font(.system(size: 18, weight: .bold))
@@ -95,7 +145,7 @@ struct ProfileView: View {
     private var statsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                statCard(title: "Hosting", value: "\(viewModel.hostedCount)")
+                statCard(title: "Hosted", value: "\(viewModel.hostedCount)")
                 statCard(title: "Joined", value: "\(viewModel.joinedCount)")
                 statCard(title: "Upcoming", value: "\(viewModel.upcomingEventsCount)")
                 statCard(title: "Friends", value: "\(viewModel.friendsCount)")
@@ -124,8 +174,20 @@ struct ProfileView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(viewModel.tags, id: \.self) { tag in
-                        TagPillView(tag: tag)
+                    ForEach(viewModel.interests) { interest in
+                        TagPillView(
+                            interest: interest,
+                            isEditMode: viewModel.isEditMode,
+                            onDelete: {
+                                viewModel.removeInterest(interest)
+                            }
+                        )
+                    }
+                    
+                    if viewModel.isEditMode {
+                        AddInterestPillView {
+                            showInterestPicker = true
+                        }
                     }
                 }
             }
@@ -214,7 +276,7 @@ struct ProfileView: View {
     // MARK: - Gallery Section
     private var gallerySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Events")
+            Text("Hosted Events")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
             

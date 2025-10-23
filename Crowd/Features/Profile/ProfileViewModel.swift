@@ -32,10 +32,14 @@ final class ProfileViewModel: ObservableObject {
     @Published var friendsCount: Int
     @Published var avatarColor: Color
     @Published var lastActive: Date
-    @Published var tags: [String]
+    @Published var interests: [Interest]
     @Published var mutuals: [MiniUser]
     @Published var gallery: [CrowdEvent]
     @Published var suggestedUsers: [MiniUser]
+    @Published var isEditMode: Bool = false
+    @Published var profileImage: UIImage?
+
+    let availableInterests: [Interest] = Interest.allInterests
 
     init(displayName: String,
          handle: String,
@@ -49,7 +53,7 @@ final class ProfileViewModel: ObservableObject {
          friendsCount: Int,
          avatarColor: Color = .blue,
          lastActive: Date = Date(),
-         tags: [String] = [],
+         interests: [Interest] = [],
          mutuals: [MiniUser] = [],
          gallery: [CrowdEvent] = [],
          suggestedUsers: [MiniUser] = []) {
@@ -65,7 +69,7 @@ final class ProfileViewModel: ObservableObject {
         self.friendsCount = friendsCount
         self.avatarColor = avatarColor
         self.lastActive = lastActive
-        self.tags = tags
+        self.interests = interests
         self.mutuals = mutuals
         self.gallery = gallery
         self.suggestedUsers = suggestedUsers
@@ -102,6 +106,39 @@ final class ProfileViewModel: ObservableObject {
         default: return "Mythic"
         }
     }
+    
+    var unselectedInterests: [Interest] {
+        availableInterests.filter { interest in
+            !interests.contains(where: { $0.id == interest.id })
+        }
+    }
+    
+    // MARK: - Edit Mode Methods
+    func toggleEditMode() {
+        withAnimation(.spring(response: 0.3)) {
+            isEditMode.toggle()
+        }
+    }
+    
+    func addInterest(_ interest: Interest) {
+        guard !interests.contains(where: { $0.id == interest.id }) else { return }
+        withAnimation(.spring(response: 0.3)) {
+            interests.append(interest)
+        }
+    }
+    
+    func removeInterest(_ interest: Interest) {
+        withAnimation(.spring(response: 0.3)) {
+            interests.removeAll(where: { $0.id == interest.id })
+        }
+    }
+    
+    func updateProfileImage(_ image: UIImage) {
+        self.profileImage = image
+        // TODO: Upload to Firebase Storage
+        // let url = try await FirebaseService.shared.uploadProfileImage(image)
+        // Update user profile with new image URL
+    }
 
     // MARK: - Mock Data
     static let mock = ProfileViewModel(
@@ -117,7 +154,13 @@ final class ProfileViewModel: ObservableObject {
         friendsCount: 47,
         avatarColor: .cyan,
         lastActive: Date().addingTimeInterval(-3600), // 1 hour ago
-        tags: ["Tech", "Music", "Sports", "Food", "Art"],
+        interests: [
+            Interest(emoji: "💻", name: "Tech"),
+            Interest(emoji: "🎵", name: "Music"),
+            Interest(emoji: "🏀", name: "Basketball"),
+            Interest(emoji: "🍕", name: "Food"),
+            Interest(emoji: "🎨", name: "Art")
+        ],
         mutuals: [
             MiniUser(id: "1", name: "Sarah Chen", avatarColor: .purple, tags: ["Music", "Art"], mutualFriendsCount: 12),
             MiniUser(id: "2", name: "Marcus Webb", avatarColor: .orange, tags: ["Sports", "Tech"], mutualFriendsCount: 8),
