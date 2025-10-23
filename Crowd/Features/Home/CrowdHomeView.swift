@@ -26,9 +26,14 @@ struct CrowdHomeView: View {
     @State private var route: OverlayRoute = .none
     @State private var overlayPresented = false
     @State private var overlaySnapIndex = 0 // 0 = peek, 1 = open
+    
+    // MARK: - Floating button navigation
+    @State private var showMessages = false
+    @State private var showCalendar = false
 
     var body: some View {
-        ZStack {
+        NavigationStack {
+            ZStack {
             // === MAP ===
             Map(position: $cameraPosition)
                 .mapControls { MapCompass() }
@@ -162,6 +167,20 @@ struct CrowdHomeView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 20)
                 }
+                
+                // === FLOATING GLASS BUTTONS ===
+                VStack(alignment: .trailing, spacing: 16) {
+                    GlassIconButton(systemName: "message.fill") {
+                        showMessages = true
+                    }
+                    
+                    GlassIconButton(systemName: "calendar") {
+                        showCalendar = true
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, 24)
+                .padding(.bottom, 110)
             }
 
             // === BOTTOM SHEET OVER MAP ===
@@ -186,6 +205,14 @@ struct CrowdHomeView: View {
             // safety: if route is set elsewhere, force the open index for profile
             .onChange(of: route) { _, r in
                 if r == .profile { overlaySnapIndex = 1 }
+            }
+            
+            // === FLOATING BUTTON NAVIGATION ===
+            .fullScreenCover(isPresented: $showMessages) {
+                MessagesView()
+            }
+            .fullScreenCover(isPresented: $showCalendar) {
+                CalenderView()
             }
         }
         // Host flow remains a system sheet
