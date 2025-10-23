@@ -55,6 +55,7 @@ struct ProfileView: View {
                     mutualsSection
                     gallerySection
                     suggestedConnectionsSection
+
                 }
                 .padding(16)
             }
@@ -294,6 +295,7 @@ struct ProfileView: View {
             }
         }
     }
+    
 
     private func eventCard(_ event: CrowdEvent) -> some View {
         VStack(alignment: .leading, spacing: 0) {
