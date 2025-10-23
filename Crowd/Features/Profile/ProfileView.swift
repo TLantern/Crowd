@@ -58,15 +58,13 @@ struct ProfileView: View {
                 }
                 .padding(16)
             }
-            
+
             // Edit Mode Toggle Button
-            Button(action: {
-                viewModel.toggleEditMode()
-            }) {
+            Button(action: { viewModel.toggleEditMode() }) {
                 Image(systemName: viewModel.isEditMode ? "checkmark.circle.fill" : "pencil.circle.fill")
                     .font(.system(size: 36))
                     .foregroundStyle(viewModel.isEditMode ? Color.green : Color.accentColor)
-                    .background(Circle().fill(.ultraThinMaterial).frame(width: 44, height: 44))
+                    .background(Circle().fill(.regularMaterial).frame(width: 44, height: 44))
             }
             .padding(16)
         }
@@ -97,16 +95,12 @@ struct ProfileView: View {
                         showOnlineStatus: viewModel.isActiveNow
                     )
                 }
-                
+
                 if viewModel.isEditMode {
-                    Button(action: {
-                        showImagePicker = true
-                    }) {
+                    Button(action: { showImagePicker = true }) {
                         HStack(spacing: 4) {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 10))
-                            Text("Edit")
-                                .font(.system(size: 11, weight: .semibold))
+                            Image(systemName: "camera.fill").font(.system(size: 10))
+                            Text("Edit").font(.system(size: 11, weight: .semibold))
                         }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
@@ -116,23 +110,37 @@ struct ProfileView: View {
                     .offset(y: 8)
                 }
             }
-            
+
             Text(viewModel.handle)
                 .font(.system(size: 18, weight: .bold))
-            
+
+            // last seen -> black text
             Text(viewModel.activeStatusText)
                 .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-            
-            Text(viewModel.bio)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .padding(.horizontal, 20)
-            
+                .foregroundStyle(.primary)
+
+            // bio -> editable in edit mode, black in read mode
+            if viewModel.isEditMode {
+                TextEditor(text: $viewModel.bio)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .frame(minHeight: 60, maxHeight: 100)
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.18), lineWidth: 1))
+                    .submitLabel(.done)
+            } else {
+                Text(viewModel.bio)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .padding(.horizontal, 20)
+            }
+
             AuraBadgeView(points: viewModel.points, rank: viewModel.auraRank)
-            
+
             Text(viewModel.affiliation)
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
@@ -161,8 +169,8 @@ struct ProfileView: View {
         .frame(minWidth: 80)
         .padding(.vertical, 14)
         .padding(.horizontal, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.12), lineWidth: 1))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.24), lineWidth: 1))
     }
 
     // MARK: - Tags Section
@@ -171,23 +179,19 @@ struct ProfileView: View {
             Text("Interests")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(viewModel.interests) { interest in
                         TagPillView(
                             interest: interest,
                             isEditMode: viewModel.isEditMode,
-                            onDelete: {
-                                viewModel.removeInterest(interest)
-                            }
+                            onDelete: { viewModel.removeInterest(interest) }
                         )
                     }
-                    
+
                     if viewModel.isEditMode {
-                        AddInterestPillView {
-                            showInterestPicker = true
-                        }
+                        AddInterestPillView { showInterestPicker = true }
                     }
                 }
             }
@@ -200,15 +204,15 @@ struct ProfileView: View {
             interactionButton(icon: "person.badge.plus", title: "Add Friend") {
                 print("Add Friend tapped")
             }
-            
+
             interactionButton(icon: "envelope", title: "Invite") {
                 showShareSheet = true
             }
-            
+
             interactionButton(icon: "message", title: "DM") {
                 print("DM tapped")
             }
-            
+
             interactionButton(icon: "qrcode", title: "QR") {
                 print("QR Share tapped")
             }
@@ -225,8 +229,8 @@ struct ProfileView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.12), lineWidth: 1))
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.24), lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -237,7 +241,7 @@ struct ProfileView: View {
             Text("Mutual Friends")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(viewModel.mutuals.prefix(5)) { mutual in
@@ -249,11 +253,11 @@ struct ProfileView: View {
                         }
                         .frame(width: 60)
                     }
-                    
+
                     if viewModel.mutuals.count > 5 {
                         VStack(spacing: 6) {
                             Circle()
-                                .fill(.ultraThinMaterial)
+                                .fill(.regularMaterial)
                                 .frame(width: 50, height: 50)
                                 .overlay(
                                     Text("+\(viewModel.mutuals.count - 5)")
@@ -268,8 +272,8 @@ struct ProfileView: View {
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 12)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.12), lineWidth: 1))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.24), lineWidth: 1))
         }
     }
 
@@ -279,12 +283,10 @@ struct ProfileView: View {
             Text("Hosted Events")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
-            
+
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12)], spacing: 12) {
                 ForEach(viewModel.gallery) { event in
-                    Button(action: {
-                        print("Event tapped: \(event.title)")
-                    }) {
+                    Button(action: { print("Event tapped: \(event.title)") }) {
                         eventCard(event)
                     }
                     .buttonStyle(.plain)
@@ -308,12 +310,12 @@ struct ProfileView: View {
                             .foregroundStyle(.secondary)
                     }
                 )
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(event.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
-                
+
                 if let tag = event.tags.first {
                     Text(tag)
                         .font(.system(size: 11))
@@ -322,10 +324,10 @@ struct ProfileView: View {
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.ultraThinMaterial)
+            .background(.regularMaterial)
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.12), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.24), lineWidth: 1))
     }
 
     private func iconForEvent(_ event: CrowdEvent) -> String {
@@ -347,7 +349,7 @@ struct ProfileView: View {
             Text("People Like You")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
-            
+
             ForEach(viewModel.suggestedUsers.prefix(3)) { user in
                 UserCardView(user: user)
             }

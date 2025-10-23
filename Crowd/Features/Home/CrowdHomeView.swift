@@ -118,7 +118,7 @@ struct CrowdHomeView: View {
                                 }
                                 .offset(y: centerYOffset)
 
-                                // Left — Profile
+                                // Left — Profile (open at 3/4 screen)
                                 FrostedIconButton(
                                     systemName: "person",
                                     baseSize: 54,
@@ -128,7 +128,7 @@ struct CrowdHomeView: View {
                                     highlightColor: Color(red: 0.63, green: 0.82, blue: 1.0)
                                 ) {
                                     route = .profile
-                                    overlaySnapIndex = 0
+                                    overlaySnapIndex = 1          // open index
                                     overlayPresented = true
                                     Haptics.light()
                                 }
@@ -160,14 +160,14 @@ struct CrowdHomeView: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.bottom, 20) // move the whole bar down
+                    .padding(.bottom, 20)
                 }
             }
 
             // === BOTTOM SHEET OVER MAP ===
             BottomOverlay(isPresented: $overlayPresented,
                           snapIndex: $overlaySnapIndex,
-                          snapFractions: [0.35, 0.70],
+                          snapFractions: [0.25, 0.75],   // 25% peek, 75% open
                           onDismiss: { route = .none }) {
                 switch route {
                 case .profile:
@@ -183,6 +183,10 @@ struct CrowdHomeView: View {
                 }
             }
             .ignoresSafeArea(edges: .bottom)
+            // safety: if route is set elsewhere, force the open index for profile
+            .onChange(of: route) { _, r in
+                if r == .profile { overlaySnapIndex = 1 }
+            }
         }
         // Host flow remains a system sheet
         .sheet(isPresented: $showHostSheet) {
@@ -259,7 +263,11 @@ private struct BottomOverlay<Content: View>: View {
             .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.15), value: isPresented)
             .gesture(dragGesture(targets: targets))
             .onChange(of: isPresented) { _, new in
-                if new { snapIndex = 0 } else { translation = 0 }
+                if new {
+                    /* keep current snapIndex to allow programmatic open */
+                } else {
+                    translation = 0
+                }
             }
         }
         .allowsHitTesting(isPresented)
@@ -281,7 +289,6 @@ private struct BottomOverlay<Content: View>: View {
             .onEnded { _ in
                 defer { translation = 0 }
                 let base = targets[clamped: snapIndex]
-                // If pulled down > 40% of current height -> go down/dismiss
                 if translation > base * 0.4 {
                     if snapIndex == 0 {
                         dismiss()
@@ -289,7 +296,6 @@ private struct BottomOverlay<Content: View>: View {
                         snapIndex = max(0, snapIndex - 1)
                     }
                 } else {
-                    // otherwise snap up to next if not already open
                     snapIndex = min(snapIndex + 1, targets.count - 1)
                 }
                 Haptics.light()
