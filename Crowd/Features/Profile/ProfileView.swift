@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-// MARK: - Entry (example usage)
+// MARK: - Entry
 struct RootView: View {
     @State private var showProfile = false
 
@@ -18,19 +18,19 @@ struct RootView: View {
         }
         .sheet(isPresented: $showProfile) {
             ProfileView(viewModel: ProfileViewModel.mock)
-                .modifier(Presentation66Detent())   // ~2/3 sheet, expandable
+                .modifier(Presentation75Detent())   // 3/4 sheet, expandable
         }
     }
 }
 
-// MARK: - 2/3 Sheet Detent
-private struct Presentation66Detent: ViewModifier {
+// MARK: - 3/4 Sheet Detent
+private struct Presentation75Detent: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 16.0, *) {
             content
-                .presentationDetents(Set([.fraction(0.66), .large]))
+                .presentationDetents(Set([.fraction(0.75), .large]))
                 .presentationDragIndicator(.visible)
-                .presentationCornerRadius(24) // iOS 16.4+
+                .presentationCornerRadius(24)
         } else {
             content
         }

@@ -21,8 +21,7 @@ struct LeaderboardView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Leaderboard")
-                .font(.title3.bold())
+            Text("Leaderboard").font(.title3.bold())
             Text("Earn Aura by hosting and joining crowds.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -32,7 +31,7 @@ struct LeaderboardView: View {
 
     private var timeframePicker: some View {
         HStack(spacing: 8) {
-            ForEach(LeaderboardViewModel.Timeframe.allCases, id: \.self) { tf in
+            ForEach(LeaderboardViewModel.Timeframe.allCases) { tf in
                 Button {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
                         viewModel.switchTo(tf)
@@ -42,10 +41,10 @@ struct LeaderboardView: View {
                         .font(.footnote.weight(.semibold))
                         .padding(.vertical, 8)
                         .padding(.horizontal, 12)
-                        .background {
+                        .background(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(viewModel.timeframe == tf ? Color.primary.opacity(0.12) : Color.clear)
-                        }
+                                .fill(viewModel.timeframe == tf ? Color.primary.opacity(0.12) : .clear)
+                        )
                 }
             }
             Spacer()
@@ -60,7 +59,7 @@ struct LeaderboardView: View {
         }
     }
 
-    // MARK: - Row (using Apple’s overlay(alignment:content:))
+    // MARK: - Row (mirrors Profile cards)
 
     private func row(_ e: LeaderboardEntry) -> some View {
         HStack(spacing: 12) {
@@ -70,15 +69,18 @@ struct LeaderboardView: View {
 
             Circle()
                 .fill(e.tint.opacity(0.25))
+                .overlay(
+                    Text(initials(from: e.name))
+                        .font(.footnote.weight(.bold))   // FIX
+                )
                 .frame(width: 36, height: 36)
-                .overlay {
-                    Text(initials(from: e.name)).font(.footnote.bold)
-                }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(e.isYou ? "\(e.name) (You)" : e.name)
                     .font(.system(size: 16, weight: .semibold))
-                Text(e.handle).font(.caption).foregroundStyle(.secondary)
+                Text(e.handle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -90,12 +92,16 @@ struct LeaderboardView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-
-        // Simple + unambiguous:
-        .background(.ultraThinMaterial)                                   // concrete View
-        .mask(RoundedRectangle(cornerRadius: 14, style: .continuous))     // rounds corners         
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        )
     }
-    
+
     // MARK: - Helpers
 
     private func initials(from name: String) -> String {
@@ -105,5 +111,5 @@ struct LeaderboardView: View {
 }
 
 #Preview {
-    LeaderboardView(viewModel: .init())
+    LeaderboardView(viewModel: .init())   // uses mockEntries from your VM
 }
