@@ -18,7 +18,7 @@ struct RootView: View {
         }
         .sheet(isPresented: $showProfile) {
             ProfileView(viewModel: ProfileViewModel.mock)
-                .modifier(Presentation75Detent())   // 3/4 sheet, expandable
+                .modifier(Presentation75Detent())
         }
     }
 }
@@ -37,58 +37,69 @@ private struct Presentation75Detent: ViewModifier {
     }
 }
 
-// MARK: - Profile
+// MARK: - Profile View
 struct ProfileView: View {
     @ObservedObject var viewModel: ProfileViewModel
+    @State private var showShareSheet = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                header
+            VStack(alignment: .leading, spacing: 20) {
+                identityBlock
                 statsRow
-                actions
+                tagsSection
+                interactionBar
+                mutualsSection
+                gallerySection
+                suggestedConnectionsSection
             }
             .padding(16)
         }
-        .ignoresSafeArea(edges: .bottom)
     }
 
-    private var header: some View {
-        HStack(spacing: 14) {
-            Circle()
-                .fill(viewModel.avatarColor.opacity(0.25))
-                .overlay(
-                    Text(initials(from: viewModel.displayName))
-                        .font(.system(size: 22, weight: .bold))
-                )
-                .frame(width: 56, height: 56)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(viewModel.displayName)
-                    .font(.system(size: 20, weight: .semibold))
-                Text(viewModel.handle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing) {
-                Text("\(viewModel.points)")
-                    .font(.system(size: 22, weight: .bold))
-                Text("Aura")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+    // MARK: - Identity Block (Header)
+    private var identityBlock: some View {
+        VStack(spacing: 10) {
+            AvatarView(
+                name: viewModel.displayName,
+                color: viewModel.avatarColor,
+                size: 90,
+                showOnlineStatus: viewModel.isActiveNow
+            )
+            
+            Text(viewModel.handle)
+                .font(.system(size: 18, weight: .bold))
+            
+            Text(viewModel.activeStatusText)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+            
+            Text(viewModel.bio)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 20)
+            
+            AuraBadgeView(points: viewModel.points, rank: viewModel.auraRank)
+            
+            Text(viewModel.affiliation)
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
         }
-        .padding(.top, 4)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
     }
 
+    // MARK: - Stats Row
     private var statsRow: some View {
-        HStack(spacing: 12) {
-            statCard(title: "Streak", value: "\(viewModel.weeklyStreak) wk")
-            statCard(title: "Joined", value: "\(viewModel.joinedCount)")
-            statCard(title: "Hosted", value: "\(viewModel.hostedCount)")
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                statCard(title: "Hosting", value: "\(viewModel.hostedCount)")
+                statCard(title: "Joined", value: "\(viewModel.joinedCount)")
+                statCard(title: "Upcoming", value: "\(viewModel.upcomingEventsCount)")
+                statCard(title: "Friends", value: "\(viewModel.friendsCount)")
+            }
         }
     }
 
@@ -97,45 +108,188 @@ struct ProfileView: View {
             Text(value).font(.system(size: 18, weight: .semibold))
             Text(title).font(.caption).foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
+        .frame(minWidth: 80)
         .padding(.vertical, 14)
+        .padding(.horizontal, 12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.12), lineWidth: 1))
     }
 
-    private var actions: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Actions")
+    // MARK: - Tags Section
+    private var tagsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Interests")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
-                .padding(.top, 8)
-
-            Group {
-                actionRow(icon: "pencil", title: "Edit Profile")
-                actionRow(icon: "bell", title: "Notifications")
-                actionRow(icon: "gearshape", title: "Settings")
-                actionRow(icon: "rectangle.portrait.and.arrow.right", title: "Log Out")
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(viewModel.tags, id: \.self) { tag in
+                        TagPillView(tag: tag)
+                    }
+                }
             }
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
         }
     }
 
-    private func actionRow(icon: String, title: String) -> some View {
-        HStack {
-            Image(systemName: icon).frame(width: 22)
-            Text(title)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
+    // MARK: - Interaction Bar
+    private var interactionBar: some View {
+        HStack(spacing: 10) {
+            interactionButton(icon: "person.badge.plus", title: "Add Friend") {
+                print("Add Friend tapped")
+            }
+            
+            interactionButton(icon: "envelope", title: "Invite") {
+                showShareSheet = true
+            }
+            
+            interactionButton(icon: "message", title: "DM") {
+                print("DM tapped")
+            }
+            
+            interactionButton(icon: "qrcode", title: "QR") {
+                print("QR Share tapped")
+            }
+        }
+    }
+
+    private func interactionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.12), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Mutuals Section
+    private var mutualsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Mutual Friends")
+                .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(viewModel.mutuals.prefix(5)) { mutual in
+                        VStack(spacing: 6) {
+                            AvatarView(name: mutual.name, color: mutual.avatarColor, size: 50)
+                            Text(mutual.name.split(separator: " ").first ?? "")
+                                .font(.system(size: 12))
+                                .lineLimit(1)
+                        }
+                        .frame(width: 60)
+                    }
+                    
+                    if viewModel.mutuals.count > 5 {
+                        VStack(spacing: 6) {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 50, height: 50)
+                                .overlay(
+                                    Text("+\(viewModel.mutuals.count - 5)")
+                                        .font(.system(size: 14, weight: .semibold))
+                                )
+                            Text("more")
+                                .font(.system(size: 12))
+                        }
+                        .frame(width: 60)
+                    }
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.12), lineWidth: 1))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
     }
 
-    private func initials(from name: String) -> String {
-        let parts = name.split(separator: " ")
-        return String(parts.prefix(2).compactMap { $0.first })
+    // MARK: - Gallery Section
+    private var gallerySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Events")
+                .font(.subheadline.bold())
+                .foregroundStyle(.secondary)
+            
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12)], spacing: 12) {
+                ForEach(viewModel.gallery) { event in
+                    Button(action: {
+                        print("Event tapped: \(event.title)")
+                    }) {
+                        eventCard(event)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func eventCard(_ event: CrowdEvent) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.accentColor.opacity(0.2))
+                .frame(height: 110)
+                .overlay(
+                    VStack {
+                        Image(systemName: iconForEvent(event))
+                            .font(.system(size: 32))
+                            .foregroundStyle(.primary)
+                        Text("\(event.attendeeCount)")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                )
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                
+                if let tag = event.tags.first {
+                    Text(tag)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.ultraThinMaterial)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.12), lineWidth: 1))
+    }
+
+    private func iconForEvent(_ event: CrowdEvent) -> String {
+        guard let tag = event.tags.first else { return "star.fill" }
+        switch tag.lowercased() {
+        case "study": return "book.fill"
+        case "sports": return "basketball.fill"
+        case "social": return "cup.and.saucer.fill"
+        case "music": return "music.note"
+        case "tech": return "laptopcomputer"
+        case "art": return "paintpalette.fill"
+        default: return "star.fill"
+        }
+    }
+
+    // MARK: - Suggested Connections
+    private var suggestedConnectionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("People Like You")
+                .font(.subheadline.bold())
+                .foregroundStyle(.secondary)
+            
+            ForEach(viewModel.suggestedUsers.prefix(3)) { user in
+                UserCardView(user: user)
+            }
+        }
     }
 }
 
