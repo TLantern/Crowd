@@ -7,6 +7,37 @@
 
 import SwiftUI
 
+// MARK: - Entry (example usage)
+struct RootView: View {
+    @State private var showProfile = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Button("Open Profile") { showProfile = true }
+                .buttonStyle(.borderedProminent)
+        }
+        .sheet(isPresented: $showProfile) {
+            ProfileView(viewModel: ProfileViewModel.mock)
+                .modifier(Presentation66Detent())   // ~2/3 sheet, expandable
+        }
+    }
+}
+
+// MARK: - 2/3 Sheet Detent
+private struct Presentation66Detent: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content
+                .presentationDetents(Set([.fraction(0.66), .large]))
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(24) // iOS 16.4+
+        } else {
+            content
+        }
+    }
+}
+
+// MARK: - Profile
 struct ProfileView: View {
     @ObservedObject var viewModel: ProfileViewModel
 
@@ -19,6 +50,7 @@ struct ProfileView: View {
             }
             .padding(16)
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 
     private var header: some View {
@@ -107,6 +139,7 @@ struct ProfileView: View {
     }
 }
 
+// MARK: - Previews
 #Preview {
-    ProfileView(viewModel: .mock)
+    RootView()
 }
