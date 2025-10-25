@@ -5,7 +5,7 @@
 	<key>API_KEY</key>
 	<string>AIzaSyAwZn7isgsDXyZNphbyNFFsVdAs-FJpNfU</string>
 	<key>GCM_SENDER_ID</key>
-	<string>117987983974041894899</string>
+	<string>489261642371</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
@@ -25,7 +25,7 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:117987983974041894899:ios:crowd6193c</string>
+	<string>1:489261642371:ios:6158bca32abf0697dc21b6</string>
 	<key>DATABASE_URL</key>
 	<string>https://crowd-6193c-default-rtdb.firebaseio.com</string>
 </dict>

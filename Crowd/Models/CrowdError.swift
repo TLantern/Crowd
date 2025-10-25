@@ -11,4 +11,6 @@ enum CrowdError: Error {
     case network
     case decoding
     case invalidInput(String)
+    case notFound
+    case invalidResponse
 }

@@ -23,13 +23,13 @@ final class FirebaseEventRepository: EventRepository {
     // MARK: - EventRepository Protocol
     
     func fetchEvents(in region: CampusRegion) async throws -> [CrowdEvent] {
-        let center = region.region.center
+        let center = region.spec.center
         
         // Call Cloud Function to get events in region
         let data: [String: Any] = [
             "latitude": center.latitude,
             "longitude": center.longitude,
-            "radiusKm": region.region.span.latitudeDelta * 111.0 // Approximate conversion
+            "radiusKm": region.spec.distance / 1000.0 // Convert meters to km
         ]
         
         let callable = functions.httpsCallable("getEventsInRegion")
@@ -49,12 +49,12 @@ final class FirebaseEventRepository: EventRepository {
         let data: [String: Any] = [
             "id": event.id,
             "title": event.title,
-            "latitude": event.coordinate.latitude,
-            "longitude": event.coordinate.longitude,
+            "latitude": event.latitude,
+            "longitude": event.longitude,
             "radiusMeters": event.radiusMeters,
             "startsAt": event.startsAt?.timeIntervalSince1970 ?? Date().timeIntervalSince1970,
             "endsAt": event.endsAt?.timeIntervalSince1970,
-            "tags": event.tags.map { $0.rawValue }
+            "tags": event.tags
         ]
         
         let callable = functions.httpsCallable("createEvent")
@@ -125,7 +125,6 @@ final class FirebaseEventRepository: EventRepository {
             throw CrowdError.invalidResponse
         }
         
-        let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
         let signalStrength = data["signalStrength"] as? Int ?? 0
         let attendeeCount = data["attendeeCount"] as? Int ?? 0
         let hostId = data["hostId"] as? String ?? ""
@@ -147,19 +146,28 @@ final class FirebaseEventRepository: EventRepository {
         }
         
         // Parse tags
-        let tagStrings = data["tags"] as? [String] ?? []
-        let tags = tagStrings.compactMap { Interest(rawValue: $0) }
+        let tags = data["tags"] as? [String] ?? []
+        
+        // Parse createdAt
+        var createdAt = Date()
+        if let timestamp = data["createdAt"] as? Timestamp {
+            createdAt = timestamp.dateValue()
+        } else if let seconds = data["createdAt"] as? TimeInterval {
+            createdAt = Date(timeIntervalSince1970: seconds)
+        }
         
         return CrowdEvent(
             id: id,
             title: title,
-            coordinate: coordinate,
+            hostId: hostId,
+            latitude: lat,
+            longitude: lon,
             radiusMeters: radiusMeters,
             startsAt: startsAt,
             endsAt: endsAt,
+            createdAt: createdAt,
             signalStrength: signalStrength,
             attendeeCount: attendeeCount,
-            hostId: hostId,
             tags: tags
         )
     }
