@@ -27,14 +27,10 @@ struct CrowdHomeView: View {
     @State private var showEventDetail = false
     @State private var zoomLevel: Double = 1200 // Distance in meters
     
-    // Mock events for heatmap demonstration
+    // Mock events
     var baseMockEvents: [CrowdEvent] {
         [
-            CrowdEvent(id: "1", title: "Basketball", hostId: "h1", hostName: "Host 1", latitude: 33.2105, longitude: -97.1520, radiusMeters: 60, startsAt: Date(), endsAt: Date().addingTimeInterval(3600), createdAt: Date(), signalStrength: 4, attendeeCount: 25, tags: [], category: "sports"),
-            CrowdEvent(id: "2", title: "Study Group", hostId: "h2", hostName: "Host 2", latitude: 33.2110, longitude: -97.1518, radiusMeters: 60, startsAt: Date(), endsAt: Date().addingTimeInterval(3600), createdAt: Date(), signalStrength: 3, attendeeCount: 15, tags: [], category: "study"),
-            CrowdEvent(id: "3", title: "Party", hostId: "h3", hostName: "Host 3", latitude: 33.2108, longitude: -97.1522, radiusMeters: 60, startsAt: Date(), endsAt: Date().addingTimeInterval(3600), createdAt: Date(), signalStrength: 5, attendeeCount: 45, tags: [], category: "party"),
-            CrowdEvent(id: "4", title: "Food Truck", hostId: "h4", hostName: "Host 4", latitude: 33.2095, longitude: -97.1510, radiusMeters: 60, startsAt: Date(), endsAt: Date().addingTimeInterval(3600), createdAt: Date(), signalStrength: 3, attendeeCount: 20, tags: [], category: "food"),
-            CrowdEvent(id: "5", title: "Concert", hostId: "h5", hostName: "Host 5", latitude: 33.2115, longitude: -97.1525, radiusMeters: 60, startsAt: Date(), endsAt: Date().addingTimeInterval(3600), createdAt: Date(), signalStrength: 5, attendeeCount: 60, tags: [], category: "music")
+            CrowdEvent(id: "1", title: "Study Session", hostId: "h1", hostName: "Willis Host", latitude: 33.2099, longitude: -97.1515, radiusMeters: 60, startsAt: Date(), endsAt: Date().addingTimeInterval(3600), createdAt: Date(), signalStrength: 4, attendeeCount: 12, tags: [], category: "study")
         ]
     }
     
