@@ -11,6 +11,7 @@ enum PrevData {
             id: "1",
             title: "Fry St. Jam",
             hostId: "u1",
+            hostName: "Alex",
             latitude: 33.2089,
             longitude: -97.1439,
             radiusMeters: 60,
@@ -19,12 +20,15 @@ enum PrevData {
             createdAt: .now,
             signalStrength: 12,
             attendeeCount: 24,
-            tags: ["music"]
+            tags: ["music"],
+            category: "Music/Concert",
+            description: "📍 Fry Street\n⏰ Starting now\n🎵 Live music vibes"
         ),
         .init(
             id: "2",
             title: "Dorm Game Night",
             hostId: "u2",
+            hostName: "Jordan",
             latitude: 33.2080,
             longitude: -97.1525,
             radiusMeters: 60,
@@ -33,7 +37,9 @@ enum PrevData {
             createdAt: .now,
             signalStrength: 7,
             attendeeCount: 10,
-            tags: ["games"]
+            tags: ["games"],
+            category: "Gaming",
+            description: "📍 Victory Hall Dorms\n⏰ Starting now\n🎮 Casual gaming session"
         )
     ]
 }

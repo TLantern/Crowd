@@ -12,6 +12,7 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     var id: String
     var title: String
     var hostId: String
+    var hostName: String
 
     // Codable-friendly storage
     var latitude: Double
@@ -24,6 +25,8 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     var signalStrength: Int
     var attendeeCount: Int
     var tags: [String]
+    var category: String?
+    var description: String?
 
     // Convenience computed property for MapKit
     var coordinates: CLLocationCoordinate2D {
@@ -34,20 +37,32 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
         }
     }
 
-    static func newDraft(at coord: CLLocationCoordinate2D, title: String) -> Self {
+    static func newDraft(
+        at coord: CLLocationCoordinate2D,
+        title: String,
+        hostId: String = "anon",
+        hostName: String = "Guest",
+        category: String? = nil,
+        description: String? = nil,
+        startsAt: Date? = nil,
+        endsAt: Date? = nil
+    ) -> Self {
         CrowdEvent(
             id: UUID().uuidString,
             title: title,
-            hostId: "anon",
+            hostId: hostId,
+            hostName: hostName,
             latitude: coord.latitude,
             longitude: coord.longitude,
             radiusMeters: 60,
-            startsAt: nil,
-            endsAt: nil,
+            startsAt: startsAt,
+            endsAt: endsAt,
             createdAt: Date(),
             signalStrength: 0,
             attendeeCount: 0,
-            tags: []
+            tags: [],
+            category: category,
+            description: description
         )
     }
 }
