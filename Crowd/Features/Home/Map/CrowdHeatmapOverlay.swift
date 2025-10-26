@@ -163,7 +163,7 @@ struct MetalHeatmapView: UIViewRepresentable {
                 }
                 
                 // Pass data to shader
-                let pointCount = Int32(screenPoints.count)
+                var pointCount = Int32(screenPoints.count)
                 var pointsData = screenPoints
                 var intensitiesData = intensities
                 var radius = Float(80.0) // Gaussian radius
