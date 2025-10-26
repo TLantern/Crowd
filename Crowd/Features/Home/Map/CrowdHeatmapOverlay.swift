@@ -7,6 +7,8 @@
 
 import SwiftUI
 import MapKit
+import Metal
+import MetalKit
 
 struct HeatmapPoint: Identifiable {
     let id = UUID()
@@ -31,78 +33,210 @@ struct CrowdHeatmapOverlay: View {
     
     var body: some View {
         GeometryReader { geometry in
-            Canvas { context, size in
-                // Draw heat blobs for each event
-                for point in heatmapPoints {
-                    // Convert coordinate to screen position
-                    if let screenPoint = coordinateToPoint(point.coordinate, in: geometry, region: mapRegion, size: size) {
-                        drawHeatBlob(
-                            at: screenPoint,
-                            intensity: point.intensity,
-                            in: &context,
-                            size: size
-                        )
-                    }
-                }
-            }
+            MetalHeatmapView(
+                points: heatmapPoints,
+                mapRegion: mapRegion,
+                geometry: geometry
+            )
             .allowsHitTesting(false)
         }
     }
+}
+
+// MARK: - Metal Heatmap View
+struct MetalHeatmapView: UIViewRepresentable {
+    let points: [HeatmapPoint]
+    let mapRegion: MKCoordinateRegion
+    let geometry: GeometryProxy
     
-    private func drawHeatBlob(at point: CGPoint, intensity: Double, in context: inout GraphicsContext, size: CGSize) {
-        // Smaller, more localized radius for distinct hotspots
-        let radius: CGFloat = 60 * intensity
-        
-        // More focused gradient with sharper falloff
-        let colors: [Color] = [
-            Color(red: 1.0, green: 0.0, blue: 0.0).opacity(intensity * 0.85),      // Deep red center
-            Color(red: 1.0, green: 0.4, blue: 0.0).opacity(intensity * 0.65),      // Red-orange
-            Color(red: 1.0, green: 0.7, blue: 0.0).opacity(intensity * 0.4),       // Orange
-            Color(red: 1.0, green: 0.9, blue: 0.0).opacity(intensity * 0.2),       // Yellow-orange
-            Color(red: 1.0, green: 1.0, blue: 0.4).opacity(intensity * 0.08),      // Light yellow
-            Color.clear
-        ]
-        
-        let gradient = Gradient(colors: colors)
-        
-        let rect = CGRect(
-            x: point.x - radius,
-            y: point.y - radius,
-            width: radius * 2,
-            height: radius * 2
-        )
-        
-        // Draw tighter radial gradient for individual hotspots
-        context.fill(
-            Circle().path(in: rect),
-            with: .radialGradient(
-                gradient,
-                center: CGPoint(x: rect.midX, y: rect.midY),
-                startRadius: 0,
-                endRadius: radius
-            )
-        )
+    func makeUIView(context: Context) -> MTKView {
+        let mtkView = MTKView()
+        mtkView.device = MTLCreateSystemDefaultDevice()
+        mtkView.delegate = context.coordinator
+        mtkView.isPaused = false
+        mtkView.enableSetNeedsDisplay = true
+        mtkView.framebufferOnly = false
+        mtkView.backgroundColor = .clear
+        mtkView.isOpaque = false
+        return mtkView
     }
     
-    private func coordinateToPoint(_ coordinate: CLLocationCoordinate2D, in geometry: GeometryProxy, region: MKCoordinateRegion, size: CGSize) -> CGPoint? {
-        // Calculate normalized position within the map region
-        let latSpan = region.span.latitudeDelta
-        let lonSpan = region.span.longitudeDelta
+    func updateUIView(_ uiView: MTKView, context: Context) {
+        context.coordinator.points = points
+        context.coordinator.mapRegion = mapRegion
+        context.coordinator.geometry = geometry
+        uiView.setNeedsDisplay()
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(points: points, mapRegion: mapRegion, geometry: geometry)
+    }
+    
+    class Coordinator: NSObject, MTKViewDelegate {
+        var points: [HeatmapPoint]
+        var mapRegion: MKCoordinateRegion
+        var geometry: GeometryProxy
         
-        // Calculate offset from region center (-0.5 to 0.5)
-        let latOffset = (coordinate.latitude - region.center.latitude) / latSpan
-        let lonOffset = (coordinate.longitude - region.center.longitude) / lonSpan
+        private var device: MTLDevice!
+        private var commandQueue: MTLCommandQueue!
+        private var pipelineState: MTLComputePipelineState!
+        private var colorMapPipelineState: MTLComputePipelineState!
         
-        // Convert to screen coordinates (center at 0.5, 0.5)
-        let x = size.width * (0.5 + lonOffset)
-        let y = size.height * (0.5 - latOffset) // Inverted Y axis for map coordinates
-        
-        // Allow some overflow for edge rendering
-        guard x >= -200 && x <= size.width + 200 && y >= -200 && y <= size.height + 200 else {
-            return nil
+        init(points: [HeatmapPoint], mapRegion: MKCoordinateRegion, geometry: GeometryProxy) {
+            self.points = points
+            self.mapRegion = mapRegion
+            self.geometry = geometry
+            super.init()
+            setupMetal()
         }
         
-        return CGPoint(x: x, y: y)
+        private func setupMetal() {
+            guard let device = MTLCreateSystemDefaultDevice() else {
+                print("Metal not supported")
+                return
+            }
+            self.device = device
+            self.commandQueue = device.makeCommandQueue()
+            
+            // Create Metal library and pipeline states
+            let library = device.makeDefaultLibrary()
+            
+            // Intensity rendering kernel
+            if let intensityFunction = library?.makeFunction(name: "heatmap_intensity_kernel") {
+                pipelineState = try? device.makeComputePipelineState(function: intensityFunction)
+            }
+            
+            // Color mapping kernel
+            if let colorMapFunction = library?.makeFunction(name: "heatmap_colormap_kernel") {
+                colorMapPipelineState = try? device.makeComputePipelineState(function: colorMapFunction)
+            }
+        }
+        
+        func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+        
+        func draw(in view: MTKView) {
+            guard let drawable = view.currentDrawable,
+                  let device = view.device,
+                  let commandBuffer = commandQueue?.makeCommandBuffer(),
+                  let pipelineState = pipelineState,
+                  let colorMapPipelineState = colorMapPipelineState else {
+                return
+            }
+            
+            let width = Int(view.drawableSize.width)
+            let height = Int(view.drawableSize.height)
+            
+            // Create intensity texture (grayscale)
+            let intensityDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: .r32Float,
+                width: width,
+                height: height,
+                mipmapped: false
+            )
+            intensityDescriptor.usage = [.shaderRead, .shaderWrite]
+            guard let intensityTexture = device.makeTexture(descriptor: intensityDescriptor) else { return }
+            
+            // Create final color texture
+            let colorDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: .bgra8Unorm,
+                width: width,
+                height: height,
+                mipmapped: false
+            )
+            colorDescriptor.usage = [.shaderRead, .shaderWrite]
+            guard let colorTexture = device.makeTexture(descriptor: colorDescriptor) else { return }
+            
+            // Step 1: Render intensity map
+            if let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+                computeEncoder.setComputePipelineState(pipelineState)
+                computeEncoder.setTexture(intensityTexture, index: 0)
+                
+                // Convert points to screen space
+                var screenPoints: [SIMD2<Float>] = []
+                var intensities: [Float] = []
+                
+                for point in points {
+                    if let screenPoint = coordinateToPoint(point.coordinate, region: mapRegion, size: CGSize(width: width, height: height)) {
+                        screenPoints.append(SIMD2<Float>(Float(screenPoint.x), Float(screenPoint.y)))
+                        intensities.append(Float(point.intensity))
+                    }
+                }
+                
+                // Pass data to shader
+                let pointCount = Int32(screenPoints.count)
+                var pointsData = screenPoints
+                var intensitiesData = intensities
+                var radius = Float(80.0) // Gaussian radius
+                
+                computeEncoder.setBytes(&pointCount, length: MemoryLayout<Int32>.size, index: 0)
+                computeEncoder.setBytes(&pointsData, length: screenPoints.count * MemoryLayout<SIMD2<Float>>.size, index: 1)
+                computeEncoder.setBytes(&intensitiesData, length: intensities.count * MemoryLayout<Float>.size, index: 2)
+                computeEncoder.setBytes(&radius, length: MemoryLayout<Float>.size, index: 3)
+                
+                let threadGroupSize = MTLSize(width: 8, height: 8, depth: 1)
+                let threadGroups = MTLSize(
+                    width: (width + threadGroupSize.width - 1) / threadGroupSize.width,
+                    height: (height + threadGroupSize.height - 1) / threadGroupSize.height,
+                    depth: 1
+                )
+                
+                computeEncoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
+                computeEncoder.endEncoding()
+            }
+            
+            // Step 2: Apply color gradient
+            if let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+                computeEncoder.setComputePipelineState(colorMapPipelineState)
+                computeEncoder.setTexture(intensityTexture, index: 0)
+                computeEncoder.setTexture(colorTexture, index: 1)
+                
+                let threadGroupSize = MTLSize(width: 8, height: 8, depth: 1)
+                let threadGroups = MTLSize(
+                    width: (width + threadGroupSize.width - 1) / threadGroupSize.width,
+                    height: (height + threadGroupSize.height - 1) / threadGroupSize.height,
+                    depth: 1
+                )
+                
+                computeEncoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
+                computeEncoder.endEncoding()
+            }
+            
+            // Step 3: Blit to drawable
+            if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
+                blitEncoder.copy(
+                    from: colorTexture,
+                    sourceSlice: 0,
+                    sourceLevel: 0,
+                    sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                    sourceSize: MTLSize(width: width, height: height, depth: 1),
+                    to: drawable.texture,
+                    destinationSlice: 0,
+                    destinationLevel: 0,
+                    destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0)
+                )
+                blitEncoder.endEncoding()
+            }
+            
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
+        }
+        
+        private func coordinateToPoint(_ coordinate: CLLocationCoordinate2D, region: MKCoordinateRegion, size: CGSize) -> CGPoint? {
+            let latSpan = region.span.latitudeDelta
+            let lonSpan = region.span.longitudeDelta
+            
+            let latOffset = (coordinate.latitude - region.center.latitude) / latSpan
+            let lonOffset = (coordinate.longitude - region.center.longitude) / lonSpan
+            
+            let x = size.width * (0.5 + lonOffset)
+            let y = size.height * (0.5 - latOffset)
+            
+            guard x >= -200 && x <= size.width + 200 && y >= -200 && y <= size.height + 200 else {
+                return nil
+            }
+            
+            return CGPoint(x: x, y: y)
+        }
     }
 }
 
