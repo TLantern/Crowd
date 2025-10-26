@@ -24,4 +24,12 @@ extension Color {
         }
         self = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
     }
+    
+    /// Initialize a Color from a hex string (e.g., "#FF5733" or "FF5733")
+    init(hexString: String) {
+        let hex = hexString.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        self.init(hex: UInt32(int))
+    }
 }

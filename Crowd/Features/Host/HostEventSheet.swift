@@ -20,11 +20,13 @@ struct HostEventSheet: View {
     var onCreate: (CrowdEvent) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appEnvironment) private var appEnv
     @EnvironmentObject var appState: AppState
     
     // Event details
     @State private var title: String = ""
     @State private var coord: CLLocationCoordinate2D
+    @State private var locationName: String = ""
     @State private var category: EventCategory = .hangout
     @State private var timeMode: TimeMode = .now
     @State private var startDate: Date = Date()
@@ -44,23 +46,32 @@ struct HostEventSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                // 1. Title Field
-                Section {
-                    TextField("What's the vibe?", text: $title)
-                        .font(.system(size: 18, weight: .medium))
-                }
-                
-                // 2. Host Name (read-only)
-                Section {
-                    HStack {
-                        Text("Host:")
-                            .foregroundStyle(.secondary)
-                        Text(appState.sessionUser?.displayName ?? "Guest")
-                            .foregroundStyle(.gray)
+                // 1. Host (First)
+                Section("Host") {
+                    HStack(spacing: 12) {
+                        if let user = appState.sessionUser {
+                            if let imageURL = user.profileImageURL, !imageURL.isEmpty {
+                                // TODO: Load image from URL when Firebase Storage is integrated
+                                AvatarView(
+                                    name: user.displayName,
+                                    color: user.avatarColor,
+                                    size: 50
+                                )
+                            } else {
+                                AvatarView(
+                                    name: user.displayName,
+                                    color: user.avatarColor,
+                                    size: 50
+                                )
+                            }
+                            Text(user.displayName)
+                                .font(.system(size: 16, weight: .medium))
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
                 
-                // 3. Time & Event Type Row (horizontal)
+                // 2. When & Type (Second)
                 Section {
                     HStack(spacing: 16) {
                         // Left: Time Mode
@@ -103,13 +114,23 @@ struct HostEventSheet: View {
                     }
                 }
                 
-                // 4. AI-Generated Description (with typewriter effect)
+                // 3. Location (Third)
+                Section("Location") {
+                    LocationSearchField(
+                        locationName: $locationName,
+                        coordinate: $coord
+                    )
+                }
+                
+                // 4. Title (Fourth)
+                Section("Title") {
+                    TextField("What's the vibe?", text: $title)
+                        .font(.system(size: 18, weight: .medium))
+                }
+                
+                // 5. Description (Last - conditional generation)
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Description")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
                         TextEditor(text: $displayedDescription)
                             .frame(minHeight: 80)
                             .font(.system(size: 15))
@@ -117,15 +138,7 @@ struct HostEventSheet: View {
                             .foregroundStyle(.primary)
                     }
                 } header: {
-                    Text("AI-Generated (editable)")
-                }
-                
-                // 5. Location
-                Section("Location") {
-                    Text("Lat: \(coord.latitude, specifier: "%.6f")  Lng: \(coord.longitude, specifier: "%.6f")")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    // TODO: add "Use current location" with LocationService
+                    Text("Crowd is generating a description...")
                 }
             }
             .navigationTitle("Start a Crowd")
@@ -141,7 +154,7 @@ struct HostEventSheet: View {
                 }
             }
             .onAppear {
-                generateDescription()
+                initializeLocation()
             }
             .onChange(of: title) { _, _ in
                 debouncedGenerateDescription()
@@ -157,17 +170,63 @@ struct HostEventSheet: View {
                     generateDescription()
                 }
             }
+            .onChange(of: locationName) { _, _ in
+                generateDescription()
+            }
         }
     }
     
-    // MARK: - AI Description Generation
+    // MARK: - Location Initialization
+    
+    private func initializeLocation() {
+        // Try to use current location from LocationService
+        if let currentLocation = appEnv.location.lastKnown {
+            coord = currentLocation
+            reverseGeocodeLocation(currentLocation)
+        } else {
+            // Fallback: use default region and set a generic name
+            coord = defaultRegion.spec.center
+            locationName = "Current Location"
+        }
+    }
+    
+    private func reverseGeocodeLocation(_ coordinate: CLLocationCoordinate2D) {
+        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let geocoder = CLGeocoder()
+        
+        geocoder.reverseGeocodeLocation(location) { placemarks, error in
+            guard let placemark = placemarks?.first, error == nil else {
+                locationName = "Current Location"
+                return
+            }
+            
+            // Build location name from placemark
+            if let name = placemark.name {
+                locationName = name
+            } else if let thoroughfare = placemark.thoroughfare {
+                locationName = thoroughfare
+            } else if let locality = placemark.locality {
+                locationName = locality
+            } else {
+                locationName = "Current Location"
+            }
+        }
+    }
+    
+    // MARK: - Description Generation
     
     private func generateDescription() {
+        // Only generate if title is not empty
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            displayedDescription = ""
+            return
+        }
+        
         // Cancel any existing typewriter animation
         typewriterTask?.cancel()
         
         // Generate the description text
-        let locationName = "Main Campus" // TODO: Get actual location name
+        let location = locationName.isEmpty ? "Current Location" : locationName
         let timeText: String
         
         if timeMode == .now {
@@ -179,13 +238,11 @@ struct HostEventSheet: View {
             timeText = "Starting \(formatter.string(from: startDate))"
         }
         
-        let vibeText = title.isEmpty ? "Join the crowd" : title
-        
         // Format with emojis and bullet points
         aiDescription = """
-        📍 \(locationName)
+        📍 \(location)
         ⏰ \(timeText)
-        \(category.emoji) \(vibeText)
+        \(category.emoji) \(title)
         """
         
         // Start typewriter effect
