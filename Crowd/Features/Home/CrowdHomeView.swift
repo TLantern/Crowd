@@ -93,136 +93,6 @@ struct CrowdHomeView: View {
         NavigationStack {
             ZStack {
                 // === MAP ===
-<<<<<<< Updated upstream
-                Map(position: $cameraPosition)
-                    .mapControls { MapCompass() }
-                    .ignoresSafeArea()
-                    .onAppear { snapTo(selectedRegion) }
-                    .onChange(of: selectedRegion) { _, new in snapTo(new) }
-                    .onMapCameraChange { ctx in
-                        currentCamera = ctx.camera
-                        let spec = selectedRegion.spec
-                        let clamped = min(max(ctx.camera.distance, spec.minZoom), spec.maxZoom)
-                        if abs(clamped - ctx.camera.distance) > 1 {
-                            cameraPosition = .camera(
-                                MapCamera(
-                                    centerCoordinate: ctx.camera.centerCoordinate,
-                                    distance: clamped,
-                                    heading: ctx.camera.heading,
-                                    pitch: ctx.camera.pitch
-                                )
-                            )
-                        }
-                    }
-
-                // === OVERLAYS & CONTROLS ===
-                GeometryReader { geo in
-                    // Panel metrics shared by panel and floating buttons
-                    let panelWidth  = min(geo.size.width * 0.84, 520)
-                    let panelHeight: CGFloat = 140
-
-                    VStack(spacing: 0) {
-                        // === Top region selector pill (moved higher without affecting bottom glass) ===
-                        HStack {
-                            Spacer()
-
-                            Menu {
-                                ForEach(CampusRegion.allCases) { region in
-                                    Button(region.rawValue) { selectedRegion = region }
-                                }
-                            } label: {
-                                GlassPill(height: 48, horizontalPadding: 20) {
-                                    HStack(spacing: 10) {
-                                        Text("🔥")
-                                        Text(selectedRegion.rawValue)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundStyle(.black)
-                                            .lineLimit(1)
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(.black.opacity(0.8))
-                                    }
-                                    .padding(.horizontal, 12)
-                                }
-                            }
-                            .fixedSize()
-                            .frame(maxWidth: geo.size.width * 0.9)
-
-                            Spacer()
-                        }
-                        .padding(.top, 0)
-                        .offset(y: -18) // raise just the navbar; tweak -10…-28 to taste
-                        .zIndex(5)
-
-                        Spacer(minLength: 0)
-
-                        // Bottom frosted panel + FAB cluster
-                        ZStack {
-                            // Frosted base
-                            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                        .stroke(.white.opacity(0.12), lineWidth: 1)
-                                )
-                                .background(
-                                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                        .fill(Color.white.opacity(0.08))
-                                )
-                                .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
-                                .frame(width: panelWidth, height: panelHeight)
-                                .allowsHitTesting(false)
-
-                            VStack(spacing: 10) {
-                                let fabSize: CGFloat = 72
-                                let centerYOffset: CGFloat = -14
-                                let spread = panelWidth * 0.35
-                                let sideYOffset: CGFloat = panelHeight * 0.16
-
-                                ZStack {
-                                    // Center FAB — Host
-                                    FABPlusButton(size: fabSize, color: Color(hex: 0x02853E)) {
-                                        showHostSheet = true
-                                        Haptics.light()
-                                    }
-                                    .offset(y: centerYOffset)
-
-                                    // Left — Profile (open at 3/4 screen)
-                                    FrostedIconButton(
-                                        systemName: "person",
-                                        baseSize: 54,
-                                        targetSize: 72,
-                                        frostOpacity: 0.22,
-                                        iconBaseColor: .black,
-                                        highlightColor: Color(red: 0.63, green: 0.82, blue: 1.0)
-                                    ) {
-                                        route = .profile
-                                        overlaySnapIndex = 1
-                                        overlayPresented = true
-                                        Haptics.light()
-                                    }
-                                    .accessibilityLabel("Open profile")
-                                    .offset(x: -spread, y: sideYOffset)
-
-                                    // Right — Leaderboard
-                                    FrostedIconButton(
-                                        systemName: "trophy",
-                                        baseSize: 54,
-                                        targetSize: 72,
-                                        frostOpacity: 0.22,
-                                        iconBaseColor: .black,
-                                        highlightColor: .yellow
-                                    ) {
-                                        route = .leaderboard
-                                        overlaySnapIndex = 0
-                                        overlayPresented = true
-                                        Haptics.light()
-                                    }
-                                    .accessibilityLabel("Open leaderboard")
-                                    .offset(x: spread, y: sideYOffset)
-                                }
-
-=======
                 Map(position: $cameraPosition) {
                     // Professional heatmap overlays (fade based on zoom)
                     if showHeatmap && heatmapOpacity > 0.01 {
@@ -484,7 +354,6 @@ struct CrowdHomeView: View {
                                     .offset(x: spread, y: sideYOffset)
                                 }
 
->>>>>>> Stashed changes
                                 Text("Start a Crowd")
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundStyle(.black.opacity(0.78))
@@ -700,8 +569,6 @@ private extension Array where Element == CGFloat {
     }
 }
 
-<<<<<<< Updated upstream
-=======
 // MARK: - Heatmap Layers
 struct HeatmapLayers: MapContent {
     let event: CrowdEvent
@@ -933,5 +800,4 @@ struct FlowLayout: Layout {
     }
 }
 
->>>>>>> Stashed changes
 #Preview { CrowdHomeView() }
