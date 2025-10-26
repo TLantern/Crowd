@@ -219,24 +219,34 @@ struct HostEventSheet: View {
     }
     
     private func reverseGeocodeLocation(_ coordinate: CLLocationCoordinate2D) {
-        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        let geocoder = CLGeocoder()
+        let request = MKReverseGeocodingRequest(coordinate: coordinate)
         
-        geocoder.reverseGeocodeLocation(location) { placemarks, error in
-            guard let placemark = placemarks?.first, error == nil else {
-                locationName = "Current Location"
-                return
-            }
-            
-            // Build location name from placemark
-            if let name = placemark.name {
-                locationName = name
-            } else if let thoroughfare = placemark.thoroughfare {
-                locationName = thoroughfare
-            } else if let locality = placemark.locality {
-                locationName = locality
-            } else {
-                locationName = "Current Location"
+        Task {
+            do {
+                let response = try await request.start()
+                guard let placemark = response.mapItems.first?.placemark else {
+                    await MainActor.run {
+                        locationName = "Current Location"
+                    }
+                    return
+                }
+                
+                await MainActor.run {
+                    // Build location name from placemark
+                    if let name = placemark.name {
+                        locationName = name
+                    } else if let thoroughfare = placemark.thoroughfare {
+                        locationName = thoroughfare
+                    } else if let locality = placemark.locality {
+                        locationName = locality
+                    } else {
+                        locationName = "Current Location"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    locationName = "Current Location"
+                }
             }
         }
     }
