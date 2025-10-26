@@ -160,6 +160,7 @@ final class FirebaseEventRepository: EventRepository {
             id: id,
             title: title,
             hostId: hostId,
+            hostName: "Guest Host",
             latitude: lat,
             longitude: lon,
             radiusMeters: radiusMeters,

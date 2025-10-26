@@ -6,14 +6,17 @@
 //
 
 import CoreLocation
+import Combine
 
-final class LocationService: NSObject, CLLocationManagerDelegate {
+final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private(set) var lastKnown: CLLocationCoordinate2D?
+    @Published private(set) var lastKnown: CLLocationCoordinate2D?
 
     override init() {
         super.init()
         manager.delegate = self
+        // Mock location for testing - UNT Union
+        lastKnown = CLLocationCoordinate2D(latitude: 33.2099, longitude: -97.1515)
     }
 
     func requestSoftAuth() {
@@ -22,6 +25,10 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        lastKnown = locations.last?.coordinate
+        // Commented out for now - using mock location
+        // lastKnown = locations.last?.coordinate
+        // if let coord = lastKnown {
+        //     print("📍 Location updated: \(coord.latitude), \(coord.longitude)")
+        // }
     }
 }
