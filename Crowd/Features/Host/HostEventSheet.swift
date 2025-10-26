@@ -21,13 +21,19 @@ struct HostEventSheet: View {
     var onCreate: (CrowdEvent) -> Void
 
     @Environment(\.dismiss) private var dismiss
+<<<<<<< Updated upstream
     @Environment(\.appEnvironment) private var appEnv
+=======
+>>>>>>> Stashed changes
     @EnvironmentObject var appState: AppState
     
     // Event details
     @State private var title: String = ""
     @State private var coord: CLLocationCoordinate2D
+<<<<<<< Updated upstream
     @State private var locationName: String = ""
+=======
+>>>>>>> Stashed changes
     @State private var category: EventCategory = .hangout
     @State private var timeMode: TimeMode = .now
     @State private var startDate: Date = Date()
@@ -47,6 +53,7 @@ struct HostEventSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+<<<<<<< Updated upstream
                 // 1. Host (First)
                 Section("Host") {
                     HStack(spacing: 12) {
@@ -73,6 +80,25 @@ struct HostEventSheet: View {
                 }
                 
                 // 2. When & Type (Second)
+=======
+                // 1. Title Field
+                Section {
+                    TextField("What's the vibe?", text: $title)
+                        .font(.system(size: 18, weight: .medium))
+                }
+                
+                // 2. Host Name (read-only)
+                Section {
+                    HStack {
+                        Text("Host:")
+                            .foregroundStyle(.secondary)
+                        Text(appState.sessionUser?.displayName ?? "Guest")
+                            .foregroundStyle(.gray)
+                    }
+                }
+                
+                // 3. Time & Event Type Row (horizontal)
+>>>>>>> Stashed changes
                 Section {
                     HStack(spacing: 16) {
                         // Left: Time Mode
@@ -115,6 +141,7 @@ struct HostEventSheet: View {
                     }
                 }
                 
+<<<<<<< Updated upstream
                 // 3. Location (Third)
                 Section("Location") {
                     LocationSearchField(
@@ -141,6 +168,31 @@ struct HostEventSheet: View {
                     }
                 } header: {
                     Text("Crowd is generating a description...")
+=======
+                // 4. AI-Generated Description (with typewriter effect)
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Description")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        TextEditor(text: $displayedDescription)
+                            .frame(minHeight: 80)
+                            .font(.system(size: 15))
+                            .scrollContentBackground(.hidden)
+                            .foregroundStyle(.primary)
+                    }
+                } header: {
+                    Text("AI-Generated (editable)")
+                }
+                
+                // 5. Location
+                Section("Location") {
+                    Text("Lat: \(coord.latitude, specifier: "%.6f")  Lng: \(coord.longitude, specifier: "%.6f")")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    // TODO: add "Use current location" with LocationService
+>>>>>>> Stashed changes
                 }
             }
             .navigationTitle("Start a Crowd")
@@ -156,7 +208,11 @@ struct HostEventSheet: View {
                 }
             }
             .onAppear {
+<<<<<<< Updated upstream
                 initializeLocation()
+=======
+                generateDescription()
+>>>>>>> Stashed changes
             }
             .onChange(of: title) { _, _ in
                 debouncedGenerateDescription()
@@ -281,6 +337,100 @@ struct HostEventSheet: View {
         📍 \(location)
         ⏰ \(timeText)
         \(category.emoji) \(title)
+        """
+        
+        // Start typewriter effect
+        displayedDescription = ""
+        typewriterTask = Task {
+            await animateTypewriter()
+        }
+    }
+    
+    private func debouncedGenerateDescription() {
+        // Cancel previous task
+        typewriterTask?.cancel()
+        
+        // Wait 500ms before regenerating
+        typewriterTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if !Task.isCancelled {
+                await MainActor.run {
+                    generateDescription()
+                }
+            }
+        }
+    }
+    
+    private func animateTypewriter() async {
+        let characters = Array(aiDescription)
+        for (index, _) in characters.enumerated() {
+            if Task.isCancelled { break }
+            
+            await MainActor.run {
+                displayedDescription = String(characters[0...index])
+            }
+            
+            // Randomize typing speed slightly for more natural feel
+            let delay = UInt64.random(in: 20_000_000...40_000_000) // 20-40ms
+            try? await Task.sleep(nanoseconds: delay)
+        }
+    }
+    
+    // MARK: - Create Event
+    
+    private func createEvent() {
+        let finalStartsAt: Date?
+        let finalEndsAt: Date?
+        
+        if timeMode == .now {
+            finalStartsAt = Date()
+            finalEndsAt = Date().addingTimeInterval(7200) // 2 hours default
+        } else {
+            finalStartsAt = startDate
+            finalEndsAt = endDate
+        }
+        
+        let event = CrowdEvent.newDraft(
+            at: coord,
+            title: title.isEmpty ? "Crowd" : title,
+            hostId: appState.sessionUser?.id ?? "anon",
+            hostName: appState.sessionUser?.displayName ?? "Guest",
+            category: category.rawValue,
+            description: displayedDescription,
+            startsAt: finalStartsAt,
+            endsAt: finalEndsAt
+        )
+        
+        onCreate(event)
+        dismiss()
+    }
+    
+    // MARK: - AI Description Generation
+    
+    private func generateDescription() {
+        // Cancel any existing typewriter animation
+        typewriterTask?.cancel()
+        
+        // Generate the description text
+        let locationName = "Main Campus" // TODO: Get actual location name
+        let timeText: String
+        
+        if timeMode == .now {
+            timeText = "Starting now"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            timeText = "Starting \(formatter.string(from: startDate))"
+        }
+        
+        let vibeText = title.isEmpty ? "Join the crowd" : title
+        
+        // Format with emojis and bullet points
+        aiDescription = """
+        📍 \(locationName)
+        ⏰ \(timeText)
+        \(category.emoji) \(vibeText)
         """
         
         // Start typewriter effect
