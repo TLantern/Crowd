@@ -38,30 +38,12 @@ struct CrowdHomeView: View {
         ]
     }
     
-    // All events including user location event
+    // All events including mock, hosted, and user location events
     var allEvents: [CrowdEvent] {
         var events = baseMockEvents
         
-        // Add event at user's current location
-        if let userLocation = locationService.lastKnown {
-            let userEvent = CrowdEvent(
-                id: "user-event",
-                title: "I'm Here!",
-                hostId: "user",
-                hostName: "You",
-                latitude: userLocation.latitude,
-                longitude: userLocation.longitude,
-                radiusMeters: 60,
-                startsAt: Date(),
-                endsAt: Date().addingTimeInterval(3600),
-                createdAt: Date(),
-                signalStrength: 5,
-                attendeeCount: 1,
-                tags: [],
-                category: "hangout"
-            )
-            events.append(userEvent)
-        }
+        // Add user-created events
+        events.append(contentsOf: hostedEvents)
         
         return events
     }
@@ -81,8 +63,8 @@ struct CrowdHomeView: View {
             ZStack {
                 // === MAP ===
                 Map(position: $cameraPosition) {
-                    // Event annotations - always visible
-                    ForEach(baseMockEvents) { event in
+                    // Event annotations - always visible (mock + user-created)
+                    ForEach(allEvents) { event in
                         Annotation(event.title, coordinate: event.coordinates) {
                             Button {
                                 selectedEvent = event
