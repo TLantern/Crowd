@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreLocation
+import MapKit
 
 struct HostEventSheet: View {
     let defaultRegion: CampusRegion
