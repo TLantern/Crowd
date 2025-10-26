@@ -219,9 +219,7 @@ struct HostEventSheet: View {
     }
     
     private func reverseGeocodeLocation(_ coordinate: CLLocationCoordinate2D) {
-        // Use MKLocalSearch as an alternative to deprecated CLGeocoder
-        let location = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-        
+        // Create MKLocalSearch request to reverse geocode the coordinate
         let searchRequest = MKLocalSearch.Request()
         searchRequest.naturalLanguageQuery = "\(coordinate.latitude),\(coordinate.longitude)"
         searchRequest.region = MKCoordinateRegion(
