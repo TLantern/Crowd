@@ -93,6 +93,9 @@ class LocationSearchCompleter: NSObject, ObservableObject, MKLocalSearchComplete
     @Published var results: [MKLocalSearchCompletion] = []
     private let completer = MKLocalSearchCompleter()
     
+    // UNT Denton coordinates: 33.2098° N, 97.1526° W
+    private let dentonCenter = CLLocationCoordinate2D(latitude: 33.2098, longitude: -97.1526)
+    
     var queryFragment: String = "" {
         didSet {
             completer.queryFragment = queryFragment
@@ -103,6 +106,14 @@ class LocationSearchCompleter: NSObject, ObservableObject, MKLocalSearchComplete
         super.init()
         completer.delegate = self
         completer.resultTypes = .address
+        
+        // Set region to Denton, TX area (approximately 10km radius covering UNT and surrounding Denton)
+        let dentonRegion = MKCoordinateRegion(
+            center: dentonCenter,
+            latitudinalMeters: 20000,  // ~10km radius
+            longitudinalMeters: 20000
+        )
+        completer.region = dentonRegion
     }
     
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
