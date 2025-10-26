@@ -128,6 +128,7 @@ final class FirebaseEventRepository: EventRepository {
         let signalStrength = data["signalStrength"] as? Int ?? 0
         let attendeeCount = data["attendeeCount"] as? Int ?? 0
         let hostId = data["hostId"] as? String ?? ""
+        let hostName = data["hostName"] as? String ?? "Guest"
         
         // Parse timestamps
         var startsAt: Date?
@@ -160,6 +161,7 @@ final class FirebaseEventRepository: EventRepository {
             id: id,
             title: title,
             hostId: hostId,
+            hostName: hostName,
             latitude: lat,
             longitude: lon,
             radiusMeters: radiusMeters,
