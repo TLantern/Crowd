@@ -12,29 +12,46 @@ import Combine
 struct LocationSearchField: View {
     @Binding var locationName: String
     @Binding var coordinate: CLLocationCoordinate2D
+    var onUseCurrentLocation: () -> Void
     
     @StateObject private var searchCompleter = LocationSearchCompleter()
     @State private var isShowingSuggestions = false
     @FocusState private var isFocused: Bool
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            TextField("Search location...", text: $locationName)
-                .focused($isFocused)
-                .textFieldStyle(.plain)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color(.systemGray6))
-                .cornerRadius(8)
-                .onChange(of: locationName) { _, newValue in
-                    searchCompleter.queryFragment = newValue
-                    isShowingSuggestions = !newValue.isEmpty
-                }
-                .onChange(of: isFocused) { _, focused in
-                    if focused && !locationName.isEmpty {
-                        isShowingSuggestions = true
+        VStack(alignment: .leading, spacing: 8) {
+            // Search field with "Use Current Location" button
+            HStack(spacing: 8) {
+                TextField("Current Location", text: $locationName)
+                    .focused($isFocused)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                    .onChange(of: locationName) { _, newValue in
+                        searchCompleter.queryFragment = newValue
+                        isShowingSuggestions = !newValue.isEmpty
                     }
+                    .onChange(of: isFocused) { _, focused in
+                        if focused && !locationName.isEmpty {
+                            isShowingSuggestions = true
+                        }
+                    }
+                
+                Button(action: {
+                    onUseCurrentLocation()
+                    isFocused = false
+                    isShowingSuggestions = false
+                }) {
+                    Image(systemName: "location.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white)
+                        .frame(width: 40, height: 40)
+                        .background(Color.accentColor)
+                        .cornerRadius(8)
                 }
+            }
             
             if isShowingSuggestions && !searchCompleter.results.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {

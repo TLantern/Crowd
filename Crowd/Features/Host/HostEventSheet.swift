@@ -118,7 +118,8 @@ struct HostEventSheet: View {
                 Section("Location") {
                     LocationSearchField(
                         locationName: $locationName,
-                        coordinate: $coord
+                        coordinate: $coord,
+                        onUseCurrentLocation: useCurrentLocation
                     )
                 }
                 
@@ -179,6 +180,9 @@ struct HostEventSheet: View {
     // MARK: - Location Initialization
     
     private func initializeLocation() {
+        // Request location permissions and start updating
+        appEnv.location.requestSoftAuth()
+        
         // Try to use current location from LocationService
         if let currentLocation = appEnv.location.lastKnown {
             coord = currentLocation
@@ -187,6 +191,30 @@ struct HostEventSheet: View {
             // Fallback: use default region and set a generic name
             coord = defaultRegion.spec.center
             locationName = "Current Location"
+        }
+    }
+    
+    private func useCurrentLocation() {
+        // Ensure location service is active
+        appEnv.location.requestSoftAuth()
+        
+        // Use current location if available
+        if let currentLocation = appEnv.location.lastKnown {
+            coord = currentLocation
+            reverseGeocodeLocation(currentLocation)
+        } else {
+            // Show a placeholder while waiting for location
+            locationName = "Getting location..."
+            
+            // Try again after a short delay to give LocationService time to update
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                if let currentLocation = appEnv.location.lastKnown {
+                    coord = currentLocation
+                    reverseGeocodeLocation(currentLocation)
+                } else {
+                    locationName = "Location unavailable"
+                }
+            }
         }
     }
     
