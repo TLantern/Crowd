@@ -61,6 +61,7 @@ actor MockEventRepository: EventRepository {
             id: UUID().uuidString,
             title: "Pop-up on \(regionName)",
             hostId: "u1",
+            hostName: "Alex",
             latitude: c.latitude + 0.0009,
             longitude: c.longitude + 0.0007,
             radiusMeters: 60,
@@ -69,13 +70,16 @@ actor MockEventRepository: EventRepository {
             createdAt: Date(),
             signalStrength: 8,
             attendeeCount: 14,
-            tags: ["music"]
+            tags: ["music"],
+            category: "Music/Concert",
+            description: "📍 \(regionName)\n⏰ Starting now\n🎵 Live music pop-up"
         )
 
         let e2 = CrowdEvent(
             id: UUID().uuidString,
             title: "Game Night",
             hostId: "u2",
+            hostName: "Jordan",
             latitude: c.latitude - 0.0011,
             longitude: c.longitude - 0.0005,
             radiusMeters: 60,
@@ -84,7 +88,9 @@ actor MockEventRepository: EventRepository {
             createdAt: Date(),
             signalStrength: 5,
             attendeeCount: 9,
-            tags: ["games"]
+            tags: ["games"],
+            category: "Gaming",
+            description: "📍 \(regionName)\n⏰ Starting now\n🎮 Casual game night"
         )
 
         store[e1.id] = e1

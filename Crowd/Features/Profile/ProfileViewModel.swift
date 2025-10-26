@@ -169,12 +169,12 @@ final class ProfileViewModel: ObservableObject {
             MiniUser(id: "5", name: "Taylor Brown", avatarColor: .blue, tags: ["Art", "Music"], mutualFriendsCount: 10)
         ],
         gallery: [
-            CrowdEvent(id: "g1", title: "Study Session", hostId: "user1", latitude: 33.2, longitude: -97.1, radiusMeters: 50, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 8, attendeeCount: 12, tags: ["Study"]),
-            CrowdEvent(id: "g2", title: "Basketball Game", hostId: "user1", latitude: 33.2, longitude: -97.1, radiusMeters: 100, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 9, attendeeCount: 24, tags: ["Sports"]),
-            CrowdEvent(id: "g3", title: "Coffee Meetup", hostId: "user1", latitude: 33.2, longitude: -97.1, radiusMeters: 30, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 6, attendeeCount: 8, tags: ["Social"]),
-            CrowdEvent(id: "g4", title: "Concert", hostId: "user1", latitude: 33.2, longitude: -97.1, radiusMeters: 200, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 10, attendeeCount: 150, tags: ["Music"]),
-            CrowdEvent(id: "g5", title: "Hackathon", hostId: "user1", latitude: 33.2, longitude: -97.1, radiusMeters: 80, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 7, attendeeCount: 35, tags: ["Tech"]),
-            CrowdEvent(id: "g6", title: "Art Gallery", hostId: "user1", latitude: 33.2, longitude: -97.1, radiusMeters: 60, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 5, attendeeCount: 18, tags: ["Art"])
+            CrowdEvent(id: "g1", title: "Study Session", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 50, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 8, attendeeCount: 12, tags: ["Study"], category: "Study Session", description: nil),
+            CrowdEvent(id: "g2", title: "Basketball Game", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 100, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 9, attendeeCount: 24, tags: ["Sports"], category: "Pickup Game", description: nil),
+            CrowdEvent(id: "g3", title: "Coffee Meetup", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 30, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 6, attendeeCount: 8, tags: ["Social"], category: "Coffee/Hangout", description: nil),
+            CrowdEvent(id: "g4", title: "Concert", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 200, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 10, attendeeCount: 150, tags: ["Music"], category: "Music/Concert", description: nil),
+            CrowdEvent(id: "g5", title: "Hackathon", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 80, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 7, attendeeCount: 35, tags: ["Tech"], category: "Networking", description: nil),
+            CrowdEvent(id: "g6", title: "Art Gallery", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 60, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 5, attendeeCount: 18, tags: ["Art"], category: "Party", description: nil)
         ],
         suggestedUsers: [
             MiniUser(id: "s1", name: "Emma Wilson", avatarColor: .indigo, tags: ["Music", "Food"], mutualFriendsCount: 5),
