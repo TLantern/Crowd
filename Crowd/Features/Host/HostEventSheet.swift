@@ -219,34 +219,35 @@ struct HostEventSheet: View {
     }
     
     private func reverseGeocodeLocation(_ coordinate: CLLocationCoordinate2D) {
-        let request = MKReverseGeocodingRequest(coordinate: coordinate)
+        // Use MKLocalSearch as an alternative to deprecated CLGeocoder
+        let location = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
         
-        Task {
-            do {
-                let response = try await request.start()
-                guard let placemark = response.mapItems.first?.placemark else {
-                    await MainActor.run {
-                        locationName = "Current Location"
-                    }
-                    return
-                }
-                
-                await MainActor.run {
-                    // Build location name from placemark
-                    if let name = placemark.name {
-                        locationName = name
-                    } else if let thoroughfare = placemark.thoroughfare {
-                        locationName = thoroughfare
-                    } else if let locality = placemark.locality {
-                        locationName = locality
-                    } else {
-                        locationName = "Current Location"
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    locationName = "Current Location"
-                }
+        let searchRequest = MKLocalSearch.Request()
+        searchRequest.naturalLanguageQuery = "\(coordinate.latitude),\(coordinate.longitude)"
+        searchRequest.region = MKCoordinateRegion(
+            center: coordinate,
+            latitudinalMeters: 100,
+            longitudinalMeters: 100
+        )
+        
+        let search = MKLocalSearch(request: searchRequest)
+        search.start { response, error in
+            guard let response = response,
+                  let item = response.mapItems.first,
+                  let placemark = item.placemark as MKPlacemark? else {
+                locationName = "Current Location"
+                return
+            }
+            
+            // Build location name from placemark
+            if let name = placemark.name {
+                locationName = name
+            } else if let thoroughfare = placemark.thoroughfare {
+                locationName = thoroughfare
+            } else if let locality = placemark.locality {
+                locationName = locality
+            } else {
+                locationName = "Current Location"
             }
         }
     }
