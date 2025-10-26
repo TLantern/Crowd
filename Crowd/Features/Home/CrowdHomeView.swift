@@ -89,18 +89,20 @@ struct CrowdHomeView: View {
     @State private var showMessages = false
     @State private var showCalendar = false
 
+    // Computed map region for heatmap overlay
+    var mapRegion: MKCoordinateRegion {
+        MKCoordinateRegion(
+            center: currentCamera.centerCoordinate,
+            latitudinalMeters: currentCamera.distance * 1.5,
+            longitudinalMeters: currentCamera.distance * 1.5
+        )
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
                 // === MAP ===
                 Map(position: $cameraPosition) {
-                    // Professional heatmap overlays (fade based on zoom)
-                    if showHeatmap && heatmapOpacity > 0.01 {
-                        ForEach(allEvents) { event in
-                            HeatmapLayers(event: event, opacity: heatmapOpacity)
-                        }
-                    }
-                    
                     // Event annotations (only shown when zoomed in)
                     if showEventMarkers {
                         ForEach(baseMockEvents) { event in
@@ -210,6 +212,18 @@ struct CrowdHomeView: View {
                             )
                         }
                     }
+                
+                // === GPU-ACCELERATED HEATMAP OVERLAY ===
+                if showHeatmap && heatmapOpacity > 0.01 {
+                    CrowdHeatmapOverlay(
+                        events: allEvents,
+                        mapRegion: mapRegion
+                    )
+                    .opacity(heatmapOpacity)
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea()
+                }
+                
                 // === OVERLAYS & CONTROLS ===
                 GeometryReader { geo in
                     // Panel metrics shared by panel and floating buttons
