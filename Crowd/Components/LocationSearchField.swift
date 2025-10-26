@@ -7,6 +7,7 @@
 
 import SwiftUI
 import MapKit
+import Combine
 
 struct LocationSearchField: View {
     @Binding var locationName: String
@@ -80,7 +81,7 @@ struct LocationSearchField: View {
                 return
             }
             
-            coordinate = item.placemark.coordinate
+            coordinate = item.location.coordinate
             locationName = result.title
             isShowingSuggestions = false
             isFocused = false
