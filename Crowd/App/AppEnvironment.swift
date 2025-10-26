@@ -21,7 +21,7 @@ struct AppEnvironment {
         let config = Config.build()
         return AppEnvironment(
             config: config,
-            eventRepo: MockEventRepository(),      // swap to FirebaseEventRepository() later
+            eventRepo: FirebaseEventRepository(),  // Connected to local emulators
             analytics: AnalyticsService(),
             presence: PresenceService(),
             location: LocationService(),
