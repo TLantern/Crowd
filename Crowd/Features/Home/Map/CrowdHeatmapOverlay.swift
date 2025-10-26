@@ -58,14 +58,19 @@ struct MetalHeatmapView: UIViewRepresentable {
         mtkView.framebufferOnly = false
         mtkView.backgroundColor = .clear
         mtkView.isOpaque = false
+        mtkView.preferredFramesPerSecond = 60
         return mtkView
     }
     
     func updateUIView(_ uiView: MTKView, context: Context) {
+        // Update coordinator data
         context.coordinator.points = points
         context.coordinator.mapRegion = mapRegion
         context.coordinator.geometry = geometry
-        uiView.setNeedsDisplay()
+        
+        // Force immediate redraw to sync with map movement
+        context.coordinator.needsRedraw = true
+        uiView.draw()
     }
     
     func makeCoordinator() -> Coordinator {
@@ -76,6 +81,7 @@ struct MetalHeatmapView: UIViewRepresentable {
         var points: [HeatmapPoint]
         var mapRegion: MKCoordinateRegion
         var geometry: GeometryProxy
+        var needsRedraw: Bool = true
         
         private var device: MTLDevice!
         private var commandQueue: MTLCommandQueue!

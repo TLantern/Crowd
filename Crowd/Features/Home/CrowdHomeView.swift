@@ -91,10 +91,13 @@ struct CrowdHomeView: View {
 
     // Computed map region for heatmap overlay
     var mapRegion: MKCoordinateRegion {
-        MKCoordinateRegion(
+        // Use the camera distance directly - it represents the eye altitude
+        // Convert to a region that matches what's visible on screen
+        let distance = currentCamera.distance
+        return MKCoordinateRegion(
             center: currentCamera.centerCoordinate,
-            latitudinalMeters: currentCamera.distance * 1.5,
-            longitudinalMeters: currentCamera.distance * 1.5
+            latitudinalMeters: distance * 2.0,  // Account for perspective
+            longitudinalMeters: distance * 2.0
         )
     }
     

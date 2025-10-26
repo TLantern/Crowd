@@ -50,14 +50,28 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		3510D0D52EADE7F800017CE9 /* HeatmapShaders.metal.metallib */ = {isa = PBXFileReference; explicitFileType = "archive.metal-library"; includeInIndex = 0; path = HeatmapShaders.metal.metallib; sourceTree = BUILT_PRODUCTS_DIR; };
 		3549F83E2EA49FED00AADFB0 /* Crowd.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Crowd.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3549F84B2EA49FF000AADFB0 /* CrowdTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CrowdTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3549F8552EA49FF000AADFB0 /* CrowdUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CrowdUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		3510D0DE2EADE84000017CE9 /* Exceptions for "Crowd" folder in "HeatmapShaders.metal" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Shaders/HeatmapShaders.metal,
+			);
+			target = 3510D0D42EADE7F800017CE9 /* HeatmapShaders.metal */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		3549F8402EA49FED00AADFB0 /* Crowd */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3510D0DE2EADE84000017CE9 /* Exceptions for "Crowd" folder in "HeatmapShaders.metal" target */,
+			);
 			path = Crowd;
 			sourceTree = "<group>";
 		};
@@ -125,6 +139,7 @@
 				3549F83E2EA49FED00AADFB0 /* Crowd.app */,
 				3549F84B2EA49FF000AADFB0 /* CrowdTests.xctest */,
 				3549F8552EA49FF000AADFB0 /* CrowdUITests.xctest */,
+				3510D0D52EADE7F800017CE9 /* HeatmapShaders.metal.metallib */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -132,6 +147,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		3510D0D42EADE7F800017CE9 /* HeatmapShaders.metal */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3510D0D92EADE7F800017CE9 /* Build configuration list for PBXNativeTarget "HeatmapShaders.metal" */;
+			buildPhases = (
+				3510D0D32EADE7F800017CE9 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HeatmapShaders.metal;
+			packageProductDependencies = (
+			);
+			productName = HeatmapShaders.metal;
+			productReference = 3510D0D52EADE7F800017CE9 /* HeatmapShaders.metal.metallib */;
+			productType = "com.apple.product-type.metal-library";
+		};
 		3549F83D2EA49FED00AADFB0 /* Crowd */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3549F85F2EA49FF000AADFB0 /* Build configuration list for PBXNativeTarget "Crowd" */;
@@ -227,6 +259,9 @@
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					3510D0D42EADE7F800017CE9 = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
 					3549F83D2EA49FED00AADFB0 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -260,6 +295,7 @@
 				3549F83D2EA49FED00AADFB0 /* Crowd */,
 				3549F84A2EA49FF000AADFB0 /* CrowdTests */,
 				3549F8542EA49FF000AADFB0 /* CrowdUITests */,
+				3510D0D42EADE7F800017CE9 /* HeatmapShaders.metal */,
 			);
 		};
 /* End PBXProject section */
@@ -289,6 +325,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		3510D0D32EADE7F800017CE9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		3549F83A2EA49FED00AADFB0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -326,6 +369,26 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		3510D0DA2EADE7F800017CE9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8254DAMG44;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				VERSIONING_SYSTEM = "";
+			};
+			name = Debug;
+		};
+		3510D0DB2EADE7F800017CE9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8254DAMG44;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				VERSIONING_SYSTEM = "";
+			};
+			name = Release;
+		};
 		3549F85D2EA49FF000AADFB0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -598,6 +661,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		3510D0D92EADE7F800017CE9 /* Build configuration list for PBXNativeTarget "HeatmapShaders.metal" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3510D0DA2EADE7F800017CE9 /* Debug */,
+				3510D0DB2EADE7F800017CE9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		3549F8392EA49FED00AADFB0 /* Build configuration list for PBXProject "Crowd" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
