@@ -23,7 +23,6 @@ struct CrowdHomeView: View {
     // MARK: - UI state
     @State private var showHostSheet = false
     @State private var hostedEvents: [CrowdEvent] = []
-    @State private var showHeatmap = true
     @State private var selectedEvent: CrowdEvent?
     @State private var showEventDetail = false
     @State private var zoomLevel: Double = 1200 // Distance in meters
@@ -67,18 +66,6 @@ struct CrowdHomeView: View {
         return events
     }
     
-    // Computed properties for zoom-based visibility
-    var heatmapOpacity: Double {
-        // Fade out heatmap when zoomed in (distance < 600m)
-        // Full opacity at 1200m+, zero at 400m
-        return min(max((zoomLevel - 400) / 800, 0.0), 1.0)
-    }
-    
-    var showEventMarkers: Bool {
-        // Show event markers when zoomed in below 800m
-        return zoomLevel < 800
-    }
-
     // MARK: - Bottom overlay routing
     enum OverlayRoute { case none, profile, leaderboard }
     @State private var route: OverlayRoute = .none
@@ -88,81 +75,67 @@ struct CrowdHomeView: View {
     // MARK: - Floating button navigation
     @State private var showMessages = false
     @State private var showCalendar = false
-
-    // Computed map region for heatmap overlay
-    var mapRegion: MKCoordinateRegion {
-        // Use the camera distance directly - it represents the eye altitude
-        // Convert to a region that matches what's visible on screen
-        let distance = currentCamera.distance
-        return MKCoordinateRegion(
-            center: currentCamera.centerCoordinate,
-            latitudinalMeters: distance * 2.0,  // Account for perspective
-            longitudinalMeters: distance * 2.0
-        )
-    }
     
     var body: some View {
         NavigationStack {
             ZStack {
                 // === MAP ===
                 Map(position: $cameraPosition) {
-                    // Event annotations (only shown when zoomed in)
-                    if showEventMarkers {
-                        ForEach(baseMockEvents) { event in
-                            Annotation(event.title, coordinate: event.coordinates) {
-                                Button {
-                                    selectedEvent = event
-                                    showEventDetail = true
-                                } label: {
-                                    EventAnnotationView(event: event)
-                                }
+                    // Event annotations - always visible
+                    ForEach(baseMockEvents) { event in
+                        Annotation(event.title, coordinate: event.coordinates) {
+                            Button {
+                                selectedEvent = event
+                                showEventDetail = true
+                            } label: {
+                                EventAnnotationView(event: event)
                             }
-                            .annotationTitles(.hidden)
                         }
-                        
-                        // User event pin at user's location
-                        if let userLocation = locationService.lastKnown {
-                            Annotation("I'm Here!", coordinate: userLocation) {
-                                Button {
-                                    let userEvent = CrowdEvent(
-                                        id: "user-event",
-                                        title: "I'm Here!",
-                                        hostId: "user",
-                                        hostName: "You",
-                                        latitude: userLocation.latitude,
-                                        longitude: userLocation.longitude,
-                                        radiusMeters: 60,
-                                        startsAt: Date(),
-                                        endsAt: Date().addingTimeInterval(3600),
-                                        createdAt: Date(),
-                                        signalStrength: 5,
-                                        attendeeCount: 1,
-                                        tags: [],
-                                        category: "hangout"
-                                    )
-                                    selectedEvent = userEvent
-                                    showEventDetail = true
-                                } label: {
-                                    EventAnnotationView(event: CrowdEvent(
-                                        id: "user-event",
-                                        title: "I'm Here!",
-                                        hostId: "user",
-                                        hostName: "You",
-                                        latitude: userLocation.latitude,
-                                        longitude: userLocation.longitude,
-                                        radiusMeters: 60,
-                                        startsAt: Date(),
-                                        endsAt: Date().addingTimeInterval(3600),
-                                        createdAt: Date(),
-                                        signalStrength: 5,
-                                        attendeeCount: 1,
-                                        tags: [],
-                                        category: "hangout"
-                                    ))
-                                }
+                        .annotationTitles(.hidden)
+                    }
+                    
+                    // User event pin at user's location
+                    if let userLocation = locationService.lastKnown {
+                        Annotation("I'm Here!", coordinate: userLocation) {
+                            Button {
+                                let userEvent = CrowdEvent(
+                                    id: "user-event",
+                                    title: "I'm Here!",
+                                    hostId: "user",
+                                    hostName: "You",
+                                    latitude: userLocation.latitude,
+                                    longitude: userLocation.longitude,
+                                    radiusMeters: 60,
+                                    startsAt: Date(),
+                                    endsAt: Date().addingTimeInterval(3600),
+                                    createdAt: Date(),
+                                    signalStrength: 5,
+                                    attendeeCount: 1,
+                                    tags: [],
+                                    category: "hangout"
+                                )
+                                selectedEvent = userEvent
+                                showEventDetail = true
+                            } label: {
+                                EventAnnotationView(event: CrowdEvent(
+                                    id: "user-event",
+                                    title: "I'm Here!",
+                                    hostId: "user",
+                                    hostName: "You",
+                                    latitude: userLocation.latitude,
+                                    longitude: userLocation.longitude,
+                                    radiusMeters: 60,
+                                    startsAt: Date(),
+                                    endsAt: Date().addingTimeInterval(3600),
+                                    createdAt: Date(),
+                                    signalStrength: 5,
+                                    attendeeCount: 1,
+                                    tags: [],
+                                    category: "hangout"
+                                ))
                             }
-                            .annotationTitles(.hidden)
                         }
+                        .annotationTitles(.hidden)
                     }
                     
                     // User location marker (character icon)
@@ -215,17 +188,6 @@ struct CrowdHomeView: View {
                             )
                         }
                     }
-                
-                // === GPU-ACCELERATED HEATMAP OVERLAY ===
-                if showHeatmap && heatmapOpacity > 0.01 {
-                    CrowdHeatmapOverlay(
-                        events: allEvents,
-                        mapRegion: mapRegion
-                    )
-                    .opacity(heatmapOpacity)
-                    .allowsHitTesting(false)
-                    .ignoresSafeArea()
-                }
                 
                 // === OVERLAYS & CONTROLS ===
                 GeometryReader { geo in

@@ -56,7 +56,7 @@ struct EventAnnotationView: View {
                         .font(.system(size: 40))
                 )
         }
-        .scaleEffect(0.5)
+        .scaleEffect(1.0)  // Doubled from 0.5 for better visibility
     }
 }
 
