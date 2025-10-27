@@ -41,7 +41,7 @@ struct CrowdHomeView: View {
     
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
-        PrevData.mockEvents + hostedEvents
+        PrevData.events + hostedEvents
     }
 
     var body: some View {

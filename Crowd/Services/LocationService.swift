@@ -6,10 +6,11 @@
 //
 
 import CoreLocation
+import Combine
 
-final class LocationService: NSObject, CLLocationManagerDelegate {
+final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private(set) var lastKnown: CLLocationCoordinate2D?
+    @Published private(set) var lastKnown: CLLocationCoordinate2D?
 
     override init() {
         super.init()
