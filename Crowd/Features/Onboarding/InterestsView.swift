@@ -12,17 +12,65 @@ struct InterestsView: View {
     
     let onNext: ([String]) -> Void
     
-    let interests: [(emoji: String, name: String)] = [
+    let interests: [(emoji: String, title: String)] = [
         ("🎮", "Gaming"),
-        ("🎵", "Music"),
-        ("🏀", "Sports"),
-        ("🍕", "Food"),
-        ("🎥", "Movies"),
-        ("💻", "Tech"),
-        ("🎨", "Art"),
-        ("🌍", "Travel"),
-        ("🧘", "Chill")
+        ("🏀", "Basketball"),
+        ("⚽", "Soccer"),
+        ("🎾", "Tennis"),
+        ("🏈", "Football"),
+        ("🧘", "Wellness"),
+        ("🎧", "Music"),
+        ("🎤", "Singing"),
+        ("🎸", "Guitar"),
+        ("🥁", "Band Life"),
+        ("💃", "Dance"),
+        ("🎭", "Theatre"),
+        ("🎨", "Art & Design"),
+        ("📸", "Photography"),
+        ("🎥", "Filmmaking"),
+        ("🖥️", "Coding"),
+        ("🤖", "AI & Tech"),
+        ("🧬", "Science"),
+        ("📚", "Study Sessions"),
+        ("☕", "Coffee Runs"),
+        ("🍕", "Foodie"),
+        ("🍔", "Late-Night Eats"),
+        ("🏋️", "Gym Life"),
+        ("🏃", "Running"),
+        ("🧗", "Adventure"),
+        ("🚴", "Biking"),
+        ("✈️", "Travel"),
+        ("🏖️", "Beach Days"),
+        ("🏕️", "Camping"),
+        ("🏡", "Chill Spots"),
+        ("🎉", "Parties"),
+        ("🎮", "Esports"),
+        ("💻", "Startups"),
+        ("💡", "Entrepreneurship"),
+        ("🧑‍💼", "Business"),
+        ("💸", "Investing"),
+        ("💬", "Public Speaking"),
+        ("🎙️", "Podcasts"),
+        ("📰", "Campus News"),
+        ("📱", "Social Media"),
+        ("🕹️", "Retro Games"),
+        ("🧑‍🍳", "Cooking"),
+        ("🐾", "Pets"),
+        ("🪩", "Nightlife"),
+        ("💞", "Dating & Friends"),
+        ("🪶", "Writing"),
+        ("✏️", "Graphic Design"),
+        ("🌍", "Culture"),
+        ("♻️", "Sustainability"),
+        ("🔥", "Campus Events")
     ]
+    
+    // Split interests into pages of 9
+    var interestPages: [[(emoji: String, title: String)]] {
+        stride(from: 0, to: interests.count, by: 9).map {
+            Array(interests[$0..<min($0 + 9, interests.count)])
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -47,29 +95,36 @@ struct InterestsView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.black.opacity(0.7))
                             
-                            // Interest chips grid
-                            LazyVGrid(columns: [
-                                GridItem(.flexible()),
-                                GridItem(.flexible()),
-                                GridItem(.flexible())
-                            ], spacing: 12) {
-                                ForEach(interests, id: \.name) { interest in
-                                    InterestChip(
-                                        emoji: interest.emoji,
-                                        name: interest.name,
-                                        isSelected: selectedInterests.contains(interest.name)
-                                    ) {
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            if selectedInterests.contains(interest.name) {
-                                                selectedInterests.remove(interest.name)
-                                            } else {
-                                                selectedInterests.insert(interest.name)
+                            // Carousel of interest chips
+                            TabView {
+                                ForEach(0..<interestPages.count, id: \.self) { pageIndex in
+                                    LazyVGrid(columns: [
+                                        GridItem(.flexible()),
+                                        GridItem(.flexible()),
+                                        GridItem(.flexible())
+                                    ], spacing: 12) {
+                                        ForEach(interestPages[pageIndex], id: \.title) { interest in
+                                            InterestChip(
+                                                emoji: interest.emoji,
+                                                name: interest.title,
+                                                isSelected: selectedInterests.contains(interest.title)
+                                            ) {
+                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                    if selectedInterests.contains(interest.title) {
+                                                        selectedInterests.remove(interest.title)
+                                                    } else {
+                                                        selectedInterests.insert(interest.title)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
+                                    .padding(.horizontal, 4)
                                 }
                             }
-                            .padding(.horizontal, 4)
+                            .tabViewStyle(.page(indexDisplayMode: .always))
+                            .indexViewStyle(.page(backgroundDisplayMode: .always))
+                            .frame(height: 300)
                             
                             Button {
                                 onNext(Array(selectedInterests))
@@ -107,20 +162,22 @@ struct InterestChip: View {
     
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Text(emoji)
-                    .font(.system(size: 32))
+                    .font(.system(size: 28))
                 Text(name)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.black)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, 12)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 14)
                     .fill(Color.white.opacity(isSelected ? 0.8 : 0.4))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: 14)
                             .stroke(Color.black.opacity(isSelected ? 0.4 : 0.0), lineWidth: 2)
                     )
             )
