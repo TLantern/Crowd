@@ -48,3 +48,25 @@ struct EventAnnotationView: View {
         .shadow(radius: 4)
     }
 }
+
+#Preview {
+    EventAnnotationView(
+        event: CrowdEvent(
+            id: "preview-1",
+            title: "Fry St. Jam",
+            hostId: "host1",
+            hostName: "Alex",
+            latitude: 33.2089,
+            longitude: -97.1439,
+            radiusMeters: 60,
+            startsAt: Date(),
+            endsAt: Date().addingTimeInterval(3600),
+            createdAt: Date(),
+            signalStrength: 12,
+            attendeeCount: 24,
+            tags: ["music"],
+            category: "Music/Concert"
+        )
+    )
+    .padding()
+}
