@@ -56,7 +56,35 @@ struct OnboardingProfileView: View {
 
                             Menu {
                                 Button("UNT") { selectedCampus = "UNT" }
-                                Button("SMU") { selectedCampus = "SMU" }
+                                Button {
+                                    // Disabled - coming soon
+                                } label: {
+                                    HStack {
+                                        Text("UTD")
+                                        Spacer()
+                                        Text("Coming Soon")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .disabled(true)
+                                .opacity(0.5)
+                                .blur(radius: 1.5)
+                                
+                                Button {
+                                    // Disabled - coming soon
+                                } label: {
+                                    HStack {
+                                        Text("UTSA")
+                                        Spacer()
+                                        Text("Coming Soon")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .disabled(true)
+                                .opacity(0.5)
+                                .blur(radius: 1.5)
                             } label: {
                                 HStack(spacing: 12) {
                                     Spacer()
@@ -77,6 +105,7 @@ struct OnboardingProfileView: View {
                                         .fill(Color.white.opacity(0.6))
                                 )
                             }
+                            .menuOrder(.fixed)
 
                             Button(action: onNext) {
                                 Text("Next →")
