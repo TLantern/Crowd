@@ -381,6 +381,10 @@ struct HostEventSheet: View {
             endsAt: finalEndsAt
         )
         
+        // Debug: Print event details
+        print("🎯 Creating event '\(event.title)' at location: \(locationName)")
+        print("🎯 Coordinates: lat=\(event.latitude), lon=\(event.longitude)")
+        
         onCreate(event)
         dismiss()
     }
@@ -418,6 +422,8 @@ struct LocationPickerView: View {
                 Button {
                     locationName = location.name
                     coordinate = location.coordinate
+                    print("📍 Selected location: \(location.name)")
+                    print("📍 Coordinates set to: lat=\(location.coordinate.latitude), lon=\(location.coordinate.longitude)")
                     searchText = ""
                     dismiss()
                 } label: {
