@@ -24,8 +24,6 @@ struct CrowdHomeView: View {
     // MARK: - UI state
     @State private var showHostSheet = false
     @State private var hostedEvents: [CrowdEvent] = []
-    @State private var selectedEvent: CrowdEvent?
-    @State private var showEventDetail = false
 
     // MARK: - Bottom overlay routing
     enum OverlayRoute { case none, profile, leaderboard }
@@ -37,10 +35,13 @@ struct CrowdHomeView: View {
     @State private var showMessages = false
     @State private var showCalendar = false
     
-    // MARK: - Mock events for display
+    // MARK: - Event detail
+    @State private var selectedEvent: CrowdEvent?
+    @State private var showEventDetail = false
+    
+    // MARK: - Computed
     var allEvents: [CrowdEvent] {
-        // Return hosted events for now
-        hostedEvents
+        PrevData.events + hostedEvents
     }
 
     var body: some View {
@@ -132,7 +133,7 @@ struct CrowdHomeView: View {
                         .annotationTitles(.hidden)
                     }
                 }
-                    .mapControls { MapCompass() }
+                .mapControls { MapCompass() }
                     .ignoresSafeArea()
                     .onAppear { snapTo(selectedRegion) }
                     .onChange(of: selectedRegion) { _, new in snapTo(new) }
@@ -312,7 +313,7 @@ struct CrowdHomeView: View {
         }
         .sheet(isPresented: $showHostSheet) {
             HostEventSheet(defaultRegion: selectedRegion) { hostedEvents.append($0) }
-                .presentationDetents([.fraction(0.75)])
+                .presentationDetents([.fraction(0.75), .large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showEventDetail) {

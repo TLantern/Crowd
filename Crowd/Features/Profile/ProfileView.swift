@@ -49,9 +49,9 @@ struct ProfileView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
                     identityBlock
-                    interactionBar
                     statsRow
                     tagsSection
+                    interactionBar
                     gallerySection
                     suggestedConnectionsSection
 
