@@ -413,6 +413,7 @@ struct LocationPickerView: View {
     var onUseCurrentLocation: () -> Void
     
     @Environment(\.dismiss) private var dismiss
+    @State private var isSearching = false
     
     var allLocations: [PredefinedLocation] {
         // Combine UNT locations with any Firestore locations in the future
@@ -429,15 +430,61 @@ struct LocationPickerView: View {
         }
     }
     
+    // MARK: - Apple Maps Geocoding
+    
+    private func searchLocationOnAppleMaps(locationName: String) {
+        isSearching = true
+        print("🔍 Searching Apple Maps for: \(locationName)")
+        
+        let searchRequest = MKLocalSearch.Request()
+        searchRequest.naturalLanguageQuery = "\(locationName), University of North Texas, Denton, TX"
+        searchRequest.region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 33.210081, longitude: -97.147700), // UNT center
+            latitudinalMeters: 5000,
+            longitudinalMeters: 5000
+        )
+        
+        let search = MKLocalSearch(request: searchRequest)
+        search.start { response, error in
+            isSearching = false
+            
+            if let error = error {
+                print("❌ Apple Maps search error: \(error.localizedDescription)")
+                // Fall back to hardcoded coordinate
+                return
+            }
+            
+            guard let mapItem = response?.mapItems.first else {
+                print("❌ No results found for: \(locationName)")
+                return
+            }
+            
+            let foundCoordinate = mapItem.placemark.coordinate
+            print("✅ Found on Apple Maps: \(mapItem.name ?? "Unknown")")
+            print("✅ Apple Maps coordinates: lat=\(foundCoordinate.latitude), lon=\(foundCoordinate.longitude)")
+            
+            // Update the coordinate with Apple Maps result
+            DispatchQueue.main.async {
+                self.coordinate = foundCoordinate
+                print("✅ Updated event coordinate to Apple Maps location")
+            }
+        }
+    }
+    
     var body: some View {
         List {
             // Predefined UNT Locations
             ForEach(filteredLocations) { location in
                 Button {
                     locationName = location.name
+                    // Set hardcoded coordinate as fallback
                     coordinate = location.coordinate
                     print("📍 Selected location: \(location.name)")
-                    print("📍 Coordinates set to: lat=\(location.coordinate.latitude), lon=\(location.coordinate.longitude)")
+                    print("📍 Fallback coordinates: lat=\(location.coordinate.latitude), lon=\(location.coordinate.longitude)")
+                    
+                    // Search Apple Maps for exact location
+                    searchLocationOnAppleMaps(locationName: location.name)
+                    
                     searchText = ""
                     dismiss()
                 } label: {
@@ -456,8 +503,13 @@ struct LocationPickerView: View {
             // Custom location option
             if !searchText.isEmpty && !filteredLocations.contains(where: { $0.name.localizedCaseInsensitiveCompare(searchText) == .orderedSame }) {
                 Button {
-                    locationName = searchText
-                    // Keep current coordinate or use a default
+                    let customLocationName = searchText
+                    locationName = customLocationName
+                    print("📍 Custom location entered: \(customLocationName)")
+                    
+                    // Search Apple Maps for custom location
+                    searchLocationOnAppleMaps(locationName: customLocationName)
+                    
                     searchText = ""
                     dismiss()
                 } label: {
