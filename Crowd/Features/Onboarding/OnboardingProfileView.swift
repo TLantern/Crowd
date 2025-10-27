@@ -10,8 +10,10 @@ import SwiftUI
 struct OnboardingProfileView: View {
     @State private var username: String = ""
     @State private var selectedCampus: String = "UNT"
+    @State private var selectedImage: UIImage?
+    @State private var showImagePicker = false
     
-    let onNext: () -> Void
+    let onNext: (String, String, UIImage?) -> Void
     
     var body: some View {
         ZStack {
@@ -36,10 +38,44 @@ struct OnboardingProfileView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.black.opacity(0.7))
 
-                            Image("ProfilePlaceholder")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 94, height: 94)
+                            VStack(spacing: 8) {
+                                Button {
+                                    showImagePicker = true
+                                } label: {
+                                    ZStack(alignment: .bottomTrailing) {
+                                        if let selectedImage = selectedImage {
+                                            Image(uiImage: selectedImage)
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 94, height: 94)
+                                                .clipShape(Circle())
+                                        } else {
+                                            Image("ProfilePlaceholder")
+                                                .resizable()
+                                                .scaledToFit()
+                                                .frame(width: 94, height: 94)
+                                        }
+                                    }
+                                }
+                                
+                                Button {
+                                    showImagePicker = true
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "pencil")
+                                            .font(.system(size: 12))
+                                        Text("Edit")
+                                            .font(.system(size: 14, weight: .medium))
+                                    }
+                                    .foregroundColor(.black.opacity(0.6))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color.white.opacity(0.7))
+                                    )
+                                }
+                            }
 
                             TextField("Ex. Scrappy", text: $username)
                                 .padding()
@@ -107,7 +143,9 @@ struct OnboardingProfileView: View {
                             }
                             .menuOrder(.fixed)
 
-                            Button(action: onNext) {
+                            Button {
+                                onNext(username, selectedCampus, selectedImage)
+                            } label: {
                                 Text("Next →")
                                     .font(.system(size: 18, weight: .medium))
                                     .padding(.vertical, 14)
@@ -127,12 +165,15 @@ struct OnboardingProfileView: View {
                 Spacer()
             }
         }
+        .sheet(isPresented: $showImagePicker) {
+            ProfileImagePicker(selectedImage: $selectedImage)
+        }
     }
 }
 
 #Preview {
-    OnboardingProfileView {
-        print("Next tapped")
+    OnboardingProfileView { username, campus, image in
+        print("Next tapped - Username: \(username), Campus: \(campus), Has Image: \(image != nil)")
     }
 }
 
