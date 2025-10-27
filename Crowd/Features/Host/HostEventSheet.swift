@@ -24,19 +24,20 @@ struct PredefinedLocation: Identifiable {
 
 let untLocations: [PredefinedLocation] = [
     PredefinedLocation(name: "University Union", coordinate: CLLocationCoordinate2D(latitude: 33.2098926, longitude: -97.1514762)),
-    PredefinedLocation(name: "Willis Library", coordinate: CLLocationCoordinate2D(latitude: 33.210113, longitude: -97.148993)),
-    PredefinedLocation(name: "Business Leadership Building", coordinate: CLLocationCoordinate2D(latitude: 33.2088910, longitude: -97.1476490)),
-    PredefinedLocation(name: "Sage Hall", coordinate: CLLocationCoordinate2D(latitude: 33.210293, longitude: -97.151120)),
-    PredefinedLocation(name: "DATCU Stadium", coordinate: CLLocationCoordinate2D(latitude: 33.197700, longitude: -97.151600)),
-    PredefinedLocation(name: "Discovery Park", coordinate: CLLocationCoordinate2D(latitude: 33.248300, longitude: -97.152700)),
-    PredefinedLocation(name: "The Syndicate", coordinate: CLLocationCoordinate2D(latitude: 33.209850, longitude: -97.151470)),
-    PredefinedLocation(name: "Kerr Hall", coordinate: CLLocationCoordinate2D(latitude: 33.211200, longitude: -97.152300)),
-    PredefinedLocation(name: "Joe Greene Hall", coordinate: CLLocationCoordinate2D(latitude: 33.211850, longitude: -97.153600)),
-    PredefinedLocation(name: "Denton Square", coordinate: CLLocationCoordinate2D(latitude: 33.214400, longitude: -97.133100)),
-    PredefinedLocation(name: "Clark Hall", coordinate: CLLocationCoordinate2D(latitude: 33.211900, longitude: -97.153900)),
-    PredefinedLocation(name: "Rec Center", coordinate: CLLocationCoordinate2D(latitude: 33.209300, longitude: -97.152400)),
-    PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.209000, longitude: -97.151100)),
-    PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.210200, longitude: -97.150600))
+    PredefinedLocation(name: "Willis Library", coordinate: CLLocationCoordinate2D(latitude: 33.210113, longitude: -97.1489542)),
+    PredefinedLocation(name: "Business Leadership Building", coordinate: CLLocationCoordinate2D(latitude: 33.2088579, longitude: -97.147729)),
+    PredefinedLocation(name: "Sage Hall", coordinate: CLLocationCoordinate2D(latitude: 33.212014, longitude: -97.1467232)),
+    PredefinedLocation(name: "DATCU Stadium", coordinate: CLLocationCoordinate2D(latitude: 33.2039355, longitude: -97.1592403)),
+    PredefinedLocation(name: "Discovery Park", coordinate: CLLocationCoordinate2D(latitude: 33.25331, longitude: -97.1544)),
+    PredefinedLocation(name: "The Syndicate", coordinate: CLLocationCoordinate2D(latitude: 33.2107832, longitude: -97.1477704)),
+    PredefinedLocation(name: "Kerr Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20771, longitude: -97.14754)),
+    PredefinedLocation(name: "Joe Greene Hall", coordinate: CLLocationCoordinate2D(latitude: 33.2069554, longitude: -97.1462809)),
+    PredefinedLocation(name: "Denton Square", coordinate: CLLocationCoordinate2D(latitude: 33.2150434, longitude: -97.1330684)),
+    PredefinedLocation(name: "Clark Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20779, longitude: -97.15143)),
+    PredefinedLocation(name: "Pohl Recreation Center", coordinate: CLLocationCoordinate2D(latitude: 33.21207, longitude: -97.15404)),
+    PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.2106644, longitude: -97.1501177)),
+    PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.2131446, longitude: -97.1454504)),
+    PredefinedLocation(name: "UNT Coliseum", coordinate: CLLocationCoordinate2D(latitude: 33.208611, longitude: -97.154167))
 ]
 
 struct HostEventSheet: View {
@@ -211,7 +212,9 @@ struct HostEventSheet: View {
                     generateDescription()
                 }
             }
-            .onChange(of: locationName) { _, _ in
+            .onChange(of: locationName) { oldValue, newValue in
+                print("📝 locationName changed from '\(oldValue)' to '\(newValue)'")
+                print("📝 Current coord: lat=\(coord.latitude), lon=\(coord.longitude)")
                 generateDescription()
             }
         }
@@ -220,17 +223,20 @@ struct HostEventSheet: View {
     // MARK: - Location Initialization
     
     private func initializeLocation() {
+        print("🏁 initializeLocation() called")
         // Request location permissions and start updating
         appEnv.location.requestSoftAuth()
         
         // Try to use current location from LocationService
         if let currentLocation = appEnv.location.lastKnown {
             coord = currentLocation
+            print("🏁 Set coord to GPS location: lat=\(currentLocation.latitude), lon=\(currentLocation.longitude)")
             reverseGeocodeLocation(currentLocation)
         } else {
             // Fallback: use default region center with "Current Location" as default
             coord = defaultRegion.spec.center
             locationName = "" // Leave empty to show "Current Location" placeholder
+            print("🏁 No GPS, set coord to region center: lat=\(coord.latitude), lon=\(coord.longitude)")
         }
     }
     
@@ -373,6 +379,10 @@ struct HostEventSheet: View {
             finalEndsAt = endDate
         }
         
+        // Debug: Print coordinate BEFORE creating event
+        print("🔍 BEFORE createEvent - coord: lat=\(coord.latitude), lon=\(coord.longitude)")
+        print("🔍 BEFORE createEvent - locationName: '\(locationName)'")
+        
         let event = CrowdEvent.newDraft(
             at: coord,
             title: title.isEmpty ? "Crowd" : title,
@@ -386,7 +396,8 @@ struct HostEventSheet: View {
         
         // Debug: Print event details
         print("🎯 Creating event '\(event.title)' at location: \(locationName)")
-        print("🎯 Coordinates: lat=\(event.latitude), lon=\(event.longitude)")
+        print("🎯 Event coordinates: lat=\(event.latitude), lon=\(event.longitude)")
+        print("🎯 Expected (The Syndicate): lat=33.209850, lon=-97.151470")
         
         onCreate(event)
         dismiss()
