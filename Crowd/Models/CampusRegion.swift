@@ -15,6 +15,7 @@ enum CampusRegion: String, CaseIterable, Identifiable {
     case athletics = "Athletics"
     case sororitiesFrats = "Sororities/Frats"
     case fryStreet = "Fry Street"
+    case discoveryPark = "Discovery Park"
 
     var id: String { rawValue }
 
@@ -43,12 +44,14 @@ enum CampusRegion: String, CaseIterable, Identifiable {
                        minZoom: 120,
                        maxZoom: 3000)
         case .athletics:
-            RegionSpec(center: .init(latitude: 33.20966163808522, longitude: -97.15312219148802),
-                       distance: 1200,
-                       heading: 0,
-                       pitch: 0,
-                       minZoom: 120,
-                       maxZoom: 3000)
+            RegionSpec(
+                center: .init(latitude: 33.20179, longitude: -97.15859),
+                distance: 1200,
+                heading: 0,
+                pitch: 0,
+                minZoom: 120,
+                maxZoom: 3000
+            )
         case .sororitiesFrats:
             RegionSpec(center: .init(latitude: 33.20874975594727, longitude: -97.14290223812876),
                        distance: 1200,
@@ -58,6 +61,13 @@ enum CampusRegion: String, CaseIterable, Identifiable {
                        maxZoom: 3000)
         case .fryStreet:
             RegionSpec(center: .init(latitude: 33.21407, longitude: -97.14607),
+                       distance: 1200,
+                       heading: 0,
+                       pitch: 0,
+                       minZoom: 120,
+                       maxZoom: 3000)
+        case .discoveryPark:
+            RegionSpec(center: .init(latitude: 33.2543441, longitude: -97.1532534),
                        distance: 1200,
                        heading: 0,
                        pitch: 0,
