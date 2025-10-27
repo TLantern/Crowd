@@ -51,11 +51,8 @@ struct ProfileView: View {
                     identityBlock
                     statsRow
                     tagsSection
-<<<<<<< Updated upstream
                     interactionBar
                     mutualsSection
-=======
->>>>>>> Stashed changes
                     gallerySection
                     suggestedConnectionsSection
 
