@@ -11,17 +11,12 @@ struct EventAnnotationView: View {
     let event: CrowdEvent
     
     var emoji: String {
-        // Map category to emoji, default to fire
-        guard let category = event.category else { return "🔥" }
-        switch category.lowercased() {
-        case "food": return "🍔"
-        case "sports": return "🏀"
-        case "study": return "📚"
-        case "party": return "🎉"
-        case "music": return "🎵"
-        case "hangout": return "🔥"
-        default: return "🔥"
+        // Map category to emoji using EventCategory enum
+        guard let categoryString = event.category,
+              let eventCategory = EventCategory(rawValue: categoryString) else {
+            return "🔥" // Default fallback
         }
+        return eventCategory.emoji
     }
 
     var body: some View {
