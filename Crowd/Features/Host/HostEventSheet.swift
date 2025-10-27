@@ -192,7 +192,10 @@ struct HostEventSheet: View {
                 }
             }
             .onAppear {
-                initializeLocation()
+                // Only initialize location if user hasn't selected one yet
+                if locationName.isEmpty {
+                    initializeLocation()
+                }
             }
             .onChange(of: title) { _, _ in
                 debouncedGenerateDescription()
@@ -225,9 +228,9 @@ struct HostEventSheet: View {
             coord = currentLocation
             reverseGeocodeLocation(currentLocation)
         } else {
-            // Fallback: use default region and set a generic name
+            // Fallback: use default region but leave name empty so user must select
             coord = defaultRegion.spec.center
-            locationName = "Current Location"
+            locationName = ""
         }
     }
     
