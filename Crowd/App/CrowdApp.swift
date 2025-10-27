@@ -27,7 +27,7 @@ struct CrowdApp: App {
                     .environment(\.appEnvironment, env)
                     .task { await appState.bootstrap() }
             } else {
-                OnboardingView {
+                OnboardingFlowView {
                     hasSeenOnboarding = true
                 }
             }
