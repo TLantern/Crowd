@@ -9,12 +9,25 @@ struct LeaderboardView: View {
     @ObservedObject var viewModel: LeaderboardViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
-            timeframePicker
-            entriesList
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                header
+                timeframePicker
+                
+                if viewModel.entries.count >= 3 {
+                    podium
+                        .padding(.vertical, 20)
+                    
+                    if viewModel.entries.count > 3 {
+                        Divider()
+                            .padding(.vertical, 8)
+                    }
+                }
+                
+                entriesList
+            }
+            .padding(16)
         }
-        .padding(16)
     }
 
     // MARK: - Sections
@@ -51,9 +64,115 @@ struct LeaderboardView: View {
         }
     }
 
+    private var podium: some View {
+        let top3 = Array(viewModel.entries.prefix(3))
+        let first = top3[0]
+        let second = top3.count > 1 ? top3[1] : nil
+        let third = top3.count > 2 ? top3[2] : nil
+        
+        return HStack(alignment: .bottom, spacing: 16) {
+            // 2nd Place (Left)
+            if let second = second {
+                VStack(spacing: 8) {
+                    Text("2")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.secondary)
+                    
+                    Circle()
+                        .fill(second.tint.opacity(0.25))
+                        .overlay(
+                            Text(initials(from: second.name))
+                                .font(.system(size: 18, weight: .bold))
+                        )
+                        .frame(width: 60, height: 60)
+                    
+                    Text(second.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                    
+                    Text("\(second.points)")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.orange)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color(.systemBackground))
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                )
+            }
+            
+            // 1st Place (Center - Highest)
+            VStack(spacing: 8) {
+                Text("👑")
+                    .font(.system(size: 32))
+                
+                Circle()
+                    .fill(first.tint.opacity(0.25))
+                    .overlay(
+                        Text(initials(from: first.name))
+                            .font(.system(size: 22, weight: .bold))
+                    )
+                    .frame(width: 80, height: 80)
+                
+                Text(first.name)
+                    .font(.system(size: 16, weight: .bold))
+                    .lineLimit(1)
+                
+                Text("\(first.points)")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.yellow)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .background(Color(.systemBackground))
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(.yellow.opacity(0.4), lineWidth: 2)
+            )
+            .shadow(color: .yellow.opacity(0.3), radius: 10, y: 5)
+            
+            // 3rd Place (Right)
+            if let third = third {
+                VStack(spacing: 8) {
+                    Text("3")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.secondary)
+                    
+                    Circle()
+                        .fill(third.tint.opacity(0.25))
+                        .overlay(
+                            Text(initials(from: third.name))
+                                .font(.system(size: 18, weight: .bold))
+                        )
+                        .frame(width: 60, height: 60)
+                    
+                    Text(third.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                    
+                    Text("\(third.points)")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.orange)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color(.systemBackground))
+                .cornerRadius(16)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                )
+            }
+        }
+    }
+    
     private var entriesList: some View {
         VStack(spacing: 8) {
-            ForEach(viewModel.entries) { e in
+            ForEach(viewModel.entries.dropFirst(3)) { e in
                 row(e)
             }
         }
@@ -93,7 +212,7 @@ struct LeaderboardView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            .ultraThinMaterial,
+            Color(.systemBackground),
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
         )
         .overlay(

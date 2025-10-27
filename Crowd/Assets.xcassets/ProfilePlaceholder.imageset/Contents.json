@@ -1,0 +1,23 @@
+{
+  "images" : [
+    {
+      "filename" : "placeholder-profile-icon-20tehfawxt5eihco 1.pdf",
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "filename" : "placeholder-profile-icon-20tehfawxt5eihco 2.pdf",
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "placeholder-profile-icon-20tehfawxt5eihco 3.pdf",
+      "idiom" : "universal",
+      "scale" : "3x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

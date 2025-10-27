@@ -10,6 +10,7 @@ import MapKit
 
 struct CrowdHomeView: View {
     @Environment(\.appEnvironment) var env
+    @EnvironmentObject private var appState: AppState
     @ObservedObject private var locationService = AppEnvironment.current.location
     
     // MARK: - Region & camera
@@ -25,25 +26,7 @@ struct CrowdHomeView: View {
     @State private var hostedEvents: [CrowdEvent] = []
     @State private var selectedEvent: CrowdEvent?
     @State private var showEventDetail = false
-    @State private var zoomLevel: Double = 1200 // Distance in meters
-    
-    // Mock events
-    var baseMockEvents: [CrowdEvent] {
-        [
-            CrowdEvent(id: "1", title: "Study Session", hostId: "h1", hostName: "Willis Host", latitude: 33.2099, longitude: -97.1515, radiusMeters: 60, startsAt: Date(), endsAt: Date().addingTimeInterval(3600), createdAt: Date(), signalStrength: 4, attendeeCount: 12, tags: [], category: "study")
-        ]
-    }
-    
-    // All events including mock, hosted, and user location events
-    var allEvents: [CrowdEvent] {
-        var events = baseMockEvents
-        
-        // Add user-created events
-        events.append(contentsOf: hostedEvents)
-        
-        return events
-    }
-    
+
     // MARK: - Bottom overlay routing
     enum OverlayRoute { case none, profile, leaderboard }
     @State private var route: OverlayRoute = .none
@@ -54,6 +37,12 @@ struct CrowdHomeView: View {
     @State private var showMessages = false
     @State private var showCalendar = false
     
+    // MARK: - Mock events for display
+    var allEvents: [CrowdEvent] {
+        // Return hosted events for now
+        hostedEvents
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -125,19 +114,19 @@ struct CrowdHomeView: View {
                                     .fill(.black.opacity(0.4))
                                     .frame(width: 16, height: 16)
                                     .blur(radius: 2)
-                                    .offset(y: 20)
+                                    .offset(x: -30, y: 20)
                                 
                                 Circle()
                                     .fill(.black.opacity(0.6))
                                     .frame(width: 10, height: 10)
-                                    .offset(y: 20)
+                                    .offset(x: -30, y: 20)
                                 
                                 // Character icon - rendered last (in front)
                                 Image("UserLocationItem")
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
                                     .frame(width: 50, height: 50)
-                                    .offset(y: -2)
+                                    .offset(x: -30, y: -2)
                             }
                         }
                         .annotationTitles(.hidden)
@@ -145,14 +134,10 @@ struct CrowdHomeView: View {
                 }
                     .mapControls { MapCompass() }
                     .ignoresSafeArea()
-                    .onAppear {
-                        snapTo(selectedRegion)
-                        locationService.requestSoftAuth()
-                    }
+                    .onAppear { snapTo(selectedRegion) }
                     .onChange(of: selectedRegion) { _, new in snapTo(new) }
                     .onMapCameraChange { ctx in
                         currentCamera = ctx.camera
-                        zoomLevel = ctx.camera.distance // Track zoom level
                         let spec = selectedRegion.spec
                         let clamped = min(max(ctx.camera.distance, spec.minZoom), spec.maxZoom)
                         if abs(clamped - ctx.camera.distance) > 1 {
@@ -166,7 +151,7 @@ struct CrowdHomeView: View {
                             )
                         }
                     }
-                
+
                 // === OVERLAYS & CONTROLS ===
                 GeometryReader { geo in
                     // Panel metrics shared by panel and floating buttons
@@ -205,43 +190,6 @@ struct CrowdHomeView: View {
                         .padding(.top, 0)
                         .offset(y: -18) // raise just the navbar; tweak -10…-28 to taste
                         .zIndex(5)
-                        
-                        // === Zoom Controls ===
-                        HStack {
-                            Spacer()
-                            VStack(spacing: 8) {
-                                Button {
-                                    zoomIn()
-                                } label: {
-                                    Image(systemName: "plus.magnifyingglass")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.black)
-                                        .frame(width: 44, height: 44)
-                                        .background(
-                                            Circle()
-                                                .fill(.ultraThinMaterial)
-                                                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-                                        )
-                                }
-                                
-                                Button {
-                                    zoomOut()
-                                } label: {
-                                    Image(systemName: "minus.magnifyingglass")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.black)
-                                        .frame(width: 44, height: 44)
-                                        .background(
-                                            Circle()
-                                                .fill(.ultraThinMaterial)
-                                                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-                                        )
-                                }
-                            }
-                            .padding(.trailing, 16)
-                            .padding(.top, 8)
-                        }
-                        .zIndex(4)
 
                         Spacer(minLength: 0)
 
@@ -303,7 +251,7 @@ struct CrowdHomeView: View {
                                         highlightColor: .yellow
                                     ) {
                                         route = .leaderboard
-                                        overlaySnapIndex = 0
+                                        overlaySnapIndex = 1
                                         overlayPresented = true
                                         Haptics.light()
                                     }
@@ -354,7 +302,9 @@ struct CrowdHomeView: View {
                 }
                 .ignoresSafeArea(edges: .bottom)
                 .onChange(of: route) { _, r in
-                    if r == .profile { overlaySnapIndex = 1 }
+                    if r == .profile || r == .leaderboard {
+                        overlaySnapIndex = 1
+                    }
                 }
                 .fullScreenCover(isPresented: $showMessages) { MessagesView() }
                 .fullScreenCover(isPresented: $showCalendar) { CalenderView() }
@@ -362,12 +312,13 @@ struct CrowdHomeView: View {
         }
         .sheet(isPresented: $showHostSheet) {
             HostEventSheet(defaultRegion: selectedRegion) { hostedEvents.append($0) }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.fraction(0.75)])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showEventDetail) {
             if let event = selectedEvent {
                 EventDetailView(event: event)
+                    .environmentObject(appState)
                     .presentationDetents([.fraction(0.75)])
                     .presentationDragIndicator(.visible)
             }
@@ -378,34 +329,6 @@ struct CrowdHomeView: View {
     private func snapTo(_ region: CampusRegion) {
         withAnimation(.easeInOut(duration: 0.35)) {
             cameraPosition = MapCameraController.position(from: region.spec)
-        }
-    }
-    
-    private func zoomIn() {
-        withAnimation(.easeInOut(duration: 0.3)) {
-            let newDistance = max(currentCamera.distance / 2, 100)
-            cameraPosition = .camera(
-                MapCamera(
-                    centerCoordinate: currentCamera.centerCoordinate,
-                    distance: newDistance,
-                    heading: currentCamera.heading,
-                    pitch: currentCamera.pitch
-                )
-            )
-        }
-    }
-    
-    private func zoomOut() {
-        withAnimation(.easeInOut(duration: 0.3)) {
-            let newDistance = min(currentCamera.distance * 2, 5000)
-            cameraPosition = .camera(
-                MapCamera(
-                    centerCoordinate: currentCamera.centerCoordinate,
-                    distance: newDistance,
-                    heading: currentCamera.heading,
-                    pitch: currentCamera.pitch
-                )
-            )
         }
     }
 }
@@ -532,11 +455,18 @@ struct HeatmapLayers: MapContent {
     var opacity: Double = 1.0
     
     var body: some MapContent {
-        let intensity = max(0.3, min(Double(event.attendeeCount) / 40.0, 1.0))
-        let baseRadius: Double = 100 // Reduced from 150
+        // Radius grows by 10% per attendee
+        let radiusMultiplier = pow(1.10, Double(event.attendeeCount))
+        // Intensity grows by 5% per attendee
+        let intensityMultiplier = pow(1.05, Double(event.attendeeCount))
+        
+        let baseRadius: Double = 100
+        let baseIntensity: Double = 0.3
+        let intensity = min(baseIntensity * intensityMultiplier, 1.0)
+        let radius = baseRadius * radiusMultiplier
         
         // Layer 1: Outer glow (largest, most transparent)
-        MapCircle(center: event.coordinates, radius: CLLocationDistance(baseRadius * 1.8 * intensity))
+        MapCircle(center: event.coordinates, radius: CLLocationDistance(radius * 1.8))
             .foregroundStyle(
                 .radialGradient(
                     colors: [
@@ -546,12 +476,12 @@ struct HeatmapLayers: MapContent {
                     ],
                     center: .center,
                     startRadius: 0,
-                    endRadius: baseRadius * 1.8
+                    endRadius: radius * 1.8
                 )
             )
         
         // Layer 2: Middle gradient
-        MapCircle(center: event.coordinates, radius: CLLocationDistance(baseRadius * 1.2 * intensity))
+        MapCircle(center: event.coordinates, radius: CLLocationDistance(radius * 1.2))
             .foregroundStyle(
                 .radialGradient(
                     colors: [
@@ -562,12 +492,12 @@ struct HeatmapLayers: MapContent {
                     ],
                     center: .center,
                     startRadius: 0,
-                    endRadius: baseRadius * 1.2
+                    endRadius: radius * 1.2
                 )
             )
         
         // Layer 3: Hot center (smallest, most intense)
-        MapCircle(center: event.coordinates, radius: CLLocationDistance(baseRadius * 0.6 * intensity))
+        MapCircle(center: event.coordinates, radius: CLLocationDistance(radius * 0.6))
             .foregroundStyle(
                 .radialGradient(
                     colors: [
@@ -578,16 +508,45 @@ struct HeatmapLayers: MapContent {
                     ],
                     center: .center,
                     startRadius: 0,
-                    endRadius: baseRadius * 0.6
+                    endRadius: radius * 0.6
                 )
             )
     }
+}
+
+// MARK: - Chat Message Model
+struct ChatMessage: Identifiable {
+    let id = UUID()
+    let author: String
+    let message: String
+    let isCurrentUser: Bool
 }
 
 // MARK: - Event Detail View
 struct EventDetailView: View {
     let event: CrowdEvent
     @Environment(\.dismiss) var dismiss
+    @StateObject private var viewModel = EventDetailViewModel()
+    @State private var hasJoined = false
+    @State private var chatMessage = ""
+    @State private var chatMessages: [ChatMessage] = [
+        ChatMessage(author: "Sarah", message: "Hey everyone! Excited for this!", isCurrentUser: false),
+        ChatMessage(author: "Mike", message: "Same here! What time are we starting?", isCurrentUser: false)
+    ]
+    @FocusState private var isChatFocused: Bool
+    @EnvironmentObject private var appState: AppState
+    @State private var showCancelConfirmation = false
+    
+    var currentUserName: String {
+        appState.sessionUser?.displayName ?? "You"
+    }
+    
+    var isHost: Bool {
+        guard let currentUserId = FirebaseManager.shared.getCurrentUserId() else {
+            return false
+        }
+        return event.hostId == currentUserId
+    }
     
     var emoji: String {
         guard let category = event.category else { return "🔥" }
@@ -603,84 +562,255 @@ struct EventDetailView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Header with emoji and title
-                HStack(spacing: 16) {
-                    Text(emoji)
-                        .font(.system(size: 60))
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(event.title)
-                            .font(.system(size: 28, weight: .bold))
-                        
-                        Text("Hosted by \(event.hostName)")
-                            .font(.system(size: 16))
-                            .foregroundColor(.secondary)
-                    }
-                    
+        VStack(spacing: 0) {
+            // Cancel button for hosts
+            if isHost {
+                HStack {
                     Spacer()
+                    Button {
+                        showCancelConfirmation = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.red)
+                            .background(Circle().fill(Color(.systemBackground)))
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.top, 8)
                 }
-                .padding(.horizontal)
-                .padding(.top, 20)
-                
-                Divider()
-                
-                // Event details
-                VStack(alignment: .leading, spacing: 16) {
-                    DetailRow(icon: "person.3.fill", title: "Attendees", value: "\(event.attendeeCount)")
-                    DetailRow(icon: "antenna.radiowaves.left.and.right", title: "Signal Strength", value: String(repeating: "📶", count: event.signalStrength))
+            }
+            
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header: Emoji + Title (centered together)
+                    HStack(spacing: 8) {
+                        Text(emoji)
+                            .font(.system(size: 40))
+                        
+                        Text(event.title)
+                            .font(.system(size: 24, weight: .bold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal)
+                    .padding(.top, isHost ? 0 : 20)
                     
-                    if let start = event.startsAt, let end = event.endsAt {
-                        DetailRow(icon: "clock.fill", title: "Time", value: formatTime(start, end))
+                    // Host info with aura points
+                    VStack(spacing: 4) {
+                        if viewModel.isLoadingHost {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else if let host = viewModel.hostProfile {
+                            Text("Hosted by: \(host.displayName) • \(host.auraPoints) points")
+                                .font(.system(size: 15))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Hosted by: \(event.hostName) • 0 points")
+                                .font(.system(size: 15))
+                                .foregroundColor(.secondary)
+                        }
                     }
                     
-                    DetailRow(icon: "mappin.circle.fill", title: "Location", value: "Within \(event.radiusMeters)m")
+                    Divider()
+                        .padding(.horizontal)
                     
-                    if !event.tags.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: "tag.fill")
-                                    .foregroundColor(.blue)
-                                Text("Tags")
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
+                    if hasJoined {
+                        // Chat view
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Event Chat")
+                                .font(.system(size: 18, weight: .semibold))
+                                .frame(maxWidth: .infinity, alignment: .center)
                             
-                            FlowLayout(spacing: 8) {
-                                ForEach(event.tags, id: \.self) { tag in
-                                    Text(tag)
-                                        .font(.system(size: 14))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(Color.blue.opacity(0.1))
-                                        .foregroundColor(.blue)
-                                        .cornerRadius(12)
+                            // Chat messages
+                            ScrollViewReader { proxy in
+                                VStack(alignment: .leading, spacing: 12) {
+                                    ForEach(chatMessages) { message in
+                                        ChatMessageBubble(
+                                            message: message.message,
+                                            author: message.author,
+                                            isCurrentUser: message.isCurrentUser
+                                        )
+                                        .id(message.id)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .onChange(of: chatMessages.count) { _, _ in
+                                    if let lastMessage = chatMessages.last {
+                                        withAnimation {
+                                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                        }
+                                    }
                                 }
                             }
                         }
-                        .padding(.top, 8)
+                        .padding(.horizontal)
+                        .frame(minHeight: 200)
+                    } else {
+                        // Event details
+                        VStack(spacing: 20) {
+                            // Crowd Size (centered)
+                            VStack(spacing: 8) {
+                                Text("Crowd Size")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                Text("\(event.attendeeCount)")
+                                    .font(.system(size: 32, weight: .bold))
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            // Time
+                            if let start = event.startsAt, let end = event.endsAt {
+                                VStack(spacing: 8) {
+                                    Text("Time")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                    Text(formatTime(start, end))
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.primary)
+                                }
+                            }
+                            
+                            // Location
+                            VStack(spacing: 8) {
+                                Text("Location")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                Text("Within \(Int(event.radiusMeters))m")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            Divider()
+                                .padding(.horizontal)
+                            
+                            // Friends Attending
+                            VStack(spacing: 12) {
+                                Text("Friends Attending")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                if viewModel.isLoadingFriends {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else if viewModel.friendsAttending.isEmpty {
+                                    Text("No friends attending yet")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    HStack(spacing: -8) {
+                                        ForEach(viewModel.friendsAttending.prefix(5)) { friend in
+                                            AvatarView(
+                                                name: friend.displayName,
+                                                color: friend.avatarColor,
+                                                size: 40
+                                            )
+                                            .overlay(
+                                                Circle()
+                                                    .strokeBorder(.white, lineWidth: 2)
+                                            )
+                                        }
+                                        
+                                        if viewModel.friendsAttending.count > 5 {
+                                            ZStack {
+                                                Circle()
+                                                    .fill(.ultraThinMaterial)
+                                                    .frame(width: 40, height: 40)
+                                                Text("+\(viewModel.friendsAttending.count - 5)")
+                                                    .font(.system(size: 12, weight: .semibold))
+                                            }
+                                        }
+                                    }
+                                    .padding(.horizontal)
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(minLength: 20)
+                }
+            }
+            
+            // Chat input (only when joined)
+            if hasJoined {
+                HStack(spacing: 12) {
+                    TextField("Type a message...", text: $chatMessage)
+                        .textFieldStyle(.plain)
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(20)
+                        .focused($isChatFocused)
+                    
+                    Button {
+                        sendMessage()
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(chatMessage.isEmpty ? .gray : Color(hex: 0x02853E))
+                    }
+                    .disabled(chatMessage.isEmpty)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial)
+            }
+            
+            // Action button
+            Button {
+                if hasJoined {
+                    // Open invite friends sheet
+                } else {
+                    Task {
+                        let success = await viewModel.joinEvent(eventId: event.id)
+                        if success {
+                            withAnimation(.spring(response: 0.3)) {
+                                hasJoined = true
+                            }
+                        }
                     }
                 }
-                .padding(.horizontal)
-                
-                Spacer()
-                
-                // Join button
-                Button {
-                    // Handle join action
-                    dismiss()
-                } label: {
-                    Text("Join Event")
+            } label: {
+                HStack {
+                    if viewModel.isJoining {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .controlSize(.small)
+                    }
+                    Text(hasJoined ? "Invite Friends" : "Join Crowd")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.blue)
-                        .cornerRadius(16)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 20)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    LinearGradient(
+                        colors: [Color(hex: 0x02853E), Color(hex: 0x03A04E)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(16)
             }
+            .disabled(viewModel.isJoining)
+            .padding(.horizontal)
+            .padding(.bottom, 20)
+        }
+        .task {
+            await viewModel.loadHostProfile(hostId: event.hostId)
+            await viewModel.loadFriendsAttending(eventId: event.id)
+        }
+        .alert("Error", isPresented: .constant(viewModel.joinError != nil)) {
+            Button("OK") {
+                viewModel.joinError = nil
+            }
+        } message: {
+            Text(viewModel.joinError ?? "Unknown error")
+        }
+        .confirmationDialog("Cancel Crowd", isPresented: $showCancelConfirmation, titleVisibility: .visible) {
+            Button("Cancel Crowd", role: .destructive) {
+                cancelEvent()
+            }
+            Button("Keep Crowd", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to cancel this crowd? This action cannot be undone.")
         }
     }
     
@@ -688,6 +818,51 @@ struct EventDetailView: View {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+    }
+    
+    private func sendMessage() {
+        guard !chatMessage.isEmpty else { return }
+        
+        // Add message to chat
+        let newMessage = ChatMessage(
+            author: currentUserName,
+            message: chatMessage,
+            isCurrentUser: true
+        )
+        chatMessages.append(newMessage)
+        
+        // TODO: Send message to Firebase
+        print("Sending message: \(chatMessage)")
+        chatMessage = ""
+    }
+    
+    private func cancelEvent() {
+        // TODO: Delete event from Firebase
+        print("Canceling event: \(event.id)")
+        dismiss()
+    }
+}
+
+struct ChatMessageBubble: View {
+    let message: String
+    let author: String
+    let isCurrentUser: Bool
+    
+    var body: some View {
+        VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
+            Text(author)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+            
+            Text(message)
+                .font(.system(size: 15))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(isCurrentUser ? Color(hex: 0x02853E) : Color(.systemGray5))
+                .foregroundColor(isCurrentUser ? .white : .primary)
+                .cornerRadius(16)
+        }
+        .frame(maxWidth: .infinity, alignment: isCurrentUser ? .trailing : .leading)
     }
 }
 
@@ -757,4 +932,7 @@ struct FlowLayout: Layout {
     }
 }
 
-#Preview { CrowdHomeView() }
+#Preview {
+    CrowdHomeView()
+        .environmentObject(AppState())
+}

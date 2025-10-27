@@ -16,6 +16,29 @@ enum TimeMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+struct PredefinedLocation: Identifiable {
+    let id = UUID()
+    let name: String
+    let coordinate: CLLocationCoordinate2D
+}
+
+let untLocations: [PredefinedLocation] = [
+    PredefinedLocation(name: "University Union", coordinate: CLLocationCoordinate2D(latitude: 33.2098926, longitude: -97.1514762)),
+    PredefinedLocation(name: "Willis Library", coordinate: CLLocationCoordinate2D(latitude: 33.210113, longitude: -97.148993)),
+    PredefinedLocation(name: "Business Leadership Building", coordinate: CLLocationCoordinate2D(latitude: 33.2088910, longitude: -97.1476490)),
+    PredefinedLocation(name: "Sage Hall", coordinate: CLLocationCoordinate2D(latitude: 33.210293, longitude: -97.151120)),
+    PredefinedLocation(name: "DATCU Stadium", coordinate: CLLocationCoordinate2D(latitude: 33.197700, longitude: -97.151600)),
+    PredefinedLocation(name: "Discovery Park", coordinate: CLLocationCoordinate2D(latitude: 33.248300, longitude: -97.152700)),
+    PredefinedLocation(name: "The Syndicate", coordinate: CLLocationCoordinate2D(latitude: 33.209850, longitude: -97.151470)),
+    PredefinedLocation(name: "Kerr Hall", coordinate: CLLocationCoordinate2D(latitude: 33.211200, longitude: -97.152300)),
+    PredefinedLocation(name: "Joe Greene Hall", coordinate: CLLocationCoordinate2D(latitude: 33.211850, longitude: -97.153600)),
+    PredefinedLocation(name: "Denton Square", coordinate: CLLocationCoordinate2D(latitude: 33.214400, longitude: -97.133100)),
+    PredefinedLocation(name: "Clark Hall", coordinate: CLLocationCoordinate2D(latitude: 33.211900, longitude: -97.153900)),
+    PredefinedLocation(name: "Rec Center", coordinate: CLLocationCoordinate2D(latitude: 33.209300, longitude: -97.152400)),
+    PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.209000, longitude: -97.151100)),
+    PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.210200, longitude: -97.150600))
+]
+
 struct HostEventSheet: View {
     let defaultRegion: CampusRegion
     var onCreate: (CrowdEvent) -> Void
@@ -32,6 +55,10 @@ struct HostEventSheet: View {
     @State private var timeMode: TimeMode = .now
     @State private var startDate: Date = Date()
     @State private var endDate: Date = Date().addingTimeInterval(3600) // 1 hour later
+    
+    // Location picker
+    @State private var searchText: String = ""
+    @State private var firestoreLocations: [PredefinedLocation] = []
     
     // AI description with typewriter effect
     @State private var aiDescription: String = ""
@@ -72,7 +99,31 @@ struct HostEventSheet: View {
                     .padding(.vertical, 4)
                 }
                 
-                // 2. When & Type (Second)
+                // 2. Title (Second)
+                Section("Title") {
+                    TextField("What's the vibe?", text: $title)
+                        .font(.system(size: 18, weight: .medium))
+                }
+                
+                // 3. Location (Third)
+                Section("Location 📍") {
+                    NavigationLink {
+                        LocationPickerView(
+                            locationName: $locationName,
+                            coordinate: $coord,
+                            searchText: $searchText,
+                            onUseCurrentLocation: useCurrentLocation
+                        )
+                    } label: {
+                        HStack {
+                            Text(locationName.isEmpty ? "Select a location" : locationName)
+                                .foregroundStyle(locationName.isEmpty ? .secondary : .primary)
+                            Spacer()
+                        }
+                    }
+                }
+                
+                // 4. When & Type (Fourth)
                 Section {
                     HStack(spacing: 16) {
                         // Left: Time Mode
@@ -113,21 +164,6 @@ struct HostEventSheet: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                }
-                
-                // 3. Location (Third)
-                Section("Location") {
-                    LocationSearchField(
-                        locationName: $locationName,
-                        coordinate: $coord,
-                        onUseCurrentLocation: useCurrentLocation
-                    )
-                }
-                
-                // 4. Title (Fourth)
-                Section("Title") {
-                    TextField("What's the vibe?", text: $title)
-                        .font(.system(size: 18, weight: .medium))
                 }
                 
                 // 5. Description (Last - conditional generation)
@@ -345,7 +381,99 @@ struct HostEventSheet: View {
             endsAt: finalEndsAt
         )
         
+        // Debug: Print event details
+        print("🎯 Creating event '\(event.title)' at location: \(locationName)")
+        print("🎯 Coordinates: lat=\(event.latitude), lon=\(event.longitude)")
+        
         onCreate(event)
         dismiss()
+    }
+}
+
+// MARK: - Location Picker View
+
+struct LocationPickerView: View {
+    @Binding var locationName: String
+    @Binding var coordinate: CLLocationCoordinate2D
+    @Binding var searchText: String
+    var onUseCurrentLocation: () -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    
+    var allLocations: [PredefinedLocation] {
+        // Combine UNT locations with any Firestore locations in the future
+        untLocations
+    }
+    
+    var filteredLocations: [PredefinedLocation] {
+        if searchText.isEmpty {
+            return allLocations
+        } else {
+            return allLocations.filter { location in
+                location.name.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+    }
+    
+    var body: some View {
+        List {
+            // Predefined UNT Locations
+            ForEach(filteredLocations) { location in
+                Button {
+                    locationName = location.name
+                    coordinate = location.coordinate
+                    print("📍 Selected location: \(location.name)")
+                    print("📍 Coordinates set to: lat=\(location.coordinate.latitude), lon=\(location.coordinate.longitude)")
+                    searchText = ""
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(location.name)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if locationName == location.name {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                }
+            }
+            
+            // Custom location option
+            if !searchText.isEmpty && !filteredLocations.contains(where: { $0.name.localizedCaseInsensitiveCompare(searchText) == .orderedSame }) {
+                Button {
+                    locationName = searchText
+                    // Keep current coordinate or use a default
+                    searchText = ""
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(.blue)
+                        Text("Use \"\(searchText)\"")
+                            .foregroundStyle(.primary)
+                    }
+                }
+            }
+            
+            // Use Current Location option
+            Section {
+                Button {
+                    onUseCurrentLocation()
+                    searchText = ""
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: "location.fill")
+                            .foregroundStyle(.blue)
+                        Text("Use Current Location")
+                            .foregroundStyle(.primary)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Select Location")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "Search locations")
     }
 }

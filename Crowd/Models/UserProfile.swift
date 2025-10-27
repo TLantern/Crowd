@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-struct UserProfile: Codable, Equatable {
+struct UserProfile: Codable, Equatable, Identifiable {
     var id: String
     var displayName: String
     var auraPoints: Int
