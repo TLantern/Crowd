@@ -36,7 +36,7 @@ struct OnboardingProfileView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.black.opacity(0.7))
 
-                            Image("ProfilePic")
+                            Image("ProfilePlaceholder")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 64, height: 64)
