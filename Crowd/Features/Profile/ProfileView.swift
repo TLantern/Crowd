@@ -52,7 +52,6 @@ struct ProfileView: View {
                     statsRow
                     tagsSection
                     interactionBar
-                    mutualsSection
                     gallerySection
                     suggestedConnectionsSection
 
