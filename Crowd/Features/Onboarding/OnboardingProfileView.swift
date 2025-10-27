@@ -27,7 +27,7 @@ struct OnboardingProfileView: View {
                     .fill(.ultraThinMaterial)
                     .shadow(radius: 24, y: 8)
                     .overlay(
-                        VStack(spacing: 16) {
+                        VStack(spacing: 28) {
                             Text("Almost done ✨")
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.black)
@@ -36,10 +36,10 @@ struct OnboardingProfileView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.black.opacity(0.7))
 
-                            Image("ProfilePic")
+                            Image("ProfilePlaceholder")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 64, height: 64)
+                                .frame(width: 94, height: 94)
 
                             TextField("Ex. Scrappy", text: $username)
                                 .padding()
@@ -58,10 +58,16 @@ struct OnboardingProfileView: View {
                                 Button("UNT") { selectedCampus = "UNT" }
                                 Button("SMU") { selectedCampus = "SMU" }
                             } label: {
-                                HStack {
-                                    Text(selectedCampus)
+                                HStack(spacing: 12) {
                                     Spacer()
+                                    Image("UNTlogo")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 30, height: 30)
+                                    Text(selectedCampus)
                                     Image(systemName: "chevron.down")
+                                        .font(.system(size: 14))
+                                    Spacer()
                                 }
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.black)
