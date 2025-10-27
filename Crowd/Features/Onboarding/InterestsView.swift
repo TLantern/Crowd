@@ -26,7 +26,7 @@ struct InterestsView: View {
     
     var body: some View {
         ZStack {
-            Image("OnboardingBG")
+            Image("Background")
                 .resizable()
                 .scaledToFill()
                 .ignoresSafeArea()
@@ -34,18 +34,18 @@ struct InterestsView: View {
             VStack(spacing: 20) {
                 Spacer()
                 
-                RoundedRectangle(cornerRadius: 40)
+                RoundedRectangle(cornerRadius: 32)
                     .fill(.ultraThinMaterial)
-                    .shadow(radius: 30, y: 8)
+                    .shadow(radius: 24, y: 8)
                     .overlay(
-                        VStack(spacing: 24) {
+                        VStack(spacing: 28) {
                             Text("What's your scene?")
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.black)
                             
                             Text("Pick what you're into 👇")
                                 .font(.system(size: 16))
-                                .foregroundColor(.black.opacity(0.6))
+                                .foregroundColor(.black.opacity(0.7))
                             
                             // Interest chips grid
                             LazyVGrid(columns: [
@@ -69,31 +69,28 @@ struct InterestsView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal, 8)
+                            .padding(.horizontal, 4)
+                            
+                            Button {
+                                onNext(Array(selectedInterests))
+                            } label: {
+                                Text("Next →")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .padding(.vertical, 14)
+                                    .frame(maxWidth: .infinity)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 24)
+                                            .fill(Color.white)
+                                    )
+                                    .foregroundColor(.black)
+                            }
+                            .disabled(selectedInterests.isEmpty)
+                            .opacity(selectedInterests.isEmpty ? 0.5 : 1.0)
                         }
-                        .padding(32)
+                        .padding(24)
                     )
                     .padding(.horizontal, 24)
                     .frame(maxHeight: 600)
-                
-                // Next button
-                Button {
-                    onNext(Array(selectedInterests))
-                } label: {
-                    Text("Next →")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 24)
-                                .fill(Color.white)
-                                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
-                        )
-                }
-                .disabled(selectedInterests.isEmpty)
-                .opacity(selectedInterests.isEmpty ? 0.5 : 1.0)
-                .padding(.horizontal, 24)
                 
                 Spacer()
             }
