@@ -9,13 +9,10 @@ import SwiftUI
 import MapKit
 
 struct CrowdHomeView: View {
-<<<<<<< Updated upstream
-=======
     @Environment(\.appEnvironment) var env
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var locationService = AppEnvironment.current.location
     
->>>>>>> Stashed changes
     // MARK: - Region & camera
     @State private var selectedRegion: CampusRegion = .mainCampus
     @State private var cameraPosition: MapCameraPosition = .automatic
@@ -37,14 +34,20 @@ struct CrowdHomeView: View {
     // MARK: - Floating button navigation
     @State private var showMessages = false
     @State private var showCalendar = false
+    
+    // MARK: - Event detail
+    @State private var selectedEvent: CrowdEvent?
+    @State private var showEventDetail = false
+    
+    // MARK: - Computed
+    var allEvents: [CrowdEvent] {
+        PrevData.mockEvents + hostedEvents
+    }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 // === MAP ===
-<<<<<<< Updated upstream
-                Map(position: $cameraPosition)
-=======
                 Map(position: $cameraPosition) {
                     // Event annotations - always visible (mock + user-created)
                     ForEach(allEvents) { event in
@@ -130,8 +133,7 @@ struct CrowdHomeView: View {
                         .annotationTitles(.hidden)
                     }
                 }
->>>>>>> Stashed changes
-                    .mapControls { MapCompass() }
+                .mapControls { MapCompass() }
                     .ignoresSafeArea()
                     .onAppear { snapTo(selectedRegion) }
                     .onChange(of: selectedRegion) { _, new in snapTo(new) }
@@ -314,8 +316,6 @@ struct CrowdHomeView: View {
                 .presentationDetents([.fraction(0.75)])
                 .presentationDragIndicator(.visible)
         }
-<<<<<<< Updated upstream
-=======
         .sheet(isPresented: $showEventDetail) {
             if let event = selectedEvent {
                 EventDetailView(event: event)
@@ -324,7 +324,6 @@ struct CrowdHomeView: View {
                     .presentationDragIndicator(.visible)
             }
         }
->>>>>>> Stashed changes
     }
 
     // MARK: - Camera snap helper
@@ -451,9 +450,6 @@ private extension Array where Element == CGFloat {
     }
 }
 
-<<<<<<< Updated upstream
-#Preview { CrowdHomeView() }
-=======
 // MARK: - Heatmap Layers
 struct HeatmapLayers: MapContent {
     let event: CrowdEvent
@@ -941,4 +937,3 @@ struct FlowLayout: Layout {
     CrowdHomeView()
         .environmentObject(AppState())
 }
->>>>>>> Stashed changes
