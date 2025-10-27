@@ -62,8 +62,8 @@ struct OnboardingProfileView: View {
                                     HStack {
                                         Text("UTD")
                                         Spacer()
-                                        Text("Coming Soon")
-                                            .font(.caption)
+                                        Text("**Coming Soon**")
+                                            .font(.caption.bold())
                                             .foregroundColor(.secondary)
                                     }
                                 }
@@ -77,8 +77,8 @@ struct OnboardingProfileView: View {
                                     HStack {
                                         Text("UTSA")
                                         Spacer()
-                                        Text("Coming Soon")
-                                            .font(.caption)
+                                        Text("**Coming Soon**")
+                                            .font(.caption.bold())
                                             .foregroundColor(.secondary)
                                     }
                                 }
