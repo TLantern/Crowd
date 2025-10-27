@@ -151,6 +151,15 @@ struct InterestsView: View {
             }
         }
     }
+    
+    // MARK: - Auto Rotation
+    private func startAutoRotation() {
+        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+            withAnimation(.easeInOut(duration: 0.5)) {
+                currentPage = (currentPage + 1) % interestPages.count
+            }
+        }
+    }
 }
 
 // MARK: - Interest Chip Component
