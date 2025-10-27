@@ -9,7 +9,12 @@ import SwiftUI
 
 struct OnboardingFlowView: View {
     @State private var currentStep: OnboardingStep = .welcome
+    @State private var username: String = ""
+    @State private var selectedCampus: String = ""
     @State private var selectedInterests: [String] = []
+    @State private var isSaving = false
+    @State private var showError = false
+    @State private var errorMessage = ""
     
     let onComplete: () -> Void
     
@@ -33,7 +38,10 @@ struct OnboardingFlowView: View {
             
             // Profile Setup Screen
             if currentStep == .profile {
-                OnboardingProfileView {
+                OnboardingProfileView(
+                    username: $username,
+                    selectedCampus: $selectedCampus
+                ) {
                     withAnimation(.easeInOut(duration: 0.6)) {
                         currentStep = .interests
                     }
@@ -45,13 +53,68 @@ struct OnboardingFlowView: View {
             if currentStep == .interests {
                 InterestsView { interests in
                     selectedInterests = interests
-                    withAnimation(.easeInOut(duration: 0.6)) {
-                        // Save interests if needed
-                        onComplete()
+                    Task {
+                        await saveProfileToFirebase()
                     }
                 }
                 .transition(.opacity)
             }
+            
+            // Loading overlay
+            if isSaving {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                ProgressView("Creating your profile...")
+                    .padding()
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            }
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
+        }
+    }
+    
+    // MARK: - Save Profile to Firebase
+    
+    private func saveProfileToFirebase() async {
+        isSaving = true
+        
+        do {
+            // Get or create user ID
+            let userId: String
+            if let currentUserId = FirebaseManager.shared.getCurrentUserId() {
+                userId = currentUserId
+            } else {
+                userId = try await FirebaseManager.shared.signInAnonymously()
+            }
+            
+            // Create profile in Firestore
+            try await UserProfileService.shared.createProfile(
+                userId: userId,
+                displayName: username.isEmpty ? "Guest" : username,
+                campus: selectedCampus.isEmpty ? "UNT" : selectedCampus,
+                interests: selectedInterests
+            )
+            
+            print("✅ Profile created successfully!")
+            
+            // Complete onboarding
+            await MainActor.run {
+                isSaving = false
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    onComplete()
+                }
+            }
+            
+        } catch {
+            await MainActor.run {
+                isSaving = false
+                errorMessage = "Failed to create profile: \(error.localizedDescription)"
+                showError = true
+            }
+            print("❌ Error saving profile: \(error)")
         }
     }
 }

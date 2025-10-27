@@ -10,16 +10,24 @@ import MapKit
 
 struct CrowdMapView: View {
     var events: [CrowdEvent]
-    var camera: MKCoordinateRegion
+    @State private var cameraPosition: MapCameraPosition
+    
+    init(events: [CrowdEvent], camera: MKCoordinateRegion) {
+        self.events = events
+        self._cameraPosition = State(initialValue: .region(camera))
+    }
 
     var body: some View {
-        Map(position: .constant(.region(camera))) {
+        Map(position: $cameraPosition) {
             ForEach(events) { event in
                 Annotation(event.title, coordinate: event.coordinates) {
                     EventAnnotationView(event: event)
                 }
             }
             // Optional: CrowdHeatmapOverlay(dots: ...)
+        }
+        .onMapCameraChange { context in
+            cameraPosition = .camera(context.camera)
         }
     }
 }

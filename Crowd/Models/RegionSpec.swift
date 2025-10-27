@@ -23,7 +23,7 @@ struct RegionSpec: Sendable {
          heading: CLLocationDirection = 0,
          pitch: Double = 0,
          minZoom: CLLocationDistance = 120,
-         maxZoom: CLLocationDistance = 10000) {
+         maxZoom: CLLocationDistance = 100000) {
         self.center = center
         self.distance = distance
         self.minZoom = minZoom

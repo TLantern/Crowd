@@ -183,29 +183,58 @@ final class ProfileViewModel: ObservableObject {
         ]
     )
 
-    // MARK: - Firebase Integration (Stubbed)
-    // Uncomment and implement when Firebase is ready
+    // MARK: - Firebase Integration
     
-//    func fetchProfile() async throws {
-//        // let profile = try await FirebaseService.shared.fetchUserProfile()
-//        // Update @Published properties on MainActor
-//    }
-//
-//    func fetchGallery() async throws -> [CrowdEvent] {
-//        // let events = try await FirebaseService.shared.fetchUserEvents()
-//        // return events
-//        return []
-//    }
-//
-//    func fetchMutuals() async throws -> [MiniUser] {
-//        // let users = try await FirebaseService.shared.fetchMutualFriends()
-//        // return users
-//        return []
-//    }
-//
-//    func fetchSuggestions() async throws -> [MiniUser] {
-//        // let users = try await FirebaseService.shared.fetchSuggestedUsers()
-//        // return users
-//        return []
-//    }
+    @MainActor
+    func loadProfile(userId: String) async {
+        do {
+            let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
+            
+            // Update all properties from Firebase
+            self.displayName = profile.displayName
+            self.handle = profile.handle ?? "@\(profile.displayName.lowercased())"
+            self.bio = profile.bio ?? "Hey there! I'm using Crowd."
+            self.affiliation = profile.campus ?? "University"
+            self.points = profile.auraPoints
+            self.hostedCount = profile.hostedCount
+            self.joinedCount = profile.joinedCount
+            self.friendsCount = profile.friendsCount
+            self.avatarColor = profile.avatarColor
+            self.lastActive = profile.lastActive ?? Date()
+            
+            // Convert interests from strings to Interest objects
+            self.interests = profile.interests.compactMap { interestName in
+                Interest.allInterests.first { $0.name == interestName }
+            }
+            
+            print("✅ Profile loaded from Firebase for: \(profile.displayName)")
+            
+        } catch {
+            print("❌ Error loading profile: \(error)")
+        }
+    }
+    
+    @MainActor
+    func saveChanges(userId: String) async {
+        do {
+            let updates: [String: Any] = [
+                "displayName": displayName,
+                "bio": bio,
+                "interests": interests.map { $0.name }
+            ]
+            
+            try await UserProfileService.shared.updateProfile(userId: userId, updates: updates)
+            print("✅ Profile changes saved")
+            
+        } catch {
+            print("❌ Error saving profile changes: \(error)")
+        }
+    }
+    
+    // Factory method to create ViewModel from Firebase
+    static func fromFirebase(userId: String) async -> ProfileViewModel {
+        let viewModel = ProfileViewModel.mock
+        await viewModel.loadProfile(userId: userId)
+        return viewModel
+    }
 }

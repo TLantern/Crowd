@@ -40,6 +40,23 @@ enum PrevData {
             tags: ["games"],
             category: "Gaming",
             description: "📍 Victory Hall Dorms\n⏰ Starting now\n🎮 Casual gaming session"
+        ),
+        .init(
+            id: "3",
+            title: "Library Study Sesh",
+            hostId: "u3",
+            hostName: "Casey",
+            latitude: 33.2095,
+            longitude: -97.1490,
+            radiusMeters: 60,
+            startsAt: nil,
+            endsAt: nil,
+            createdAt: .now,
+            signalStrength: 4,
+            attendeeCount: 3,
+            tags: ["study"],
+            category: "Study Group",
+            description: "📍 Willis Library\n⏰ Starting now\n📚 Quiet study time"
         )
     ]
 }

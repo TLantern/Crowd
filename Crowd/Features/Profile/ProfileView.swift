@@ -43,30 +43,45 @@ struct ProfileView: View {
     @State private var showShareSheet = false
     @State private var showInterestPicker = false
     @State private var showImagePicker = false
+    @State private var isLoading = true
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
-                    identityBlock
-                    statsRow
-                    tagsSection
-                    interactionBar
-                    gallerySection
-                    suggestedConnectionsSection
+            if isLoading {
+                ProgressView("Loading profile...")
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        identityBlock
+                        statsRow
+                        tagsSection
+                        interactionBar
+                        gallerySection
+                        suggestedConnectionsSection
 
+                    }
+                    .padding(16)
+                }
+
+                // Edit Mode Toggle Button
+                Button(action: { 
+                    if viewModel.isEditMode {
+                        Task {
+                            await saveChanges()
+                        }
+                    }
+                    viewModel.toggleEditMode()
+                }) {
+                    Image(systemName: viewModel.isEditMode ? "checkmark.circle.fill" : "pencil.circle.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(viewModel.isEditMode ? Color.green : Color.accentColor)
+                        .background(Circle().fill(Color(.systemBackground)).frame(width: 44, height: 44))
                 }
                 .padding(16)
             }
-
-            // Edit Mode Toggle Button
-            Button(action: { viewModel.toggleEditMode() }) {
-                Image(systemName: viewModel.isEditMode ? "checkmark.circle.fill" : "pencil.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(viewModel.isEditMode ? Color.green : Color.accentColor)
-                    .background(Circle().fill(Color(.systemBackground)).frame(width: 44, height: 44))
-            }
-            .padding(16)
+        }
+        .task {
+            await loadProfile()
         }
         .sheet(isPresented: $showImagePicker) {
             ProfileImagePicker(selectedImage: $viewModel.profileImage)
@@ -74,6 +89,23 @@ struct ProfileView: View {
         .sheet(isPresented: $showInterestPicker) {
             InterestPickerView(viewModel: viewModel)
         }
+    }
+    
+    // MARK: - Firebase Actions
+    
+    private func loadProfile() async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            isLoading = false
+            return
+        }
+        
+        await viewModel.loadProfile(userId: userId)
+        isLoading = false
+    }
+    
+    private func saveChanges() async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
+        await viewModel.saveChanges(userId: userId)
     }
 
     // MARK: - Identity Block (Header)
