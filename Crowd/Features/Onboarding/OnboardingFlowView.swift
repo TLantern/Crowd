@@ -9,11 +9,12 @@ import SwiftUI
 
 struct OnboardingFlowView: View {
     @State private var currentStep: OnboardingStep = .welcome
-    @State private var displayName: String = ""
-    @State private var campus: String = "UNT"
+    @State private var username: String = ""
+    @State private var selectedCampus: String = ""
     @State private var selectedInterests: [String] = []
-    @State private var isCreatingProfile = false
-    @State private var errorMessage: String?
+    @State private var isSaving = false
+    @State private var showError = false
+    @State private var errorMessage = ""
     
     let onComplete: () -> Void
     
@@ -38,8 +39,8 @@ struct OnboardingFlowView: View {
             // Profile Setup Screen
             if currentStep == .profile {
                 OnboardingProfileView(
-                    displayName: $displayName,
-                    campus: $campus
+                    username: $username,
+                    selectedCampus: $selectedCampus
                 ) {
                     withAnimation(.easeInOut(duration: 0.6)) {
                         currentStep = .interests
@@ -53,74 +54,67 @@ struct OnboardingFlowView: View {
                 InterestsView { interests in
                     selectedInterests = interests
                     Task {
-                        await createUserProfile()
+                        await saveProfileToFirebase()
                     }
                 }
                 .transition(.opacity)
             }
             
             // Loading overlay
-            if isCreatingProfile {
+            if isSaving {
                 Color.black.opacity(0.4)
                     .ignoresSafeArea()
-                
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .tint(.white)
-                    
-                    Text("Creating your profile...")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                }
-                .padding(32)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(.ultraThinMaterial)
-                )
+                ProgressView("Creating your profile...")
+                    .padding()
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
         }
-        .alert("Error", isPresented: .constant(errorMessage != nil)) {
-            Button("OK") {
-                errorMessage = nil
-            }
+        .alert("Error", isPresented: $showError) {
+            Button("OK") { }
         } message: {
-            if let error = errorMessage {
-                Text(error)
-            }
+            Text(errorMessage)
         }
     }
     
-    private func createUserProfile() async {
-        isCreatingProfile = true
-        defer { isCreatingProfile = false }
+    // MARK: - Save Profile to Firebase
+    
+    private func saveProfileToFirebase() async {
+        isSaving = true
         
         do {
-            let profile = try await UserProfileService.shared.createUser(
-                displayName: displayName.isEmpty ? "Guest" : displayName,
-                campus: campus,
+            // Get or create user ID
+            let userId: String
+            if let currentUserId = FirebaseManager.shared.getCurrentUserId() {
+                userId = currentUserId
+            } else {
+                userId = try await FirebaseManager.shared.signInAnonymously()
+            }
+            
+            // Create profile in Firestore
+            try await UserProfileService.shared.createProfile(
+                userId: userId,
+                displayName: username.isEmpty ? "Guest" : username,
+                campus: selectedCampus.isEmpty ? "UNT" : selectedCampus,
                 interests: selectedInterests
             )
             
-            // Track analytics
-            AnalyticsService.shared.trackUserCreated(userId: profile.id, displayName: profile.displayName)
+            print("✅ Profile created successfully!")
             
-            // Update app state with new profile
+            // Complete onboarding
             await MainActor.run {
-                AppEnvironment.current.appState.sessionUser = profile
-                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                
+                isSaving = false
                 withAnimation(.easeInOut(duration: 0.6)) {
                     onComplete()
                 }
             }
             
-            print("✅ Onboarding complete for user: \(profile.displayName)")
         } catch {
             await MainActor.run {
+                isSaving = false
                 errorMessage = "Failed to create profile: \(error.localizedDescription)"
+                showError = true
             }
-            print("❌ Onboarding failed: \(error)")
+            print("❌ Error saving profile: \(error)")
         }
     }
 }

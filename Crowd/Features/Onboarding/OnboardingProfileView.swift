@@ -8,10 +8,21 @@
 import SwiftUI
 
 struct OnboardingProfileView: View {
-    @Binding var displayName: String
-    @Binding var campus: String
+    @Binding var username: String
+    @Binding var selectedCampus: String
     
     let onNext: () -> Void
+    
+    init(username: Binding<String> = .constant(""), selectedCampus: Binding<String> = .constant("UNT"), onNext: @escaping () -> Void) {
+        self._username = username
+        self._selectedCampus = selectedCampus
+        self.onNext = onNext
+        
+        // Set default if empty
+        if self.selectedCampus.isEmpty {
+            self.selectedCampus = "UNT"
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -36,12 +47,43 @@ struct OnboardingProfileView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.black.opacity(0.7))
 
-                            Image("ProfilePlaceholder")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 64, height: 64)
+                            // Profile Image Section
+                            ZStack {
+                                Button(action: {
+                                    // TODO: Implement profile image picker
+                                    print("Profile image tapped - open image picker")
+                                }) {
+                                    Image("ProfilePlaceholder")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 170, height: 100)
+                                        .clipShape(Circle())
+                                }
+                                
+                                // Camera button overlay - positioned to overlap the corner
+                                VStack {
+                                    Spacer()
+                                    HStack {
+                                        Spacer()
+                                        Button(action: {
+                                            // TODO: Implement camera/image picker
+                                            print("Camera button tapped - open image picker")
+                                        }) {
+                                            Image(systemName: "camera.fill")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(.white)
+                                                .frame(width: 28, height: 28)
+                                                .background(
+                                                    Circle()
+                                                        .fill(Color.black.opacity(0.8))
+                                                )
+                                        }
+                                    }
+                                    .offset(x: -8, y: -8) // Overlap the corner
+                                }
+                            }
 
-                            TextField("Ex. Scrappy", text: $displayName)
+                            TextField("Ex. Scrappy", text: $username)
                                 .padding()
                                 .background(
                                     RoundedRectangle(cornerRadius: 20)
@@ -55,11 +97,12 @@ struct OnboardingProfileView: View {
                                 .foregroundColor(.black.opacity(0.7))
 
                             Menu {
-                                Button("UNT") { campus = "UNT" }
-                                Button("SMU") { campus = "SMU" }
+                                Button("UNT") { selectedCampus = "UNT" }
+                                Button("SMU") { selectedCampus = "SMU" }
                             } label: {
                                 HStack {
-                                    Text(campus)
+                                    Text(selectedCampus.isEmpty ? "Campus" : selectedCampus)
+                                        .foregroundColor(selectedCampus.isEmpty ? .black.opacity(0.5) : .black)
                                     Spacer()
                                     Image(systemName: "chevron.down")
                                 }
@@ -96,10 +139,7 @@ struct OnboardingProfileView: View {
 }
 
 #Preview {
-    OnboardingProfileView(
-        displayName: .constant(""),
-        campus: .constant("UNT")
-    ) {
+    OnboardingProfileView {
         print("Next tapped")
     }
 }

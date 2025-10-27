@@ -195,166 +195,56 @@ final class ProfileViewModel: ObservableObject {
 
     // MARK: - Firebase Integration
     
-    func fetchProfile(userId: String) async throws {
-        let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
-        
-        // Update @Published properties on MainActor
-        await MainActor.run {
+    @MainActor
+    func loadProfile(userId: String) async {
+        do {
+            let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
+            
+            // Update all properties from Firebase
             self.displayName = profile.displayName
+            self.handle = profile.handle ?? "@\(profile.displayName.lowercased())"
+            self.bio = profile.bio ?? "Hey there! I'm using Crowd."
+            self.affiliation = profile.campus ?? "University"
             self.points = profile.auraPoints
-            // Other fields can be updated when backend supports them
-        }
-    }
-    
-    func fetchGallery(userId: String) async throws -> [CrowdEvent] {
-        let db = FirebaseManager.shared.db
-        
-        // Fetch events where user is host
-        let hostedSnapshot = try await db.collection("events")
-            .whereField("hostId", isEqualTo: userId)
-            .limit(to: 20)
-            .getDocuments()
-        
-        // Fetch events where user has signals
-        let signalsSnapshot = try await db.collection("signals")
-            .whereField("userId", isEqualTo: userId)
-            .limit(to: 20)
-            .getDocuments()
-        
-        let eventIds = signalsSnapshot.documents.compactMap { doc -> String? in
-            doc.data()["eventId"] as? String
-        }
-        
-        var events: [CrowdEvent] = []
-        
-        // Parse hosted events
-        for doc in hostedSnapshot.documents {
-            if let event = try? parseEvent(from: doc.data()) {
-                events.append(event)
-            }
-        }
-        
-        // Fetch attended events
-        for eventId in eventIds {
-            let eventDoc = try await db.collection("events").document(eventId).getDocument()
-            if let data = eventDoc.data(),
-               let event = try? parseEvent(from: data) {
-                events.append(event)
-            }
-        }
-        
-        // Remove duplicates and sort by date
-        let uniqueEvents = Array(Set(events.map { $0.id })).compactMap { id in
-            events.first(where: { $0.id == id })
-        }.sorted { $0.createdAt > $1.createdAt }
-        
-        await MainActor.run {
-            self.gallery = uniqueEvents
-        }
-        
-        return uniqueEvents
-    }
-    
-    func fetchMutuals(userId: String) async throws -> [MiniUser] {
-        // Fetch user's friends list
-        let db = FirebaseManager.shared.db
-        let userDoc = try await db.collection("users").document(userId).getDocument()
-        
-        guard let data = userDoc.data(),
-              let friendIds = data["friends"] as? [String] else {
-            return []
-        }
-        
-        // Fetch profiles for friends
-        let profiles = try await UserProfileService.shared.fetchProfiles(userIds: friendIds)
-        
-        let miniUsers = profiles.map { profile in
-            MiniUser(
-                id: profile.id,
-                name: profile.displayName,
-                avatarColor: profile.avatarColor,
-                tags: [], // TODO: Fetch user interests
-                mutualFriendsCount: 0 // TODO: Calculate mutual friends
-            )
-        }
-        
-        await MainActor.run {
-            self.mutuals = miniUsers
-        }
-        
-        return miniUsers
-    }
-    
-    func fetchSuggestions(userId: String) async throws -> [MiniUser] {
-        let db = FirebaseManager.shared.db
-        
-        // Fetch top users by aura points (excluding current user)
-        let snapshot = try await db.collection("users")
-            .order(by: "auraPoints", descending: true)
-            .limit(to: 10)
-            .getDocuments()
-        
-        let profiles = snapshot.documents.compactMap { doc -> UserProfile? in
-            let data = doc.data()
-            let id = doc.documentID
+            self.hostedCount = profile.hostedCount
+            self.joinedCount = profile.joinedCount
+            self.friendsCount = profile.friendsCount
+            self.avatarColor = profile.avatarColor
+            self.lastActive = profile.lastActive ?? Date()
             
-            guard id != userId else { return nil }
+            // Convert interests from strings to Interest objects
+            self.interests = profile.interests.compactMap { interestName in
+                Interest.allInterests.first { $0.name == interestName }
+            }
             
-            return try? UserProfile(
-                id: id,
-                displayName: data["displayName"] as? String ?? "User",
-                auraPoints: data["auraPoints"] as? Int ?? 0,
-                avatarColorHex: data["avatarColorHex"] as? String ?? "#808080",
-                profileImageURL: data["profileImageURL"] as? String
-            )
+            print("✅ Profile loaded from Firebase for: \(profile.displayName)")
+            
+        } catch {
+            print("❌ Error loading profile: \(error)")
         }
-        
-        let miniUsers = profiles.map { profile in
-            MiniUser(
-                id: profile.id,
-                name: profile.displayName,
-                avatarColor: profile.avatarColor,
-                tags: [],
-                mutualFriendsCount: 0
-            )
-        }
-        
-        await MainActor.run {
-            self.suggestedUsers = miniUsers
-        }
-        
-        return miniUsers
     }
     
-    private func parseEvent(from data: [String: Any]) throws -> CrowdEvent {
-        guard let id = data["id"] as? String,
-              let title = data["title"] as? String,
-              let lat = data["latitude"] as? Double,
-              let lon = data["longitude"] as? Double,
-              let radiusMeters = data["radiusMeters"] as? Double else {
-            throw CrowdError.invalidResponse
+    @MainActor
+    func saveChanges(userId: String) async {
+        do {
+            let updates: [String: Any] = [
+                "displayName": displayName,
+                "bio": bio,
+                "interests": interests.map { $0.name }
+            ]
+            
+            try await UserProfileService.shared.updateProfile(userId: userId, updates: updates)
+            print("✅ Profile changes saved")
+            
+        } catch {
+            print("❌ Error saving profile changes: \(error)")
         }
-        
-        let signalStrength = data["signalStrength"] as? Int ?? 0
-        let attendeeCount = data["attendeeCount"] as? Int ?? 0
-        let hostId = data["hostId"] as? String ?? ""
-        let hostName = data["hostName"] as? String ?? "Guest"
-        let tags = data["tags"] as? [String] ?? []
-        
-        return CrowdEvent(
-            id: id,
-            title: title,
-            hostId: hostId,
-            hostName: hostName,
-            latitude: lat,
-            longitude: lon,
-            radiusMeters: radiusMeters,
-            startsAt: nil,
-            endsAt: nil,
-            createdAt: Date(),
-            signalStrength: signalStrength,
-            attendeeCount: attendeeCount,
-            tags: tags
-        )
+    }
+    
+    // Factory method to create ViewModel from Firebase
+    static func fromFirebase(userId: String) async -> ProfileViewModel {
+        let viewModel = ProfileViewModel.mock
+        await viewModel.loadProfile(userId: userId)
+        return viewModel
     }
 }

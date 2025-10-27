@@ -32,7 +32,6 @@ struct CrowdHomeView: View {
     @State private var overlaySnapIndex = 0 // 0 = peek, 1 = open
 
     // MARK: - Floating button navigation
-    @State private var showMessages = false
     @State private var showCalendar = false
     
     // MARK: - Event detail
@@ -272,7 +271,6 @@ struct CrowdHomeView: View {
 
                     // === FLOATING GLASS BUTTONS ===
                     VStack(alignment: .trailing, spacing: 16) {
-                        GlassIconButton(systemName: "message.fill") { showMessages = true }
                         GlassIconButton(systemName: "calendar") { showCalendar = true }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -307,7 +305,6 @@ struct CrowdHomeView: View {
                         overlaySnapIndex = 1
                     }
                 }
-                .fullScreenCover(isPresented: $showMessages) { MessagesView() }
                 .fullScreenCover(isPresented: $showCalendar) { CalenderView() }
             }
         }

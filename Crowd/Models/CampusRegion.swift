@@ -28,21 +28,21 @@ enum CampusRegion: String, CaseIterable, Identifiable {
                        heading: 0,
                        pitch: 90,
                        minZoom: 80,
-                       maxZoom: 2000)
+                       maxZoom: 50000)
         case .dentonSquare:
             RegionSpec(center: .init(latitude: 33.215019065876064, longitude: -97.13367931121785),
                        distance: 1200,
                        heading: 0,
                        pitch: 0,
                        minZoom: 120,
-                       maxZoom: 3000)
+                       maxZoom: 50000)
         case .dorms:
             RegionSpec(center: .init(latitude: 33.20801444332677, longitude: -97.14869547061329),
                        distance: 1200,
                        heading: 0,
                        pitch: 0,
                        minZoom: 120,
-                       maxZoom: 3000)
+                       maxZoom: 50000)
         case .athletics:
             RegionSpec(
                 center: .init(latitude: 33.20179, longitude: -97.15859),
@@ -50,7 +50,7 @@ enum CampusRegion: String, CaseIterable, Identifiable {
                 heading: 0,
                 pitch: 0,
                 minZoom: 120,
-                maxZoom: 3000
+                maxZoom: 50000
             )
         case .sororitiesFrats:
             RegionSpec(center: .init(latitude: 33.20874975594727, longitude: -97.14290223812876),
@@ -58,21 +58,21 @@ enum CampusRegion: String, CaseIterable, Identifiable {
                        heading: 0,
                        pitch: 0,
                        minZoom: 120,
-                       maxZoom: 3000)
+                       maxZoom: 50000)
         case .fryStreet:
             RegionSpec(center: .init(latitude: 33.21407, longitude: -97.14607),
                        distance: 1200,
                        heading: 0,
                        pitch: 0,
                        minZoom: 120,
-                       maxZoom: 3000)
+                       maxZoom: 50000)
         case .discoveryPark:
             RegionSpec(center: .init(latitude: 33.2543441, longitude: -97.1532534),
                        distance: 1200,
                        heading: 0,
                        pitch: 0,
                        minZoom: 120,
-                       maxZoom: 3000)
+                       maxZoom: 50000)
         }
     }
 }
