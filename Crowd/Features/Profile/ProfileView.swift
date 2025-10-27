@@ -51,8 +51,11 @@ struct ProfileView: View {
                     identityBlock
                     statsRow
                     tagsSection
+<<<<<<< Updated upstream
                     interactionBar
                     mutualsSection
+=======
+>>>>>>> Stashed changes
                     gallerySection
                     suggestedConnectionsSection
 
@@ -65,7 +68,7 @@ struct ProfileView: View {
                 Image(systemName: viewModel.isEditMode ? "checkmark.circle.fill" : "pencil.circle.fill")
                     .font(.system(size: 36))
                     .foregroundStyle(viewModel.isEditMode ? Color.green : Color.accentColor)
-                    .background(Circle().fill(.regularMaterial).frame(width: 44, height: 44))
+                    .background(Circle().fill(Color(.systemBackground)).frame(width: 44, height: 44))
             }
             .padding(16)
         }
@@ -128,7 +131,7 @@ struct ProfileView: View {
                     .frame(minHeight: 60, maxHeight: 100)
                     .scrollContentBackground(.hidden)
                     .padding(8)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.18), lineWidth: 1))
                     .submitLabel(.done)
             } else {
@@ -156,8 +159,8 @@ struct ProfileView: View {
             HStack(spacing: 12) {
                 statCard(title: "Hosted", value: "\(viewModel.hostedCount)")
                 statCard(title: "Joined", value: "\(viewModel.joinedCount)")
-                statCard(title: "Upcoming", value: "\(viewModel.upcomingEventsCount)")
                 statCard(title: "Friends", value: "\(viewModel.friendsCount)")
+                statCard(title: "Upcoming", value: "\(viewModel.upcomingEventsCount)")
             }
         }
     }
@@ -170,7 +173,7 @@ struct ProfileView: View {
         .frame(minWidth: 80)
         .padding(.vertical, 14)
         .padding(.horizontal, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.24), lineWidth: 1))
     }
 
@@ -202,20 +205,20 @@ struct ProfileView: View {
     // MARK: - Interaction Bar
     private var interactionBar: some View {
         HStack(spacing: 10) {
-            interactionButton(icon: "person.badge.plus", title: "Add Friend") {
-                print("Add Friend tapped")
-            }
-
             interactionButton(icon: "envelope", title: "Invite") {
                 showShareSheet = true
+            }
+
+            interactionButton(icon: "qrcode", title: "QR") {
+                print("QR Share tapped")
             }
 
             interactionButton(icon: "message", title: "DM") {
                 print("DM tapped")
             }
 
-            interactionButton(icon: "qrcode", title: "QR") {
-                print("QR Share tapped")
+            interactionButton(icon: "person.badge.plus", title: "Add Friend") {
+                print("Add Friend tapped")
             }
         }
     }
@@ -230,52 +233,10 @@ struct ProfileView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(.regularMaterial, in: Capsule())
+            .background(Color(.systemBackground), in: Capsule())
             .overlay(Capsule().stroke(.white.opacity(0.24), lineWidth: 1))
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: - Mutuals Section
-    private var mutualsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Mutual Friends")
-                .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(viewModel.mutuals.prefix(5)) { mutual in
-                        VStack(spacing: 6) {
-                            AvatarView(name: mutual.name, color: mutual.avatarColor, size: 50)
-                            Text(mutual.name.split(separator: " ").first ?? "")
-                                .font(.system(size: 12))
-                                .lineLimit(1)
-                        }
-                        .frame(width: 60)
-                    }
-
-                    if viewModel.mutuals.count > 5 {
-                        VStack(spacing: 6) {
-                            Circle()
-                                .fill(.regularMaterial)
-                                .frame(width: 50, height: 50)
-                                .overlay(
-                                    Text("+\(viewModel.mutuals.count - 5)")
-                                        .font(.system(size: 14, weight: .semibold))
-                                )
-                            Text("more")
-                                .font(.system(size: 12))
-                        }
-                        .frame(width: 60)
-                    }
-                }
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.24), lineWidth: 1))
-        }
     }
 
     // MARK: - Gallery Section
@@ -326,7 +287,7 @@ struct ProfileView: View {
             }
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial)
+            .background(Color(.systemBackground))
         }
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.24), lineWidth: 1))

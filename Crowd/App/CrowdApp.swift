@@ -11,6 +11,7 @@ import FirebaseCore
 @main
 struct CrowdApp: App {
     @StateObject private var appState = AppState()
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     private let env = AppEnvironment.current
     
     init() {
@@ -20,10 +21,16 @@ struct CrowdApp: App {
 
     var body: some Scene {
         WindowGroup {
-            CrowdHomeView()
-                .environmentObject(appState)
-                .environment(\.appEnvironment, env)
-                .task { await appState.bootstrap() }
+            if hasSeenOnboarding {
+                CrowdHomeView()
+                    .environmentObject(appState)
+                    .environment(\.appEnvironment, env)
+                    .task { await appState.bootstrap() }
+            } else {
+                OnboardingView {
+                    hasSeenOnboarding = true
+                }
+            }
         }
     }
 }
