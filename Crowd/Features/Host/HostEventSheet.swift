@@ -116,7 +116,7 @@ struct HostEventSheet: View {
                         )
                     } label: {
                         HStack {
-                            Text(locationName.isEmpty ? "Select a location" : locationName)
+                            Text(locationName.isEmpty ? "Current Location" : locationName)
                                 .foregroundStyle(locationName.isEmpty ? .secondary : .primary)
                             Spacer()
                         }
@@ -228,9 +228,9 @@ struct HostEventSheet: View {
             coord = currentLocation
             reverseGeocodeLocation(currentLocation)
         } else {
-            // Fallback: use default region but leave name empty so user must select
+            // Fallback: use default region center with "Current Location" as default
             coord = defaultRegion.spec.center
-            locationName = ""
+            locationName = "" // Leave empty to show "Current Location" placeholder
         }
     }
     
