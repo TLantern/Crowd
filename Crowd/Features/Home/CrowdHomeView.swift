@@ -313,7 +313,7 @@ struct CrowdHomeView: View {
         }
         .sheet(isPresented: $showHostSheet) {
             HostEventSheet(defaultRegion: selectedRegion) { hostedEvents.append($0) }
-                .presentationDetents([.fraction(0.75)])
+                .presentationDetents([.fraction(0.75), .large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showEventDetail) {
