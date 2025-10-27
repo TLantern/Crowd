@@ -7,6 +7,8 @@
 
 import Foundation
 import FirebaseFirestore
+import FirebaseStorage
+import UIKit
 
 final class UserProfileService {
     static let shared = UserProfileService()
@@ -74,6 +76,98 @@ final class UserProfileService {
     
     func clearCache() {
         profileCache.removeAll()
+    }
+    
+    // MARK: - Profile Creation & Updates
+    
+    func createUser(displayName: String, campus: String, interests: [String]) async throws -> UserProfile {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            throw NSError(domain: "UserProfileService", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        
+        let functions = FirebaseManager.shared.functions
+        let callable = functions.httpsCallable("createUser")
+        
+        let data: [String: Any] = [
+            "displayName": displayName,
+            "interests": interests,
+            "campus": campus
+        ]
+        
+        let result = try await callable.call(data)
+        
+        guard let response = result.data as? [String: Any],
+              let success = response["success"] as? Bool,
+              success else {
+            throw NSError(domain: "UserProfileService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to create user"])
+        }
+        
+        // Fetch the newly created profile
+        let profile = try await fetchProfile(userId: userId)
+        
+        print("✅ User profile created: \(displayName)")
+        return profile
+    }
+    
+    func updateProfile(userId: String, updates: [String: Any]) async throws {
+        let functions = FirebaseManager.shared.functions
+        let callable = functions.httpsCallable("updateUser")
+        
+        var data = updates
+        data["id"] = userId
+        
+        let result = try await callable.call(data)
+        
+        guard let response = result.data as? [String: Any],
+              let success = response["success"] as? Bool,
+              success else {
+            throw NSError(domain: "UserProfileService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to update profile"])
+        }
+        
+        // Clear cache to force refresh
+        profileCache.removeValue(forKey: userId)
+        
+        print("✅ User profile updated")
+    }
+    
+    func updateInterests(userId: String, interests: [String]) async throws {
+        try await updateProfile(userId: userId, updates: ["interests": interests])
+    }
+    
+    func updateDisplayName(userId: String, displayName: String) async throws {
+        try await updateProfile(userId: userId, updates: ["displayName": displayName])
+    }
+    
+    // MARK: - Profile Image Upload
+    
+    /// Upload profile image to Firebase Storage and update user profile
+    func uploadProfileImage(userId: String, image: UIImage) async throws -> String {
+        // Compress image
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            throw NSError(domain: "UserProfileService", code: 400, userInfo: [NSLocalizedDescriptionKey: "Failed to compress image"])
+        }
+        
+        // Upload to Firebase Storage
+        let storage = Storage.storage()
+        let storageRef = storage.reference()
+        let imageRef = storageRef.child("profile_images/\(userId).jpg")
+        
+        // Set metadata
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
+        // Upload image
+        _ = try await imageRef.putDataAsync(imageData, metadata: metadata)
+        
+        // Get download URL
+        let downloadURL = try await imageRef.downloadURL()
+        
+        // Update user profile with image URL
+        try await updateProfile(userId: userId, updates: ["profileImageURL": downloadURL.absoluteString])
+        
+        print("✅ Profile image uploaded: \(downloadURL.absoluteString)")
+        
+        return downloadURL.absoluteString
     }
 }
 

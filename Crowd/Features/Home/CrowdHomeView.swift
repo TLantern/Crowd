@@ -838,9 +838,29 @@ struct EventDetailView: View {
     }
     
     private func cancelEvent() {
-        // TODO: Delete event from Firebase
-        print("Canceling event: \(event.id)")
-        dismiss()
+        // Verify user is the host
+        guard let currentUserId = FirebaseManager.shared.getCurrentUserId(),
+              currentUserId == event.hostId else {
+            print("⚠️ Only the host can delete the event")
+            return
+        }
+        
+        Task {
+            do {
+                try await AppEnvironment.current.eventRepo.deleteEvent(eventId: event.id)
+                
+                // Track analytics
+                AnalyticsService.shared.trackEventDeleted(eventId: event.id)
+                
+                print("✅ Event deleted: \(event.id)")
+                
+                await MainActor.run {
+                    dismiss()
+                }
+            } catch {
+                print("❌ Failed to delete event: \(error)")
+            }
+        }
     }
 }
 

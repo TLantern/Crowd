@@ -45,6 +45,10 @@ actor MockEventRepository: EventRepository {
         e.signalStrength += 2
         store[eventId] = e
     }
+    
+    func deleteEvent(eventId: String) async throws {
+        store.removeValue(forKey: eventId)
+    }
 
     func boostSignal(eventId: String, delta: Int) async throws {
         guard var e = store[eventId] else { return }
