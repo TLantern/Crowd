@@ -62,14 +62,38 @@ final class FirebaseEventRepository: EventRepository {
     }
     
     func join(eventId: String, userId: String) async throws {
-        // Create a signal for the event
+        // Get user's current location
+        guard let location = await AppEnvironment.current.locationService.lastKnown else {
+            throw CrowdError.custom("Location not available. Please enable location services.")
+        }
+        
+        // Create a signal for the event with user's location
         let data: [String: Any] = [
             "eventId": eventId,
+            "latitude": location.latitude,
+            "longitude": location.longitude,
             "signalStrength": 3 // Default signal strength
         ]
         
         let callable = functions.httpsCallable("createSignal")
         _ = try await callable.call(data)
+        
+        print("✅ Joined event \(eventId) at location (\(location.latitude), \(location.longitude))")
+    }
+    
+    func deleteEvent(eventId: String) async throws {
+        let callable = functions.httpsCallable("deleteEvent")
+        let data: [String: Any] = ["id": eventId]
+        
+        let result = try await callable.call(data)
+        
+        guard let response = result.data as? [String: Any],
+              let success = response["success"] as? Bool,
+              success else {
+            throw CrowdError.invalidResponse
+        }
+        
+        print("✅ Event deleted: \(eventId)")
     }
     
     func boostSignal(eventId: String, delta: Int) async throws {
@@ -98,20 +122,88 @@ final class FirebaseEventRepository: EventRepository {
     // MARK: - Real-time Listeners
     
     func listenToEvents(in region: CampusRegion, onChange: @escaping ([CrowdEvent]) -> Void) {
-        // For now, use a simple query. In production, you'd want geohash queries
+        // Use geohash-based query for efficient spatial filtering
+        let center = region.spec.center
+        let radiusKm = region.spec.distance / 1000.0
+        
+        // Calculate geohash prefix for the region
+        // For simplicity, we'll use a 4-character prefix (~39km × 19.5km)
+        // This is a rough approximation - in production, use the geohash utility
+        let geohashPrefix = String(encodeGeohash(lat: center.latitude, lon: center.longitude).prefix(4))
+        
+        print("🔄 Setting up real-time listener for region: \(region.rawValue) with geohash prefix: \(geohashPrefix)")
+        
         db.collection("events")
+            .whereField("geohash", isGreaterThanOrEqualTo: geohashPrefix)
+            .whereField("geohash", isLessThanOrEqualTo: geohashPrefix + "\u{f8ff}")
             .addSnapshotListener { snapshot, error in
                 guard let documents = snapshot?.documents else {
-                    print("Error fetching events: \(error?.localizedDescription ?? "Unknown")")
+                    print("❌ Error fetching events: \(error?.localizedDescription ?? "Unknown")")
                     return
                 }
                 
                 let events = documents.compactMap { doc -> CrowdEvent? in
-                    try? self.parseEvent(from: doc.data())
+                    guard let event = try? self.parseEvent(from: doc.data()) else {
+                        return nil
+                    }
+                    
+                    // Filter by exact distance
+                    let distance = self.calculateDistance(
+                        from: center,
+                        to: CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+                    )
+                    
+                    return distance <= radiusKm ? event : nil
                 }
                 
+                print("🔄 Real-time update: \(events.count) events in region")
                 onChange(events)
             }
+    }
+    
+    // Simple geohash encoder (6-character precision)
+    private func encodeGeohash(lat: Double, lon: Double) -> String {
+        let base32 = Array("0123456789bcdefghjkmnpqrstuvwxyz")
+        var latRange = (-90.0, 90.0)
+        var lonRange = (-180.0, 180.0)
+        var geohash = ""
+        var bit = 0
+        var ch = 0
+        
+        while geohash.count < 6 {
+            if bit % 2 == 0 {
+                let mid = (lonRange.0 + lonRange.1) / 2
+                if lon > mid {
+                    ch |= (1 << (4 - (bit / 2)))
+                    lonRange.0 = mid
+                } else {
+                    lonRange.1 = mid
+                }
+            } else {
+                let mid = (latRange.0 + latRange.1) / 2
+                if lat > mid {
+                    ch |= (1 << (4 - (bit / 2)))
+                    latRange.0 = mid
+                } else {
+                    latRange.1 = mid
+                }
+            }
+            
+            bit += 1
+            if bit == 10 {
+                geohash.append(base32[ch])
+                bit = 0
+                ch = 0
+            }
+        }
+        
+        return geohash
+    }
+    
+    private func calculateDistance(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
+        let locationFrom = CLLocation(latitude: from.latitude, longitude: from.longitude)
+        let locationTo = CLLocation(latitude: to.latitude, longitude: to.longitude)
+        return locationFrom.distance(from: locationTo) / 1000.0 // Convert to km
     }
     
     // MARK: - Helpers

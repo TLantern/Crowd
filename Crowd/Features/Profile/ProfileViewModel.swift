@@ -135,9 +135,19 @@ final class ProfileViewModel: ObservableObject {
     
     func updateProfileImage(_ image: UIImage) {
         self.profileImage = image
-        // TODO: Upload to Firebase Storage
-        // let url = try await FirebaseService.shared.uploadProfileImage(image)
-        // Update user profile with new image URL
+        
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            return
+        }
+        
+        Task {
+            do {
+                let imageURL = try await UserProfileService.shared.uploadProfileImage(userId: userId, image: image)
+                print("✅ Profile image uploaded: \(imageURL)")
+            } catch {
+                print("❌ Failed to upload profile image: \(error)")
+            }
+        }
     }
 
     // MARK: - Mock Data
@@ -183,29 +193,168 @@ final class ProfileViewModel: ObservableObject {
         ]
     )
 
-    // MARK: - Firebase Integration (Stubbed)
-    // Uncomment and implement when Firebase is ready
+    // MARK: - Firebase Integration
     
-//    func fetchProfile() async throws {
-//        // let profile = try await FirebaseService.shared.fetchUserProfile()
-//        // Update @Published properties on MainActor
-//    }
-//
-//    func fetchGallery() async throws -> [CrowdEvent] {
-//        // let events = try await FirebaseService.shared.fetchUserEvents()
-//        // return events
-//        return []
-//    }
-//
-//    func fetchMutuals() async throws -> [MiniUser] {
-//        // let users = try await FirebaseService.shared.fetchMutualFriends()
-//        // return users
-//        return []
-//    }
-//
-//    func fetchSuggestions() async throws -> [MiniUser] {
-//        // let users = try await FirebaseService.shared.fetchSuggestedUsers()
-//        // return users
-//        return []
-//    }
+    func fetchProfile(userId: String) async throws {
+        let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
+        
+        // Update @Published properties on MainActor
+        await MainActor.run {
+            self.displayName = profile.displayName
+            self.points = profile.auraPoints
+            // Other fields can be updated when backend supports them
+        }
+    }
+    
+    func fetchGallery(userId: String) async throws -> [CrowdEvent] {
+        let db = FirebaseManager.shared.db
+        
+        // Fetch events where user is host
+        let hostedSnapshot = try await db.collection("events")
+            .whereField("hostId", isEqualTo: userId)
+            .limit(to: 20)
+            .getDocuments()
+        
+        // Fetch events where user has signals
+        let signalsSnapshot = try await db.collection("signals")
+            .whereField("userId", isEqualTo: userId)
+            .limit(to: 20)
+            .getDocuments()
+        
+        let eventIds = signalsSnapshot.documents.compactMap { doc -> String? in
+            doc.data()["eventId"] as? String
+        }
+        
+        var events: [CrowdEvent] = []
+        
+        // Parse hosted events
+        for doc in hostedSnapshot.documents {
+            if let event = try? parseEvent(from: doc.data()) {
+                events.append(event)
+            }
+        }
+        
+        // Fetch attended events
+        for eventId in eventIds {
+            let eventDoc = try await db.collection("events").document(eventId).getDocument()
+            if let data = eventDoc.data(),
+               let event = try? parseEvent(from: data) {
+                events.append(event)
+            }
+        }
+        
+        // Remove duplicates and sort by date
+        let uniqueEvents = Array(Set(events.map { $0.id })).compactMap { id in
+            events.first(where: { $0.id == id })
+        }.sorted { $0.createdAt > $1.createdAt }
+        
+        await MainActor.run {
+            self.gallery = uniqueEvents
+        }
+        
+        return uniqueEvents
+    }
+    
+    func fetchMutuals(userId: String) async throws -> [MiniUser] {
+        // Fetch user's friends list
+        let db = FirebaseManager.shared.db
+        let userDoc = try await db.collection("users").document(userId).getDocument()
+        
+        guard let data = userDoc.data(),
+              let friendIds = data["friends"] as? [String] else {
+            return []
+        }
+        
+        // Fetch profiles for friends
+        let profiles = try await UserProfileService.shared.fetchProfiles(userIds: friendIds)
+        
+        let miniUsers = profiles.map { profile in
+            MiniUser(
+                id: profile.id,
+                name: profile.displayName,
+                avatarColor: profile.avatarColor,
+                tags: [], // TODO: Fetch user interests
+                mutualFriendsCount: 0 // TODO: Calculate mutual friends
+            )
+        }
+        
+        await MainActor.run {
+            self.mutuals = miniUsers
+        }
+        
+        return miniUsers
+    }
+    
+    func fetchSuggestions(userId: String) async throws -> [MiniUser] {
+        let db = FirebaseManager.shared.db
+        
+        // Fetch top users by aura points (excluding current user)
+        let snapshot = try await db.collection("users")
+            .order(by: "auraPoints", descending: true)
+            .limit(to: 10)
+            .getDocuments()
+        
+        let profiles = snapshot.documents.compactMap { doc -> UserProfile? in
+            let data = doc.data()
+            let id = doc.documentID
+            
+            guard id != userId else { return nil }
+            
+            return try? UserProfile(
+                id: id,
+                displayName: data["displayName"] as? String ?? "User",
+                auraPoints: data["auraPoints"] as? Int ?? 0,
+                avatarColorHex: data["avatarColorHex"] as? String ?? "#808080",
+                profileImageURL: data["profileImageURL"] as? String
+            )
+        }
+        
+        let miniUsers = profiles.map { profile in
+            MiniUser(
+                id: profile.id,
+                name: profile.displayName,
+                avatarColor: profile.avatarColor,
+                tags: [],
+                mutualFriendsCount: 0
+            )
+        }
+        
+        await MainActor.run {
+            self.suggestedUsers = miniUsers
+        }
+        
+        return miniUsers
+    }
+    
+    private func parseEvent(from data: [String: Any]) throws -> CrowdEvent {
+        guard let id = data["id"] as? String,
+              let title = data["title"] as? String,
+              let lat = data["latitude"] as? Double,
+              let lon = data["longitude"] as? Double,
+              let radiusMeters = data["radiusMeters"] as? Double else {
+            throw CrowdError.invalidResponse
+        }
+        
+        let signalStrength = data["signalStrength"] as? Int ?? 0
+        let attendeeCount = data["attendeeCount"] as? Int ?? 0
+        let hostId = data["hostId"] as? String ?? ""
+        let hostName = data["hostName"] as? String ?? "Guest"
+        let tags = data["tags"] as? [String] ?? []
+        
+        return CrowdEvent(
+            id: id,
+            title: title,
+            hostId: hostId,
+            hostName: hostName,
+            latitude: lat,
+            longitude: lon,
+            radiusMeters: radiusMeters,
+            startsAt: nil,
+            endsAt: nil,
+            createdAt: Date(),
+            signalStrength: signalStrength,
+            attendeeCount: attendeeCount,
+            tags: tags
+        )
+    }
 }

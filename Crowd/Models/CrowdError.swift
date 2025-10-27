@@ -13,4 +13,5 @@ enum CrowdError: Error {
     case invalidInput(String)
     case notFound
     case invalidResponse
+    case custom(String)
 }

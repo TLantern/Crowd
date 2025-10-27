@@ -10,6 +10,7 @@ import FirebaseCore
 import FirebaseFirestore
 import FirebaseFunctions
 import FirebaseAuth
+import FirebaseAnalytics
 
 final class FirebaseManager {
     static let shared = FirebaseManager()

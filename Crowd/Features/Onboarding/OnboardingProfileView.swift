@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct OnboardingProfileView: View {
-    @State private var username: String = ""
-    @State private var selectedCampus: String = "UNT"
+    @Binding var displayName: String
+    @Binding var campus: String
     
     let onNext: () -> Void
     
@@ -41,7 +41,7 @@ struct OnboardingProfileView: View {
                                 .scaledToFit()
                                 .frame(width: 64, height: 64)
 
-                            TextField("Ex. Scrappy", text: $username)
+                            TextField("Ex. Scrappy", text: $displayName)
                                 .padding()
                                 .background(
                                     RoundedRectangle(cornerRadius: 20)
@@ -55,11 +55,11 @@ struct OnboardingProfileView: View {
                                 .foregroundColor(.black.opacity(0.7))
 
                             Menu {
-                                Button("UNT") { selectedCampus = "UNT" }
-                                Button("SMU") { selectedCampus = "SMU" }
+                                Button("UNT") { campus = "UNT" }
+                                Button("SMU") { campus = "SMU" }
                             } label: {
                                 HStack {
-                                    Text(selectedCampus)
+                                    Text(campus)
                                     Spacer()
                                     Image(systemName: "chevron.down")
                                 }
@@ -96,7 +96,10 @@ struct OnboardingProfileView: View {
 }
 
 #Preview {
-    OnboardingProfileView {
+    OnboardingProfileView(
+        displayName: .constant(""),
+        campus: .constant("UNT")
+    ) {
         print("Next tapped")
     }
 }

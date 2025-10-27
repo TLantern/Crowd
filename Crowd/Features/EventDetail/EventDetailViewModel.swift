@@ -38,6 +38,10 @@ final class EventDetailViewModel: ObservableObject {
         
         do {
             try await eventRepo.join(eventId: eventId, userId: userId)
+            
+            // Track analytics
+            AnalyticsService.shared.trackEventJoined(eventId: eventId, title: "Event")
+            
             print("✅ Successfully joined event: \(eventId)")
             return true
         } catch {
