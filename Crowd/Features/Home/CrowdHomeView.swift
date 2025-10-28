@@ -316,7 +316,9 @@ struct CrowdHomeView: View {
                 .presentationDetents([.fraction(0.75), .large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showEventDetail) {
+        .sheet(isPresented: $showEventDetail, onDismiss: {
+            selectedEvent = nil
+        }) {
             if let event = selectedEvent {
                 EventDetailView(event: event)
                     .environmentObject(appState)
