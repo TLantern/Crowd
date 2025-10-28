@@ -2,7 +2,7 @@
 //  CrowdEvent.swift
 //  Crowd
 //
-//  Created by Teni Owojori on 10/19/25.
+//  Core in-app event model used by map/list UI.
 //
 
 import Foundation
@@ -14,21 +14,21 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     var hostId: String
     var hostName: String
 
-    // Codable-friendly storage
     var latitude: Double
     var longitude: Double
-
     var radiusMeters: Double
+
     var startsAt: Date?
     var endsAt: Date?
     var createdAt: Date
+
     var signalStrength: Int
     var attendeeCount: Int
+
     var tags: [String]
     var category: String?
     var description: String?
 
-    // Convenience computed property for MapKit
     var coordinates: CLLocationCoordinate2D {
         get { .init(latitude: latitude, longitude: longitude) }
         set {
@@ -45,7 +45,8 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
         category: String? = nil,
         description: String? = nil,
         startsAt: Date? = nil,
-        endsAt: Date? = nil
+        endsAt: Date? = nil,
+        tags: [String] = []
     ) -> Self {
         CrowdEvent(
             id: UUID().uuidString,
@@ -60,7 +61,7 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             createdAt: Date(),
             signalStrength: 0,
             attendeeCount: 0,
-            tags: [],
+            tags: tags,
             category: category,
             description: description
         )
