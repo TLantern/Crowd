@@ -132,7 +132,7 @@ final class FirebaseEventRepository: EventRepository {
     
     // MARK: - Real-time Listeners
     
-    func listenToEvents(in region: CampusRegion, onChange: @escaping ([CrowdEvent]) -> Void) {
+    func listenToEvents(in region: CampusRegion, onChange: @escaping ([CrowdEvent]) -> Void) -> ListenerRegistration {
         // Use geohash-based query for efficient spatial filtering
         let center = region.spec.center
         let radiusKm = region.spec.distance / 1000.0
@@ -144,12 +144,13 @@ final class FirebaseEventRepository: EventRepository {
         
         print("🔄 Setting up real-time listener for region: \(region.rawValue) with geohash prefix: \(geohashPrefix)")
         
-        db.collection("events")
+        return db.collection("events")
             .whereField("geohash", isGreaterThanOrEqualTo: geohashPrefix)
             .whereField("geohash", isLessThanOrEqualTo: geohashPrefix + "\u{f8ff}")
             .addSnapshotListener { snapshot, error in
                 guard let documents = snapshot?.documents else {
                     print("❌ Error fetching events: \(error?.localizedDescription ?? "Unknown")")
+                    onChange([])
                     return
                 }
                 

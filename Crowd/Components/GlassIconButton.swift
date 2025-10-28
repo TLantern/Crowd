@@ -36,7 +36,7 @@ struct GlassIconButton: View {
                 
                 Image(systemName: systemName)
                     .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.black.opacity(0.78))
+                    .foregroundStyle(.primary.opacity(0.78))
             }
         }
         .frame(width: 56, height: 56)
