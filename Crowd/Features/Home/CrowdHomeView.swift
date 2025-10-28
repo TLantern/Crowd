@@ -347,6 +347,13 @@ struct CrowdHomeView: View {
             // Check every 5 minutes to remove events that ended 4+ hours ago
             removeExpiredEvents()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { notification in
+            // Remove deleted event from hostedEvents array
+            if let eventId = notification.object as? String {
+                hostedEvents.removeAll { $0.id == eventId }
+                print("🗑️ Removed deleted event from hostedEvents: \(eventId)")
+            }
+        }
     }
     
     // MARK: - Firebase Event Loading

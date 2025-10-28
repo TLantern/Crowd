@@ -8,6 +8,10 @@
 import SwiftUI
 import FirebaseFirestore
 
+extension Notification.Name {
+    static let eventDeleted = Notification.Name("eventDeleted")
+}
+
 
 struct EventDetailView: View {
     let event: CrowdEvent
@@ -225,6 +229,9 @@ struct EventDetailView: View {
                 AnalyticsService.shared.trackEventDeleted(eventId: event.id)
                 
                 print("✅ Event deleted: \(event.id)")
+                
+                // Post notification to remove from hostedEvents array
+                NotificationCenter.default.post(name: .eventDeleted, object: event.id)
                 
                 await MainActor.run {
                     dismiss()

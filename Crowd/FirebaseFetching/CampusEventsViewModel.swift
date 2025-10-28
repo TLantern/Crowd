@@ -35,6 +35,7 @@ final class CampusEventsViewModel: ObservableObject {
                 }
                 
                 print("📊 CampusEventsViewModel: Received \(docs.count) documents from campus_events_live")
+                print("📊 CampusEventsViewModel: Previous events count: \(self.crowdEvents.count)")
 
                 var mapped: [CrowdEvent] = []
 
@@ -65,8 +66,13 @@ final class CampusEventsViewModel: ObservableObject {
                 for event in mapped {
                     print("   - \(event.title) (starts: \(event.startsAt?.description ?? "nil"))")
                 }
-
+                
+                let previousCount = self.crowdEvents.count
                 self.crowdEvents = mapped
+                
+                if previousCount != mapped.count {
+                    print("🔄 CampusEventsViewModel: Event count changed from \(previousCount) to \(mapped.count)")
+                }
             }
     }
 
