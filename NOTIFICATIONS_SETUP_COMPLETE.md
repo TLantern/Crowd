@@ -114,11 +114,77 @@ The code is complete, but you need to configure the external services:
 **Status:** ❌ NOT DONE
 **Time Required:** 2 minutes
 
-In Xcode:
-1. Select project → Crowd target → Info tab
-2. Add 3 location permission strings (see detailed guide in previous message)
-
 **Why:** iOS requires permission descriptions or app will crash
+
+#### **Method A: Using Xcode UI (Recommended)**
+
+1. **Open Xcode** - Double-click `Crowd.xcodeproj`
+
+2. **Navigate to Project Settings**
+   - In the left sidebar (Project Navigator), click the very top item: **"Crowd"** (blue icon)
+   - You should see "PROJECTS" and "TARGETS" in the main editor
+
+3. **Select Target**
+   - Under "TARGETS", click on **"Crowd"**
+
+4. **Go to Info Tab**
+   - At the top of the main editor, click the **"Info"** tab
+   - You'll see "Custom iOS Target Properties" section
+
+5. **Add First Permission**
+   - Hover over any row in the list
+   - Click the **"+"** button that appears
+   - In the new row's **Key** dropdown, start typing: `Privacy - Location When In Use`
+   - Select **"Privacy - Location When In Use Usage Description"**
+   - In the **Value** field, paste:
+     ```
+     Crowd uses your location to show nearby events and connect you with people around you.
+     ```
+
+6. **Add Second Permission**
+   - Click **"+"** again
+   - Type: `Privacy - Location Always and When In Use`
+   - Select **"Privacy - Location Always and When In Use Usage Description"**
+   - Value:
+     ```
+     Crowd needs background location access to notify you about events happening near you, even when the app is closed.
+     ```
+
+7. **Add Third Permission**
+   - Click **"+"** again
+   - Type: `Privacy - Location Always`
+   - Select **"Privacy - Location Always Usage Description"**
+   - Value:
+     ```
+     Allow Crowd to access your location in the background to send you notifications about nearby events.
+     ```
+
+8. **Save** - Press **Cmd+S**
+
+#### **Method B: Edit as Source Code (Faster if comfortable with XML)**
+
+1. **Right-click on Info.plist** in Xcode
+2. Select **"Open As" → "Source Code"**
+3. Find the closing `</dict>` tag near the bottom
+4. **Paste this BEFORE the closing `</dict>` tag:**
+
+```xml
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Crowd uses your location to show nearby events and connect you with people around you.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Crowd needs background location access to notify you about events happening near you, even when the app is closed.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Allow Crowd to access your location in the background to send you notifications about nearby events.</string>
+```
+
+5. **Right-click Info.plist** again → **"Open As" → "Property List"** (to go back)
+6. **Save** (Cmd+S)
+
+#### **Verify It Worked:**
+After adding, you should see three new entries in Info.plist:
+- ✅ Privacy - Location When In Use Usage Description
+- ✅ Privacy - Location Always and When In Use Usage Description  
+- ✅ Privacy - Location Always Usage Description
 
 ---
 
