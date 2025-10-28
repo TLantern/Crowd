@@ -7,7 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
-import FirebaseFirestoreSwift
+// import FirebaseFirestoreSwift //
 import CoreLocation
 import Combine
 

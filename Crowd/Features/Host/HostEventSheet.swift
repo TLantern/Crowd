@@ -37,7 +37,7 @@ let untLocations: [PredefinedLocation] = [
     PredefinedLocation(name: "Pohl Recreation Center", coordinate: CLLocationCoordinate2D(latitude: 33.21207, longitude: -97.15404)),
     PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.2106644, longitude: -97.1501177)),
     PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.2131446, longitude: -97.1454504)),
-    PredefinedLocation(name: "UNT Coliseum", coordinate: CLLocationCoordinate2D(latitude: 33.208611, longitude: -97.154167))
+    PredefinedLocation(name: "Super PIT (UNT Coliseum)", coordinate: CLLocationCoordinate2D(latitude: 33.208611, longitude: -97.154167))
 ]
 
 struct HostEventSheet: View {
@@ -65,6 +65,9 @@ struct HostEventSheet: View {
     @State private var aiDescription: String = ""
     @State private var displayedDescription: String = ""
     @State private var typewriterTask: Task<Void, Never>?
+    
+    // Confetti celebration
+    @State private var showConfetti = false
 
     init(defaultRegion: CampusRegion, onCreate: @escaping (CrowdEvent) -> Void) {
         self.defaultRegion = defaultRegion
@@ -218,6 +221,7 @@ struct HostEventSheet: View {
                 generateDescription()
             }
         }
+        .confetti(isPresented: $showConfetti)
     }
     
     // MARK: - Location Initialization
@@ -399,8 +403,17 @@ struct HostEventSheet: View {
         print("🎯 Event coordinates: lat=\(event.latitude), lon=\(event.longitude)")
         print("🎯 Expected (The Syndicate): lat=33.209850, lon=-97.151470")
         
+        // Trigger celebration effects
+        showConfetti = true
+        Haptics.success() // Light vibration
+        
+        // Call onCreate callback
         onCreate(event)
-        dismiss()
+        
+        // Dismiss after a short delay to allow confetti to show
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            dismiss()
+        }
     }
 }
 
@@ -432,42 +445,36 @@ struct LocationPickerView: View {
     
     // MARK: - Apple Maps Geocoding
     
-    private func searchLocationOnAppleMaps(locationName: String) {
-        isSearching = true
+    private func searchLocationOnAppleMaps(locationName: String) async -> CLLocationCoordinate2D? {
         print("🔍 Searching Apple Maps for: \(locationName)")
         
         let searchRequest = MKLocalSearch.Request()
-        searchRequest.naturalLanguageQuery = "\(locationName), University of North Texas, Denton, TX"
+        // More specific query with "UNT" prefix for campus buildings
+        let query = locationName.contains("DATCU") || locationName.contains("Stadium") || locationName.contains("Square")
+            ? "\(locationName), Denton, TX"
+            : "\(locationName), UNT, Denton, TX 76203"
+        searchRequest.naturalLanguageQuery = query
         searchRequest.region = MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 33.210081, longitude: -97.147700), // UNT center
-            latitudinalMeters: 5000,
-            longitudinalMeters: 5000
+            center: CLLocationCoordinate2D(latitude: 33.210081, longitude: -97.147700),
+            latitudinalMeters: 3000,
+            longitudinalMeters: 3000
         )
         
         let search = MKLocalSearch(request: searchRequest)
-        search.start { response, error in
-            isSearching = false
-            
-            if let error = error {
-                print("❌ Apple Maps search error: \(error.localizedDescription)")
-                // Fall back to hardcoded coordinate
-                return
+        
+        do {
+            let response = try await search.start()
+            guard let mapItem = response.mapItems.first else {
+                print("❌ No results for: \(locationName)")
+                return nil
             }
             
-            guard let mapItem = response?.mapItems.first else {
-                print("❌ No results found for: \(locationName)")
-                return
-            }
-            
-            let foundCoordinate = mapItem.placemark.coordinate
-            print("✅ Found on Apple Maps: \(mapItem.name ?? "Unknown")")
-            print("✅ Apple Maps coordinates: lat=\(foundCoordinate.latitude), lon=\(foundCoordinate.longitude)")
-            
-            // Update the coordinate with Apple Maps result
-            DispatchQueue.main.async {
-                self.coordinate = foundCoordinate
-                print("✅ Updated event coordinate to Apple Maps location")
-            }
+            let coordinate = mapItem.placemark.coordinate
+            print("✅ Found: \(mapItem.name ?? "Unknown") at lat=\(coordinate.latitude), lon=\(coordinate.longitude)")
+            return coordinate
+        } catch {
+            print("❌ Search error: \(error.localizedDescription)")
+            return nil
         }
     }
     
@@ -476,50 +483,70 @@ struct LocationPickerView: View {
             // Predefined UNT Locations
             ForEach(filteredLocations) { location in
                 Button {
-                    locationName = location.name
-                    // Set hardcoded coordinate as fallback
-                    coordinate = location.coordinate
-                    print("📍 Selected location: \(location.name)")
-                    print("📍 Fallback coordinates: lat=\(location.coordinate.latitude), lon=\(location.coordinate.longitude)")
-                    
-                    // Search Apple Maps for exact location
-                    searchLocationOnAppleMaps(locationName: location.name)
-                    
-                    searchText = ""
-                    dismiss()
+                    Task {
+                        isSearching = true
+                        locationName = location.name
+                        
+                        // Search Apple Maps for accurate coordinates
+                        if let coord = await searchLocationOnAppleMaps(locationName: location.name) {
+                            coordinate = coord
+                        } else {
+                            // Fallback to hardcoded if search fails
+                            coordinate = location.coordinate
+                        }
+                        
+                        isSearching = false
+                        searchText = ""
+                        dismiss()
+                    }
                 } label: {
                     HStack {
                         Text(location.name)
                             .foregroundStyle(.primary)
                         Spacer()
-                        if locationName == location.name {
+                        if isSearching {
+                            ProgressView()
+                        } else if locationName == location.name {
                             Image(systemName: "checkmark")
                                 .foregroundStyle(.blue)
                         }
                     }
                 }
+                .disabled(isSearching)
             }
             
             // Custom location option
             if !searchText.isEmpty && !filteredLocations.contains(where: { $0.name.localizedCaseInsensitiveCompare(searchText) == .orderedSame }) {
                 Button {
-                    let customLocationName = searchText
-                    locationName = customLocationName
-                    print("📍 Custom location entered: \(customLocationName)")
-                    
-                    // Search Apple Maps for custom location
-                    searchLocationOnAppleMaps(locationName: customLocationName)
-                    
-                    searchText = ""
-                    dismiss()
+                    Task {
+                        isSearching = true
+                        let customName = searchText
+                        locationName = customName
+                        
+                        if let coord = await searchLocationOnAppleMaps(locationName: customName) {
+                            coordinate = coord
+                        } else {
+                            print("⚠️ Could not find coordinates for custom location")
+                            // Keep existing coordinate (current location or region center)
+                        }
+                        
+                        isSearching = false
+                        searchText = ""
+                        dismiss()
+                    }
                 } label: {
                     HStack {
                         Image(systemName: "plus.circle.fill")
                             .foregroundStyle(.blue)
                         Text("Use \"\(searchText)\"")
                             .foregroundStyle(.primary)
+                        Spacer()
+                        if isSearching {
+                            ProgressView()
+                        }
                     }
                 }
+                .disabled(isSearching)
             }
             
             // Use Current Location option

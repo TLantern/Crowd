@@ -67,3 +67,11 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
         )
     }
 }
+
+extension CrowdEvent {
+    func withId(_ newId: String) -> CrowdEvent {
+        var copy = self
+        copy.id = newId
+        return copy
+    }
+}

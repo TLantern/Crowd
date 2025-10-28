@@ -7,6 +7,7 @@
 
 import SwiftUI
 import MapKit
+import FirebaseFirestore
 
 struct CrowdHomeView: View {
     @Environment(\.appEnvironment) var env
@@ -26,6 +27,7 @@ struct CrowdHomeView: View {
     @State private var hostedEvents: [CrowdEvent] = []
     @State private var firebaseEvents: [CrowdEvent] = []
     @State private var isLoadingEvents = false
+    @State private var eventListener: ListenerRegistration?
 
     // MARK: - Bottom overlay routing
     enum OverlayRoute { case none, profile, leaderboard }
@@ -50,7 +52,7 @@ struct CrowdHomeView: View {
             ZStack {
                 // === MAP ===
                 Map(position: $cameraPosition) {
-                    // Event annotations - always visible (mock + user-created)
+                    // Event annotations - real Firebase events only
                     ForEach(allEvents) { event in
                         Annotation(event.title, coordinate: event.coordinates) {
                             Button {
@@ -58,50 +60,6 @@ struct CrowdHomeView: View {
                                 showEventDetail = true
                             } label: {
                                 EventAnnotationView(event: event)
-                            }
-                        }
-                        .annotationTitles(.hidden)
-                    }
-                    
-                    // User event pin at user's location
-                    if let userLocation = locationService.lastKnown {
-                        Annotation("I'm Here!", coordinate: userLocation) {
-                            Button {
-                                let userEvent = CrowdEvent(
-                                    id: "user-event",
-                                    title: "I'm Here!",
-                                    hostId: "user",
-                                    hostName: "You",
-                                    latitude: userLocation.latitude,
-                                    longitude: userLocation.longitude,
-                                    radiusMeters: 60,
-                                    startsAt: Date(),
-                                    endsAt: Date().addingTimeInterval(3600),
-                                    createdAt: Date(),
-                                    signalStrength: 5,
-                                    attendeeCount: 1,
-                                    tags: [],
-                                    category: "hangout"
-                                )
-                                selectedEvent = userEvent
-                                showEventDetail = true
-                            } label: {
-                                EventAnnotationView(event: CrowdEvent(
-                                    id: "user-event",
-                                    title: "I'm Here!",
-                                    hostId: "user",
-                                    hostName: "You",
-                                    latitude: userLocation.latitude,
-                                    longitude: userLocation.longitude,
-                                    radiusMeters: 60,
-                                    startsAt: Date(),
-                                    endsAt: Date().addingTimeInterval(3600),
-                                    createdAt: Date(),
-                                    signalStrength: 5,
-                                    attendeeCount: 1,
-                                    tags: [],
-                                    category: "hangout"
-                                ))
                             }
                         }
                         .annotationTitles(.hidden)
@@ -243,21 +201,19 @@ struct CrowdHomeView: View {
                                     .accessibilityLabel("Open profile")
                                     .offset(x: -spread, y: sideYOffset)
 
-                                    // Right — Leaderboard
+                                    // Right — Calendar
                                     FrostedIconButton(
-                                        systemName: "trophy",
+                                        systemName: "calendar",
                                         baseSize: 54,
                                         targetSize: 72,
                                         frostOpacity: 0.22,
                                         iconBaseColor: .black,
-                                        highlightColor: .yellow
+                                        highlightColor: Color(red: 0.95, green: 0.75, blue: 0.95)
                                     ) {
-                                        route = .leaderboard
-                                        overlaySnapIndex = 1
-                                        overlayPresented = true
+                                        showCalendar = true
                                         Haptics.light()
                                     }
-                                    .accessibilityLabel("Open leaderboard")
+                                    .accessibilityLabel("Open calendar")
                                     .offset(x: spread, y: sideYOffset)
                                 }
 
@@ -265,6 +221,7 @@ struct CrowdHomeView: View {
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundStyle(.black.opacity(0.78))
                                     .padding(.top, -8)
+                                    .frame(maxWidth: .infinity, alignment: .center)
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -273,7 +230,11 @@ struct CrowdHomeView: View {
 
                     // === FLOATING GLASS BUTTONS ===
                     VStack(alignment: .trailing, spacing: 16) {
-                        GlassIconButton(systemName: "calendar") { showCalendar = true }
+                        GlassIconButton(systemName: "trophy") { 
+                            route = .leaderboard
+                            overlaySnapIndex = 1
+                            overlayPresented = true
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .padding(.trailing, 24)
@@ -323,36 +284,41 @@ struct CrowdHomeView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        .task {
-            await loadFirebaseEvents()
+        .onAppear {
+            startListeningToEvents()
+        }
+        .onDisappear {
+            stopListeningToEvents()
         }
         .onChange(of: selectedRegion) { _, newRegion in
-            Task {
-                await loadFirebaseEvents(region: newRegion)
+            startListeningToEvents(region: newRegion)
+        }
+    }
+    
+    // MARK: - Real-Time Event Listening
+    
+    private func startListeningToEvents(region: CampusRegion? = nil) {
+        // Remove existing listener if any
+        stopListeningToEvents()
+        
+        let targetRegion = region ?? selectedRegion
+        print("🔄 Starting real-time listener for region: \(targetRegion.rawValue)")
+        
+        isLoadingEvents = true
+        
+        eventListener = env.eventRepo.listenToEvents(in: targetRegion) { [self] events in
+            DispatchQueue.main.async {
+                self.firebaseEvents = events
+                self.isLoadingEvents = false
+                print("✅ Real-time update: Loaded \(events.count) events from Firebase")
             }
         }
     }
     
-    // MARK: - Firebase Event Loading
-    
-    private func loadFirebaseEvents(region: CampusRegion? = nil) async {
-        let targetRegion = region ?? selectedRegion
-        isLoadingEvents = true
-        
-        do {
-            let events = try await env.eventRepo.fetchEvents(in: targetRegion)
-            await MainActor.run {
-                firebaseEvents = events
-                isLoadingEvents = false
-                print("✅ Loaded \(events.count) events from Firebase for region: \(targetRegion.rawValue)")
-            }
-        } catch {
-            await MainActor.run {
-                firebaseEvents = []
-                isLoadingEvents = false
-                print("❌ Failed to load Firebase events: \(error.localizedDescription)")
-            }
-        }
+    private func stopListeningToEvents() {
+        eventListener?.remove()
+        eventListener = nil
+        print("🛑 Stopped listening to events")
     }
 
     // MARK: - Camera snap helper
@@ -366,6 +332,7 @@ struct CrowdHomeView: View {
 // MARK: - Tiny haptics helper
 enum Haptics {
     static func light() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+    static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
 }
 
 // MARK: - Reusable Bottom Overlay

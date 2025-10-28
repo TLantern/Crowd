@@ -55,9 +55,8 @@ struct ProfileView: View {
                         identityBlock
                         statsRow
                         tagsSection
-                        interactionBar
                         gallerySection
-                        suggestedConnectionsSection
+                        attendingSection
 
                     }
                     .padding(16)
@@ -230,51 +229,7 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Interaction Bar
-    private var interactionBar: some View {
-        HStack(spacing: 10) {
-            interactionButton(icon: "envelope", title: "Invite") {
-                showShareSheet = true
-            }
-
-            interactionButton(icon: "qrcode", title: "QR") {
-                print("QR Share tapped")
-            }
-
-            interactionButton(icon: "message", title: "DM") {
-                print("DM tapped")
-            }
-
-            interactionButton(icon: "person.badge.plus", title: "Add Friend") {
-                print("Add Friend tapped")
-            }
-            
-            #if DEBUG
-            interactionButton(icon: "bell.badge", title: "Test 🔔") {
-                viewModel.showNotificationTester = true
-            }
-            #endif
-        }
-        .sheet(isPresented: $viewModel.showNotificationTester) {
-            NotificationTestView()
-        }
-    }
-
-    private func interactionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color(.systemBackground), in: Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.24), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
+    // Removed interaction bar (Invite/QR/DM/Add Friend/Test)
 
     // MARK: - Gallery Section
     private var gallerySection: some View {
@@ -344,14 +299,26 @@ struct ProfileView: View {
     }
 
     // MARK: - Suggested Connections
-    private var suggestedConnectionsSection: some View {
+    // Removed suggested connections
+
+    // MARK: - Attending Section
+    @EnvironmentObject private var appState: AppState
+    private var attendingSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("People Like You")
+            Text("Attending")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
 
-            ForEach(viewModel.suggestedUsers.prefix(3)) { user in
-                UserCardView(user: user)
+            if appState.attendingEvents.isEmpty {
+                Text("No upcoming events saved")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12)], spacing: 12) {
+                    ForEach(appState.attendingEvents) { event in
+                        eventCard(event)
+                    }
+                }
             }
         }
     }
