@@ -8,6 +8,7 @@
 import Foundation
 import CoreLocation
 import FirebaseFunctions
+import FirebaseFirestore
 
 actor PresenceService {
     private let functions: Functions

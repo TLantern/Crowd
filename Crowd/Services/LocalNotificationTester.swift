@@ -112,6 +112,14 @@ final class LocalNotificationTester {
             return "Taco Tuesday"
         case .outdoors:
             return "Campus Walk"
+        case .hangout:
+            return "Coffee Chat"
+        case .pickupGame:
+            return "Basketball Pickup"
+        case .movie:
+            return "Movie Night"
+        case .networking:
+            return "Career Mixer"
         }
     }
     

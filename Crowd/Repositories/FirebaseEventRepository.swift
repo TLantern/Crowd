@@ -74,7 +74,7 @@ final class FirebaseEventRepository: EventRepository {
     
     func join(eventId: String, userId: String) async throws {
         // Get user's current location
-        guard let location = await AppEnvironment.current.locationService.lastKnown else {
+        guard let location = await AppEnvironment.current.location.lastKnown else {
             throw CrowdError.custom("Location not available. Please enable location services.")
         }
         

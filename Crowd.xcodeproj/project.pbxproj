@@ -520,6 +520,9 @@
 				DEVELOPMENT_TEAM = 8254DAMG44;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Crowd needs access to your location to show you nearby events and help you discover what's happening around campus, even when the app is in the background.";
+				INFOPLIST_KEY_aps_environment = development;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Crowd needs access to your location to show you nearby events and help you discover what's happening around campus.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -552,6 +555,9 @@
 				DEVELOPMENT_TEAM = 8254DAMG44;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Crowd needs access to your location to show you nearby events and help you discover what's happening around campus, even when the app is in the background.";
+				INFOPLIST_KEY_aps_environment = development;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Crowd needs access to your location to show you nearby events and help you discover what's happening around campus.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
