@@ -10,6 +10,7 @@ import FirebaseCore
 
 @main
 struct CrowdApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     private let env = AppEnvironment.current
@@ -17,6 +18,9 @@ struct CrowdApp: App {
     init() {
         // Initialize Firebase and connect to emulators
         _ = FirebaseManager.shared
+        
+        // Configure push notifications
+        NotificationService.shared.configure()
     }
 
     var body: some Scene {
