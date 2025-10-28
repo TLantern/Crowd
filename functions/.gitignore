@@ -1,0 +1,17 @@
+# Compiled JavaScript files
+**/*.js.map
+
+# Node.js dependencies
+node_modules/
+
+# Firebase cache
+.firebase/
+
+# Firebase debug log
+firebase-debug.log
+firebase-debug.*.log
+
+# Firebase emulator data
+ui-debug.log
+firestore-debug.log
+
