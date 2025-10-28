@@ -24,7 +24,7 @@ struct ProfileImagePicker: View {
                         Task {
                             if let data = try? await newItem?.loadTransferable(type: Data.self),
                                let uiImage = UIImage(data: data) {
-                                selectedImage = uiImage
+                                selectedImage = cropToCircle(image: uiImage)
                                 dismiss()
                             }
                         }
@@ -116,7 +116,7 @@ struct LegacyImagePicker: UIViewControllerRepresentable {
         
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
             if let uiImage = info[.originalImage] as? UIImage {
-                parent.image = uiImage
+                parent.image = cropToCircle(image: uiImage)
             }
             parent.onImagePicked()
         }

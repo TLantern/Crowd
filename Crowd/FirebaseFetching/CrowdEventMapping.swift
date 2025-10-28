@@ -46,17 +46,18 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     let startsAtDate = isoToDate(live.startTimeLocal)
     let endsAtDate   = isoToDate(live.endTimeLocal)
 
-    // tags array can include emoji and maybe source info
-    var tags: [String] = [emoji]
-    if live.sourceType == "official" {
-        tags.append("official")
-    } else {
-        tags.append("student")
+    // Use tags from Firebase, fallback to generated tags if none provided
+    var tags: [String] = live.tags ?? []
+    if tags.isEmpty {
+        if live.sourceType == "official" {
+            tags.append("official")
+        } else {
+            tags.append("student")
+        }
     }
 
-    // title shown to user should include emoji up front for fast scanning
-    // Example: "🎉 Halloween Bash"
-    let displayTitle = "\(emoji) \(rawTitle)"
+    // Use clean title without emoji
+    let displayTitle = rawTitle
 
     let ev = CrowdEvent.newDraft(
         at: fallbackCoord,
@@ -67,7 +68,8 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
         description: description.isEmpty ? nil : description,
         startsAt: startsAtDate,
         endsAt: endsAtDate,
-        tags: tags
+        tags: tags,
+        sourceURL: live.sourceUrl
     )
 
     return ev

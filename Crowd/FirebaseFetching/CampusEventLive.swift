@@ -7,10 +7,8 @@
 
 import Foundation
 import FirebaseFirestore
-import FirebaseFirestoreSwift
-
 struct CampusEventLive: Codable, Identifiable {
-    @DocumentID var id: String?
+    var id: String?
 
     let title: String
     let locationName: String?
@@ -20,6 +18,7 @@ struct CampusEventLive: Codable, Identifiable {
     let sourceType: String        // "instagram" or "official"
     let sourceOrg: String         // "bsu_unt" or "UNT Official"
     let sourceUrl: String
+    let tags: [String]?           // Tags from Firebase
 
     let confidence: Double?
     let createdAt: Timestamp?

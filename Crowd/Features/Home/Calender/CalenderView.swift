@@ -43,7 +43,9 @@ struct CalenderView: View {
                 // Header
                 VStack(spacing: 12) {
                     HStack {
-                        VStack(alignment: .leading, spacing: 4) {
+                        Spacer()
+                        
+                        VStack(alignment: .center, spacing: 4) {
                             Text("Upcoming Events")
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundStyle(.primary)
@@ -110,23 +112,9 @@ struct CalenderView: View {
                 campusEventsVM.start()
                 // Refresh attended events to clean up expired ones
                 AttendedEventsService.shared.refreshAttendedEvents()
-                // Add sample campus events for testing
-                addSampleCampusEvents()
             }
             .onDisappear {
                 campusEventsVM.stop()
-            }
-        }
-    }
-    
-    private func addSampleCampusEvents() {
-        Task {
-            do {
-                let functions = FirebaseManager.shared.functions
-                let result = try await functions.httpsCallable("addSampleCampusEvents").call()
-                print("✅ Sample campus events added: \(result.data)")
-            } catch {
-                print("❌ Failed to add sample campus events: \(error)")
             }
         }
     }
@@ -140,7 +128,23 @@ struct EventCardView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let sourceURL = event.sourceURL {
+                        Button(action: {
+                            if let url = URL(string: sourceURL) {
+                                UIApplication.shared.open(url)
+                            }
+                        }) {
+                            Text(getEventEmoji(for: event.tags))
+                                .font(.system(size: 24))
+                        }
+                    } else {
+                        Text(getEventEmoji(for: event.tags))
+                            .font(.system(size: 24))
+                    }
+                }
+                
                 VStack(alignment: .leading, spacing: 4) {
                     Text(event.title)
                         .font(.system(size: 16, weight: .semibold))
@@ -161,17 +165,13 @@ struct EventCardView: View {
                     if let startsAt = event.startsAt {
                         Text(formatEventTime(startsAt))
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.black)
                     }
                     
-                    if let category = event.category {
-                        Text(category.uppercased())
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.accentColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.accentColor.opacity(0.1))
-                            .cornerRadius(6)
+                    if let endsAt = event.endsAt {
+                        Text(formatEventTime(endsAt))
+                            .font(.system(size: 10, weight: .regular))
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -205,28 +205,45 @@ struct EventCardView: View {
                 }
             }
             
-            // Tags
-            if !event.tags.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(event.tags, id: \.self) { tag in
-                            Text(tag)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(8)
-                        }
-                    }
-                    .padding(.horizontal, 1)
-                }
-            }
             
-            // Attending button
+            // RSVP/Tickets, Share and Attending buttons
             HStack {
+                // RSVP/Tickets button
+                if let sourceURL = event.sourceURL {
+                    Button(action: {
+                        if let url = URL(string: sourceURL) {
+                            UIApplication.shared.open(url)
+                        }
+                    }) {
+                        Text("RSVP/Tickets")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.accentColor)
+                            )
+                    }
+                }
+                
                 Spacer()
                 
+                // Share button
+                Button(action: {
+                    shareEvent()
+                }) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(8)
+                        .background(
+                            Circle()
+                                .fill(Color.black)
+                        )
+                }
+                
+                // Attending button
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         isAttending.toggle()
@@ -264,14 +281,6 @@ struct EventCardView: View {
                 .stroke(.primary.opacity(0.1), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                isExpanded.toggle()
-                if isExpanded {
-                    showEventURL = true
-                }
-            }
-        }
         .onAppear {
             // Check if user is already attending this event
             isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
@@ -280,6 +289,228 @@ struct EventCardView: View {
             // Update state when attended events list changes
             isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
         }
+    }
+    
+    private func shareEvent() {
+        var shareItems: [Any] = []
+        
+        // Add event title
+        shareItems.append(event.title)
+        
+        // Add description if available
+        if let description = event.description {
+            shareItems.append(description)
+        }
+        
+        // Add time if available
+        if let startsAt = event.startsAt {
+            shareItems.append("Time: \(formatEventTime(startsAt))")
+        }
+        
+        // Add source URL if available
+        if let sourceURL = event.sourceURL {
+            shareItems.append(sourceURL)
+        }
+        
+        let activityViewController = UIActivityViewController(
+            activityItems: shareItems,
+            applicationActivities: nil
+        )
+        
+        // Configure for iPad
+        if let popover = activityViewController.popoverPresentationController {
+            popover.sourceView = UIApplication.shared.windows.first
+            popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height / 2, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        
+        // Present the activity view controller
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootViewController = window.rootViewController {
+            
+            // Find the topmost presented view controller
+            var topController = rootViewController
+            while let presentedController = topController.presentedViewController {
+                topController = presentedController
+            }
+            
+            topController.present(activityViewController, animated: true)
+        }
+    }
+    
+    private func getEventEmoji(for tags: [String]) -> String {
+        let tagEmojis: [String: String] = [
+            // Music & Entertainment
+            "music": "🎵",
+            "concert": "🎤",
+            "party": "🎉",
+            "festival": "🎪",
+            "dance": "💃",
+            "dancing": "💃",
+            "live": "🎵",
+            "performance": "🎭",
+            
+            // Food & Dining
+            "food": "🍕",
+            "dining": "🍽️",
+            "restaurant": "🍽️",
+            "cafe": "☕",
+            "coffee": "☕",
+            "lunch": "🍽️",
+            "dinner": "🍽️",
+            "breakfast": "🥞",
+            "snack": "🍿",
+            
+            // Sports & Fitness
+            "sports": "⚽",
+            "basketball": "🏀",
+            "football": "🏈",
+            "soccer": "⚽",
+            "tennis": "🎾",
+            "volleyball": "🏐",
+            "baseball": "⚾",
+            "fitness": "💪",
+            "gym": "💪",
+            "workout": "💪",
+            "yoga": "🧘",
+            "running": "🏃",
+            "cycling": "🚴",
+            
+            // Academic & Education
+            "study": "📚",
+            "academic": "🎓",
+            "lecture": "🎓",
+            "workshop": "🔧",
+            "seminar": "🎓",
+            "conference": "🎓",
+            "education": "🎓",
+            "learning": "📚",
+            "research": "🔬",
+            "science": "🔬",
+            "tech": "💻",
+            "technology": "💻",
+            "coding": "💻",
+            "programming": "💻",
+            
+            // Arts & Culture
+            "art": "🎨",
+            "creative": "🎨",
+            "culture": "🌍",
+            "cultural": "🌍",
+            "international": "🌍",
+            "language": "🗣️",
+            "film": "🎬",
+            "movie": "🎬",
+            "theater": "🎭",
+            "drama": "🎭",
+            "comedy": "😂",
+            "standup": "🎤",
+            "photography": "📸",
+            "gallery": "🖼️",
+            
+            // Social & Networking
+            "social": "👥",
+            "networking": "🤝",
+            "meetup": "👥",
+            "community": "🏘️",
+            "volunteer": "🤝",
+            "charity": "❤️",
+            "fundraising": "💰",
+            "career": "💼",
+            "job": "💼",
+            "business": "💼",
+            "entrepreneur": "🚀",
+            "startup": "🚀",
+            
+            // Health & Wellness
+            "health": "🏥",
+            "wellness": "💚",
+            "mental": "🧠",
+            "spiritual": "🙏",
+            "religious": "⛪",
+            "faith": "⛪",
+            "meditation": "🧘",
+            "mindfulness": "🧘",
+            
+            // Outdoor & Nature
+            "outdoor": "🏔️",
+            "hiking": "🥾",
+            "camping": "⛺",
+            "nature": "🌿",
+            "environment": "🌱",
+            "sustainability": "🌱",
+            "travel": "✈️",
+            "adventure": "🗺️",
+            
+            // Gaming & Entertainment
+            "gaming": "🎮",
+            "esports": "🎮",
+            "board": "🎲",
+            "trivia": "🧠",
+            "puzzle": "🧩",
+            "card": "🃏",
+            
+            // Lifestyle & Hobbies
+            "fashion": "👗",
+            "beauty": "💄",
+            "cooking": "👨‍🍳",
+            "baking": "🧁",
+            "wine": "🍷",
+            "beer": "🍺",
+            "tea": "🍵",
+            "book": "📖",
+            "reading": "📖",
+            "writing": "✍️",
+            "poetry": "📝",
+            "blog": "✍️",
+            
+            // Politics & Activism
+            "politics": "🏛️",
+            "debate": "🗣️",
+            "activism": "✊",
+            "protest": "✊",
+            "voting": "🗳️",
+            "election": "🗳️",
+            
+            // Special Events
+            "graduation": "🎓",
+            "celebration": "🎉",
+            "anniversary": "🎂",
+            "birthday": "🎂",
+            "holiday": "🎄",
+            "christmas": "🎄",
+            "halloween": "🎃",
+            "valentine": "💕",
+            "newyear": "🎊",
+            
+            // Source Types
+            "official": "🏛️",
+            "student": "🎓",
+            "instagram": "📸",
+            "social": "👥"
+        ]
+        
+        // Check for exact matches first
+        for tag in tags {
+            let lowercaseTag = tag.lowercased()
+            if let emoji = tagEmojis[lowercaseTag] {
+                return emoji
+            }
+        }
+        
+        // Check for partial matches
+        for tag in tags {
+            let lowercaseTag = tag.lowercased()
+            for (keyword, emoji) in tagEmojis {
+                if lowercaseTag.contains(keyword) {
+                    return emoji
+                }
+            }
+        }
+        
+        // Default emoji if no match found
+        return "📅"
     }
     
     private func formatEventTime(_ date: Date) -> String {

@@ -25,12 +25,12 @@ struct InterestFilterDropdown: View {
                         .foregroundColor(.secondary)
                     
                     if selectedInterests.isEmpty {
-                        Text("Interests")
-                            .font(.system(size: 14, weight: .medium))
+                        Text("Vibe")
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.secondary)
                     } else {
-                        Text("\(selectedInterests.count) selected")
-                            .font(.system(size: 14, weight: .medium))
+                        Text("\(selectedInterests.count)")
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.primary)
                     }
                     
@@ -40,10 +40,10 @@ struct InterestFilterDropdown: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
                 .background(.ultraThinMaterial)
-                .cornerRadius(8)
+                .cornerRadius(6)
             }
             .buttonStyle(PlainButtonStyle())
             

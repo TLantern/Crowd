@@ -22,69 +22,69 @@ struct Interest: Identifiable, Hashable, Codable {
         "\(emoji) \(name)"
     }
     
-    // MARK: - Preloaded Interests (50)
+    // MARK: - Preloaded Interests (matching onboarding)
     static let allInterests: [Interest] = [
         // Entertainment & Arts
-        Interest(emoji: "🎵", name: "Music"),
-        Interest(emoji: "🎸", name: "Rock"),
-        Interest(emoji: "🎹", name: "Jazz"),
-        Interest(emoji: "🎤", name: "Karaoke"),
-        Interest(emoji: "🎬", name: "Movies"),
-        Interest(emoji: "📺", name: "TV Shows"),
-        Interest(emoji: "🎨", name: "Art"),
-        Interest(emoji: "🖼️", name: "Museums"),
+        Interest(emoji: "🎧", name: "Music"),
+        Interest(emoji: "🎤", name: "Singing"),
+        Interest(emoji: "🎸", name: "Guitar"),
+        Interest(emoji: "🥁", name: "Band Life"),
+        Interest(emoji: "💃", name: "Dance"),
+        Interest(emoji: "🎭", name: "Theatre"),
+        Interest(emoji: "🎨", name: "Art & Design"),
         Interest(emoji: "📸", name: "Photography"),
-        Interest(emoji: "🎭", name: "Theater"),
+        Interest(emoji: "🎥", name: "Filmmaking"),
+        Interest(emoji: "🪶", name: "Writing"),
+        Interest(emoji: "✏️", name: "Graphic Design"),
         
         // Sports & Fitness
+        Interest(emoji: "🎮", name: "Gaming"),
         Interest(emoji: "🏀", name: "Basketball"),
         Interest(emoji: "⚽", name: "Soccer"),
-        Interest(emoji: "🏈", name: "Football"),
-        Interest(emoji: "⚾", name: "Baseball"),
         Interest(emoji: "🎾", name: "Tennis"),
-        Interest(emoji: "🏊", name: "Swimming"),
-        Interest(emoji: "🏋️", name: "Gym"),
-        Interest(emoji: "🧘", name: "Yoga"),
-        Interest(emoji: "🚴", name: "Cycling"),
+        Interest(emoji: "🏈", name: "Football"),
+        Interest(emoji: "🏋️", name: "Gym Life"),
         Interest(emoji: "🏃", name: "Running"),
+        Interest(emoji: "🧗", name: "Adventure"),
+        Interest(emoji: "🚴", name: "Biking"),
+        Interest(emoji: "🧘", name: "Wellness"),
         
         // Food & Drink
-        Interest(emoji: "🍕", name: "Pizza"),
-        Interest(emoji: "🍔", name: "Burgers"),
-        Interest(emoji: "🍣", name: "Sushi"),
-        Interest(emoji: "🍜", name: "Ramen"),
-        Interest(emoji: "☕", name: "Coffee"),
-        Interest(emoji: "🍵", name: "Tea"),
-        Interest(emoji: "🍷", name: "Wine"),
-        Interest(emoji: "🍰", name: "Desserts"),
-        Interest(emoji: "🌮", name: "Tacos"),
-        Interest(emoji: "🥗", name: "Healthy Food"),
+        Interest(emoji: "☕", name: "Coffee Runs"),
+        Interest(emoji: "🍕", name: "Foodie"),
+        Interest(emoji: "🍔", name: "Late-Night Eats"),
+        Interest(emoji: "🧑‍🍳", name: "Cooking"),
         
-        // Technology & Gaming
-        Interest(emoji: "💻", name: "Tech"),
-        Interest(emoji: "🎮", name: "Gaming"),
-        Interest(emoji: "📱", name: "Mobile Apps"),
-        Interest(emoji: "🤖", name: "AI"),
-        Interest(emoji: "🚀", name: "Startups"),
-        Interest(emoji: "⌨️", name: "Coding"),
+        // Technology & Business
+        Interest(emoji: "🖥️", name: "Coding"),
+        Interest(emoji: "🤖", name: "AI & Tech"),
+        Interest(emoji: "🧬", name: "Science"),
+        Interest(emoji: "💻", name: "Startups"),
+        Interest(emoji: "💡", name: "Entrepreneurship"),
+        Interest(emoji: "🧑‍💼", name: "Business"),
+        Interest(emoji: "💸", name: "Investing"),
+        Interest(emoji: "🎮", name: "Esports"),
         
         // Learning & Social
-        Interest(emoji: "📚", name: "Reading"),
-        Interest(emoji: "✍️", name: "Writing"),
-        Interest(emoji: "🧠", name: "Study"),
-        Interest(emoji: "💬", name: "Social"),
-        Interest(emoji: "🎓", name: "Academia"),
-        Interest(emoji: "🌍", name: "Travel"),
-        Interest(emoji: "🗺️", name: "Adventure"),
-        Interest(emoji: "🏕️", name: "Camping"),
+        Interest(emoji: "📚", name: "Study Sessions"),
+        Interest(emoji: "💬", name: "Public Speaking"),
+        Interest(emoji: "🎙️", name: "Podcasts"),
+        Interest(emoji: "📰", name: "Campus News"),
+        Interest(emoji: "📱", name: "Social Media"),
+        Interest(emoji: "🌍", name: "Culture"),
+        Interest(emoji: "♻️", name: "Sustainability"),
+        Interest(emoji: "🔥", name: "Campus Events"),
         
-        // Lifestyle & Hobbies
-        Interest(emoji: "🎲", name: "Board Games"),
-        Interest(emoji: "🧩", name: "Puzzles"),
-        Interest(emoji: "🐕", name: "Pets"),
-        Interest(emoji: "🌱", name: "Gardening"),
-        Interest(emoji: "👗", name: "Fashion"),
-        Interest(emoji: "💄", name: "Beauty")
+        // Lifestyle & Fun
+        Interest(emoji: "✈️", name: "Travel"),
+        Interest(emoji: "🏖️", name: "Beach Days"),
+        Interest(emoji: "🏕️", name: "Camping"),
+        Interest(emoji: "🏡", name: "Chill Spots"),
+        Interest(emoji: "🎉", name: "Parties"),
+        Interest(emoji: "🕹️", name: "Retro Games"),
+        Interest(emoji: "🐾", name: "Pets"),
+        Interest(emoji: "🪩", name: "Nightlife"),
+        Interest(emoji: "💞", name: "Dating & Friends")
     ]
 }
 

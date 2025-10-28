@@ -28,6 +28,7 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     var tags: [String]
     var category: String?
     var description: String?
+    var sourceURL: String?
 
     var coordinates: CLLocationCoordinate2D {
         get { .init(latitude: latitude, longitude: longitude) }
@@ -46,7 +47,8 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
         description: String? = nil,
         startsAt: Date? = nil,
         endsAt: Date? = nil,
-        tags: [String] = []
+        tags: [String] = [],
+        sourceURL: String? = nil
     ) -> Self {
         CrowdEvent(
             id: UUID().uuidString,
@@ -63,7 +65,8 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             attendeeCount: 0,
             tags: tags,
             category: category,
-            description: description
+            description: description,
+            sourceURL: sourceURL
         )
     }
 }

@@ -12,24 +12,55 @@ struct AvatarView: View {
     let color: Color
     let size: CGFloat
     let showOnlineStatus: Bool
+    let profileImageURL: String?
+    let profileImage: UIImage?
     
-    init(name: String, color: Color, size: CGFloat = 90, showOnlineStatus: Bool = false) {
+    init(name: String, color: Color, size: CGFloat = 90, showOnlineStatus: Bool = false, profileImageURL: String? = nil, profileImage: UIImage? = nil) {
         self.name = name
         self.color = color
         self.size = size
         self.showOnlineStatus = showOnlineStatus
+        self.profileImageURL = profileImageURL
+        self.profileImage = profileImage
     }
     
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            Circle()
-                .fill(color.opacity(0.25))
-                .overlay(
-                    Text(initials(from: name))
-                        .font(.system(size: size * 0.4, weight: .bold))
-                        .foregroundColor(color)
-                )
+            if let profileImage = profileImage {
+                // Show profile image if available
+                Image(uiImage: profileImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else if let imageURL = profileImageURL, !imageURL.isEmpty {
+                // Try to load image from URL (local or remote)
+                AsyncImage(url: URL(string: imageURL)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Circle()
+                        .fill(color.opacity(0.25))
+                        .overlay(
+                            Text(initials(from: name))
+                                .font(.system(size: size * 0.4, weight: .bold))
+                                .foregroundColor(color)
+                        )
+                }
                 .frame(width: size, height: size)
+                .clipShape(Circle())
+            } else {
+                // Fallback to initials
+                Circle()
+                    .fill(color.opacity(0.25))
+                    .overlay(
+                        Text(initials(from: name))
+                            .font(.system(size: size * 0.4, weight: .bold))
+                            .foregroundColor(color)
+                    )
+                    .frame(width: size, height: size)
+            }
             
             if showOnlineStatus {
                 OnlineStatusIndicator(size: size * 0.2)

@@ -117,21 +117,65 @@ final class UserProfileService {
     // MARK: - Profile Image Upload
     
     func uploadProfileImage(_ image: UIImage, userId: String) async throws -> String {
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+        print("📸 UserProfileService: Saving profile image locally for userId: \(userId)")
+        
+        // Resize image to reasonable size (max 1024x1024)
+        let resizedImage = resizeImage(image, to: CGSize(width: 1024, height: 1024))
+        
+        guard let imageData = resizedImage.jpegData(compressionQuality: 0.8) else {
+            print("❌ UserProfileService: Failed to convert image to JPEG data")
             throw NSError(domain: "UserProfileService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
         }
         
-        let storage = Storage.storage()
-        let storageRef = storage.reference()
-        let imageRef = storageRef.child("profile_images/\(userId).jpg")
+        print("📸 UserProfileService: Image data size: \(imageData.count) bytes")
         
-        let metadata = StorageMetadata()
-        metadata.contentType = "image/jpeg"
+        // Save to local documents directory
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let imagesDirectory = documentsPath.appendingPathComponent("ProfileImages")
         
-        let _ = try await imageRef.putDataAsync(imageData, metadata: metadata)
-        let downloadURL = try await imageRef.downloadURL()
+        // Create directory if it doesn't exist
+        try? FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
         
-        return downloadURL.absoluteString
+        let imageURL = imagesDirectory.appendingPathComponent("\(userId).jpg")
+        
+        do {
+            try imageData.write(to: imageURL)
+            print("✅ UserProfileService: Image saved locally at: \(imageURL.path)")
+            
+            // Return a local file URL that can be used to display the image
+            return "file://\(imageURL.path)"
+        } catch {
+            print("❌ UserProfileService: Failed to save image locally: \(error)")
+            throw error
+        }
+    }
+    
+    private func resizeImage(_ image: UIImage, to size: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+    
+    // MARK: - Local Image Loading
+    
+    func loadLocalProfileImage(userId: String) -> UIImage? {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let imageURL = documentsPath.appendingPathComponent("ProfileImages/\(userId).jpg")
+        
+        guard FileManager.default.fileExists(atPath: imageURL.path) else {
+            print("📸 UserProfileService: No local image found for userId: \(userId)")
+            return nil
+        }
+        
+        guard let imageData = try? Data(contentsOf: imageURL),
+              let image = UIImage(data: imageData) else {
+            print("❌ UserProfileService: Failed to load local image for userId: \(userId)")
+            return nil
+        }
+        
+        print("✅ UserProfileService: Loaded local image for userId: \(userId)")
+        return image
     }
     
     // MARK: - Fetch Profile
@@ -250,42 +294,6 @@ final class UserProfileService {
         )
     }
     
-    // MARK: - Profile Image Upload
-    
-    func uploadProfileImage(userId: String, image: UIImage) async throws -> String {
-        print("📸 UserProfileService: Uploading profile image for userId: \(userId)")
-        
-        // Convert UIImage to Data
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            throw NSError(domain: "UserProfileService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
-        }
-        
-        // Create storage reference
-        let storage = Storage.storage()
-        let storageRef = storage.reference()
-        let imageRef = storageRef.child("profile_images/\(userId).jpg")
-        
-        // Upload image
-        let metadata = StorageMetadata()
-        metadata.contentType = "image/jpeg"
-        
-        let _ = try await imageRef.putDataAsync(imageData, metadata: metadata)
-        
-        // Get download URL
-        let downloadURL = try await imageRef.downloadURL()
-        let imageURLString = downloadURL.absoluteString
-        
-        print("✅ UserProfileService: Profile image uploaded successfully")
-        print("   - URL: \(imageURLString)")
-        
-        // Update user profile with image URL
-        try await updateProfile(userId: userId, updates: [
-            "profileImageURL": imageURLString,
-            "lastProfileImageUpdate": Timestamp(date: Date())
-        ])
-        
-        return imageURLString
-    }
     
     // MARK: - Utility
     

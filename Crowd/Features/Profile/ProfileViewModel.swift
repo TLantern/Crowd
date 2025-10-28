@@ -146,13 +146,24 @@ final class ProfileViewModel: ObservableObject {
         
         Task {
             do {
-                // Upload image and update profile
+                // Save image locally and update profile
                 let imageURL = try await UserProfileService.shared.uploadProfileImage(image, userId: userId)
                 try await UserProfileService.shared.updateProfile(userId: userId, updates: ["profileImageURL": imageURL])
-                print("✅ Profile image uploaded and updated: \(imageURL)")
+                print("✅ Profile image saved locally and updated: \(imageURL)")
             } catch {
-                print("❌ Failed to upload profile image: \(error)")
+                print("❌ Failed to save profile image: \(error)")
             }
+        }
+    }
+    
+    func loadLocalProfileImage() {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            return
+        }
+        
+        if let localImage = UserProfileService.shared.loadLocalProfileImage(userId: userId) {
+            self.profileImage = localImage
+            print("✅ Loaded local profile image for user: \(userId)")
         }
     }
 
@@ -203,14 +214,29 @@ final class ProfileViewModel: ObservableObject {
     
     @MainActor
     private func loadProfileImage(from url: URL) async {
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            if let image = UIImage(data: data) {
-                self.profileImage = image
-                print("✅ Profile image loaded from URL")
+        // Check if it's a local file URL
+        if url.scheme == "file" {
+            // Load from local file system
+            do {
+                let data = try Data(contentsOf: url)
+                if let image = UIImage(data: data) {
+                    self.profileImage = image
+                    print("✅ Profile image loaded from local file")
+                }
+            } catch {
+                print("❌ Failed to load local profile image: \(error)")
             }
-        } catch {
-            print("❌ Failed to load profile image: \(error)")
+        } else {
+            // Load from remote URL
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                if let image = UIImage(data: data) {
+                    self.profileImage = image
+                    print("✅ Profile image loaded from remote URL")
+                }
+            } catch {
+                print("❌ Failed to load remote profile image: \(error)")
+            }
         }
     }
     
@@ -241,6 +267,12 @@ final class ProfileViewModel: ObservableObject {
             // Load profile image if URL exists
             if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
                 await loadProfileImage(from: url)
+            } else {
+                // Try to load from local storage if no URL exists
+                if let localImage = UserProfileService.shared.loadLocalProfileImage(userId: userId) {
+                    self.profileImage = localImage
+                    print("✅ Profile image loaded from local storage")
+                }
             }
             
             print("✅ Profile loaded from Firebase for: \(profile.displayName)")
