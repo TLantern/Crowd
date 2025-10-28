@@ -7,6 +7,7 @@
 
 import CoreLocation
 import Combine
+import FirebaseFirestore
 
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
@@ -31,6 +32,11 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         manager.requestWhenInUseAuthorization()
     }
     
+    func requestAlwaysAuthorization() {
+        manager.requestAlwaysAuthorization()
+        print("📍 Requesting Always authorization for background location")
+    }
+    
     func startUpdatingLocation() {
         manager.startUpdatingLocation()
         print("📍 Started location updates")
@@ -39,6 +45,31 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
     func stopUpdatingLocation() {
         manager.stopUpdatingLocation()
         print("📍 Stopped location updates")
+    }
+    
+    // MARK: - Firestore Location Sync
+    
+    func saveLocationToProfile(userId: String, coordinate: CLLocationCoordinate2D) async {
+        print("💾 LocationService: Saving location to Firestore for user \(userId)")
+        
+        let geohash = coordinate.geohash(precision: 6)
+        let geoPoint = GeoPoint(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        
+        do {
+            try await FirebaseManager.shared.db
+                .collection("users")
+                .document(userId)
+                .updateData([
+                    "location": geoPoint,
+                    "geohash": geohash,
+                    "lastLocationUpdate": Timestamp(date: Date())
+                ])
+            print("✅ LocationService: Location saved to Firestore")
+            print("   - Lat: \(coordinate.latitude), Lon: \(coordinate.longitude)")
+            print("   - Geohash: \(geohash)")
+        } catch {
+            print("❌ LocationService: Failed to save location - \(error.localizedDescription)")
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {

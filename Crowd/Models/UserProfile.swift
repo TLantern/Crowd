@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import FirebaseFirestore
 
 struct UserProfile: Codable, Equatable, Identifiable {
     var id: String
@@ -23,6 +24,16 @@ struct UserProfile: Codable, Equatable, Identifiable {
     var friendsCount: Int
     var lastActive: Date?
     var createdAt: Date
+    
+    // Push notification fields
+    var fcmToken: String?
+    var lastTokenUpdate: Date?
+    
+    // Location fields for proximity notifications
+    var latitude: Double?
+    var longitude: Double?
+    var geohash: String?
+    var lastLocationUpdate: Date?
     
     // Computed property (not encoded/decoded)
     var avatarColor: Color {
@@ -44,6 +55,12 @@ struct UserProfile: Codable, Equatable, Identifiable {
         case friendsCount
         case lastActive
         case createdAt
+        case fcmToken
+        case lastTokenUpdate
+        case latitude
+        case longitude
+        case geohash
+        case lastLocationUpdate
     }
 
     static let anonymous = UserProfile(
@@ -60,6 +77,12 @@ struct UserProfile: Codable, Equatable, Identifiable {
         joinedCount: 0,
         friendsCount: 0,
         lastActive: nil,
-        createdAt: Date()
+        createdAt: Date(),
+        fcmToken: nil,
+        lastTokenUpdate: nil,
+        latitude: nil,
+        longitude: nil,
+        geohash: nil,
+        lastLocationUpdate: nil
     )
 }

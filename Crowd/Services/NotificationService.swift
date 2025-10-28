@@ -7,6 +7,7 @@
 
 import UserNotifications
 import FirebaseMessaging
+import FirebaseFirestore
 import UIKit
 
 final class NotificationService: NSObject, ObservableObject, UNUserNotificationCenterDelegate, MessagingDelegate {
@@ -65,8 +66,34 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         print("🔑 NotificationService: FCM Token received")
         print("🔑 Token: \(token)")
         
-        // TODO: Send token to your backend server if needed
-        // This token can be used to send notifications to this specific device
+        // Save token to user's Firestore profile
+        Task {
+            await saveFCMTokenToProfile(token: token)
+        }
+    }
+    
+    // MARK: - Token Management
+    
+    func saveFCMTokenToProfile(token: String) async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            print("⚠️ NotificationService: Cannot save token - no user ID")
+            return
+        }
+        
+        print("💾 NotificationService: Saving FCM token to Firestore...")
+        
+        do {
+            try await FirebaseManager.shared.db
+                .collection("users")
+                .document(userId)
+                .updateData([
+                    "fcmToken": token,
+                    "lastTokenUpdate": Timestamp(date: Date())
+                ])
+            print("✅ NotificationService: FCM token saved to user profile")
+        } catch {
+            print("❌ NotificationService: Failed to save token - \(error.localizedDescription)")
+        }
     }
     
     // MARK: - UNUserNotificationCenterDelegate

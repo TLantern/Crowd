@@ -46,6 +46,10 @@ final class FirebaseEventRepository: EventRepository {
     }
     
     func create(event: CrowdEvent) async throws {
+        // Calculate geohash for proximity queries
+        let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+        let geohash = coordinate.geohash(precision: 6)
+        
         let data: [String: Any] = [
             "id": event.id,
             "title": event.title,
@@ -54,8 +58,15 @@ final class FirebaseEventRepository: EventRepository {
             "radiusMeters": event.radiusMeters,
             "startsAt": event.startsAt?.timeIntervalSince1970 ?? Date().timeIntervalSince1970,
             "endsAt": event.endsAt?.timeIntervalSince1970,
-            "tags": event.tags
+            "tags": event.tags,
+            "category": event.category ?? "hangout",
+            "geohash": geohash,
+            "hostId": event.hostId,
+            "hostName": event.hostName,
+            "description": event.description ?? ""
         ]
+        
+        print("📝 Creating event with geohash: \(geohash)")
         
         let callable = functions.httpsCallable("createEvent")
         _ = try await callable.call(data)

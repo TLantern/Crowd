@@ -172,6 +172,30 @@ final class UserProfileService {
             createdAt = Date()
         }
         
+        // Parse notification fields
+        let fcmToken = data["fcmToken"] as? String
+        let lastTokenUpdate: Date?
+        if let timestamp = data["lastTokenUpdate"] as? Timestamp {
+            lastTokenUpdate = timestamp.dateValue()
+        } else {
+            lastTokenUpdate = nil
+        }
+        
+        // Parse location fields
+        var latitude: Double? = nil
+        var longitude: Double? = nil
+        if let geoPoint = data["location"] as? GeoPoint {
+            latitude = geoPoint.latitude
+            longitude = geoPoint.longitude
+        }
+        let geohash = data["geohash"] as? String
+        let lastLocationUpdate: Date?
+        if let timestamp = data["lastLocationUpdate"] as? Timestamp {
+            lastLocationUpdate = timestamp.dateValue()
+        } else {
+            lastLocationUpdate = nil
+        }
+        
         return UserProfile(
             id: userId,
             displayName: displayName,
@@ -186,7 +210,13 @@ final class UserProfileService {
             joinedCount: joinedCount,
             friendsCount: friendsCount,
             lastActive: lastActive,
-            createdAt: createdAt
+            createdAt: createdAt,
+            fcmToken: fcmToken,
+            lastTokenUpdate: lastTokenUpdate,
+            latitude: latitude,
+            longitude: longitude,
+            geohash: geohash,
+            lastLocationUpdate: lastLocationUpdate
         )
     }
     
