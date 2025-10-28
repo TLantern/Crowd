@@ -312,7 +312,26 @@ struct CrowdHomeView: View {
             }
         }
         .sheet(isPresented: $showHostSheet) {
-            HostEventSheet(defaultRegion: selectedRegion) { hostedEvents.append($0) }
+            HostEventSheet(defaultRegion: selectedRegion) { event in
+                Task {
+                    do {
+                        // Save to Firebase first
+                        try await env.eventRepo.create(event: event)
+                        print("✅ Event created in Firebase: \(event.id)")
+                        
+                        // Then add to local array for immediate UI update
+                        await MainActor.run {
+                            hostedEvents.append(event)
+                        }
+                    } catch {
+                        print("❌ Failed to create event in Firebase: \(error)")
+                        // Still add locally so user sees it, but warn about sync
+                        await MainActor.run {
+                            hostedEvents.append(event)
+                        }
+                    }
+                }
+            }
                 .presentationDetents([.fraction(0.75), .large])
                 .presentationDragIndicator(.visible)
         }
