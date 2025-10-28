@@ -41,16 +41,11 @@ struct EventDetailView: View {
     }
     
     var emoji: String {
-        guard let category = event.category else { return "🔥" }
-        switch category.lowercased() {
-        case "food": return "🍔"
-        case "sports": return "🏀"
-        case "study": return "📚"
-        case "party": return "🎉"
-        case "music": return "🎵"
-        case "hangout": return "🔥"
-        default: return "🔥"
+        guard let categoryString = event.category,
+              let eventCategory = EventCategory(rawValue: categoryString) else {
+            return "📍" // Default fallback matching EventCategory.unknown
         }
+        return eventCategory.emoji
     }
     
     var body: some View {
