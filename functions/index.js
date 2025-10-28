@@ -280,3 +280,114 @@ exports.testNotification = functions.https.onCall(async (data, context) => {
   }
 });
 
+// Create a new event
+exports.createEvent = functions.https.onCall(async (data, context) => {
+  try {
+    console.log('📝 Creating event:', data.title);
+    
+    const eventData = {
+      id: data.id,
+      title: data.title,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      radiusMeters: data.radiusMeters || 50,
+      startsAt: data.startsAt,
+      endsAt: data.endsAt,
+      tags: data.tags || [],
+      category: data.category || 'hangout',
+      geohash: data.geohash,
+      hostId: data.hostId,
+      hostName: data.hostName,
+      description: data.description || '',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      attendeeCount: 0,
+      signalStrength: 1
+    };
+    
+    await db.collection('events').doc(data.id).set(eventData);
+    console.log('✅ Event created:', data.id);
+    
+    return { success: true, eventId: data.id };
+  } catch (error) {
+    console.error('❌ Error creating event:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// Get events in a region
+exports.getEventsInRegion = functions.https.onCall(async (data, context) => {
+  try {
+    const { latitude, longitude, radiusKm } = data;
+    
+    console.log(`📍 Fetching events near (${latitude}, ${longitude}) within ${radiusKm}km`);
+    
+    // Get all events (we'll filter by distance)
+    const eventsSnapshot = await db.collection('events').get();
+    
+    const events = [];
+    eventsSnapshot.forEach(doc => {
+      const event = doc.data();
+      
+      // Calculate distance
+      const distance = calculateDistance(
+        latitude,
+        longitude,
+        event.latitude,
+        event.longitude
+      );
+      
+      // Only include events within radius
+      if (distance <= radiusKm * 1000) {
+        events.push({
+          ...event,
+          distance: Math.round(distance)
+        });
+      }
+    });
+    
+    console.log(`✅ Found ${events.length} events in region`);
+    return { events };
+  } catch (error) {
+    console.error('❌ Error fetching events:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// Delete an event
+exports.deleteEvent = functions.https.onCall(async (data, context) => {
+  try {
+    const eventId = data.id; // App sends 'id' parameter
+    
+    if (!eventId) {
+      throw new functions.https.HttpsError('invalid-argument', 'eventId is required');
+    }
+    
+    console.log(`🗑️ Deleting event: ${eventId}`);
+    
+    // Get the event to verify it exists
+    const eventDoc = await db.collection('events').doc(eventId).get();
+    
+    if (!eventDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Event not found');
+    }
+    
+    // Delete the event
+    await db.collection('events').doc(eventId).delete();
+    
+    // Also delete any associated signals
+    const signalsSnapshot = await db.collection('signals')
+      .where('eventId', '==', eventId)
+      .get();
+    
+    const deletePromises = signalsSnapshot.docs.map(doc => doc.ref.delete());
+    await Promise.all(deletePromises);
+    
+    console.log(`✅ Event deleted: ${eventId} (and ${signalsSnapshot.size} signals)`);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error deleting event:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
