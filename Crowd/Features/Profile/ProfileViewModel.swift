@@ -211,11 +211,28 @@ final class ProfileViewModel: ObservableObject {
             self.lastActive = profile.lastActive ?? Date()
             
             // Convert interests from strings to Interest objects
+            print("📝 Loading interests from Firebase: \(profile.interests)")
+            
             self.interests = profile.interests.compactMap { interestName in
-                Interest.allInterests.first { $0.name == interestName }
+                // Try exact match first
+                if let exactMatch = Interest.allInterests.first(where: { $0.name == interestName }) {
+                    return exactMatch
+                }
+                
+                // Fall back to case-insensitive match
+                if let caseInsensitiveMatch = Interest.allInterests.first(where: { 
+                    $0.name.lowercased() == interestName.lowercased() 
+                }) {
+                    print("⚠️ Case mismatch found for '\(interestName)' - matched to '\(caseInsensitiveMatch.name)'")
+                    return caseInsensitiveMatch
+                }
+                
+                print("❌ Could not find Interest for: '\(interestName)'")
+                return nil
             }
             
             print("✅ Profile loaded from Firebase for: \(profile.displayName)")
+            print("✅ Loaded \(self.interests.count) interests: \(self.interests.map { $0.name })")
             
             // Load user's hosted events for gallery
             await loadHostedEvents(userId: userId)
