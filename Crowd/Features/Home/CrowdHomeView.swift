@@ -52,7 +52,7 @@ struct CrowdHomeView: View {
             ZStack {
                 // === MAP ===
                 Map(position: $cameraPosition) {
-                    // Event annotations - always visible (mock + user-created)
+                    // Event annotations - real Firebase events only
                     ForEach(allEvents) { event in
                         Annotation(event.title, coordinate: event.coordinates) {
                             Button {
@@ -60,50 +60,6 @@ struct CrowdHomeView: View {
                                 showEventDetail = true
                             } label: {
                                 EventAnnotationView(event: event)
-                            }
-                        }
-                        .annotationTitles(.hidden)
-                    }
-                    
-                    // User event pin at user's location
-                    if let userLocation = locationService.lastKnown {
-                        Annotation("I'm Here!", coordinate: userLocation) {
-                            Button {
-                                let userEvent = CrowdEvent(
-                                    id: "user-event",
-                                    title: "I'm Here!",
-                                    hostId: "user",
-                                    hostName: "You",
-                                    latitude: userLocation.latitude,
-                                    longitude: userLocation.longitude,
-                                    radiusMeters: 60,
-                                    startsAt: Date(),
-                                    endsAt: Date().addingTimeInterval(3600),
-                                    createdAt: Date(),
-                                    signalStrength: 5,
-                                    attendeeCount: 1,
-                                    tags: [],
-                                    category: "hangout"
-                                )
-                                selectedEvent = userEvent
-                                showEventDetail = true
-                            } label: {
-                                EventAnnotationView(event: CrowdEvent(
-                                    id: "user-event",
-                                    title: "I'm Here!",
-                                    hostId: "user",
-                                    hostName: "You",
-                                    latitude: userLocation.latitude,
-                                    longitude: userLocation.longitude,
-                                    radiusMeters: 60,
-                                    startsAt: Date(),
-                                    endsAt: Date().addingTimeInterval(3600),
-                                    createdAt: Date(),
-                                    signalStrength: 5,
-                                    attendeeCount: 1,
-                                    tags: [],
-                                    category: "hangout"
-                                ))
                             }
                         }
                         .annotationTitles(.hidden)
@@ -265,6 +221,7 @@ struct CrowdHomeView: View {
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundStyle(.black.opacity(0.78))
                                     .padding(.top, -8)
+                                    .frame(maxWidth: .infinity, alignment: .center)
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -375,6 +332,7 @@ struct CrowdHomeView: View {
 // MARK: - Tiny haptics helper
 enum Haptics {
     static func light() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+    static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
 }
 
 // MARK: - Reusable Bottom Overlay

@@ -65,6 +65,9 @@ struct HostEventSheet: View {
     @State private var aiDescription: String = ""
     @State private var displayedDescription: String = ""
     @State private var typewriterTask: Task<Void, Never>?
+    
+    // Confetti celebration
+    @State private var showConfetti = false
 
     init(defaultRegion: CampusRegion, onCreate: @escaping (CrowdEvent) -> Void) {
         self.defaultRegion = defaultRegion
@@ -218,6 +221,7 @@ struct HostEventSheet: View {
                 generateDescription()
             }
         }
+        .confetti(isPresented: $showConfetti)
     }
     
     // MARK: - Location Initialization
@@ -399,8 +403,17 @@ struct HostEventSheet: View {
         print("🎯 Event coordinates: lat=\(event.latitude), lon=\(event.longitude)")
         print("🎯 Expected (The Syndicate): lat=33.209850, lon=-97.151470")
         
+        // Trigger celebration effects
+        showConfetti = true
+        Haptics.success() // Light vibration
+        
+        // Call onCreate callback
         onCreate(event)
-        dismiss()
+        
+        // Dismiss after a short delay to allow confetti to show
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            dismiss()
+        }
     }
 }
 
