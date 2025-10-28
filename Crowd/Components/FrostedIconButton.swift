@@ -16,7 +16,7 @@ struct FrostedIconButton: View {
     var baseSize: CGFloat = 54
     var targetSize: CGFloat = 72
     var frostOpacity: Double = 0.22
-    var iconBaseColor: Color = .black
+    var iconBaseColor: Color = .primary
     var highlightColor: Color               // e.g. yellow or baby blue
     var action: () -> Void
 

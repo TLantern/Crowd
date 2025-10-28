@@ -154,6 +154,7 @@ struct InterestsView: View {
                 Spacer()
             }
         }
+        .preferredColorScheme(.light)
     }
     
     // MARK: - Auto Rotation
