@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CoreLocation
 
 struct CalenderView: View {
     @Environment(\.dismiss) private var dismiss
