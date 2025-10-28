@@ -366,7 +366,61 @@ Complete these in order:
 
 ---
 
-## 🧪 Testing Scenarios
+## 🧪 Local Notification Testing (Preview Mode)
+
+### **NEW: Test Notifications Locally Without Firebase! 🎉**
+
+You can now test notifications **locally** without deploying Firebase Functions or needing multiple devices!
+
+#### **How to Access Local Tester:**
+
+1. **Build and run the app** in Xcode (Simulator or Device)
+2. **Navigate to Profile** (tap your avatar)
+3. **Look for "Test 🔔" button** in the interaction bar (only visible in Debug mode)
+4. **Tap "Test 🔔"** to open the Notification Tester
+
+#### **What You Can Test:**
+
+**Quick Tests:**
+- ✅ Send Immediate Test - Notification appears instantly
+- ✅ Send Nearby Event (2s delay) - Simulates event creation nearby
+
+**Test by Category:**
+- ✅ Test each event category (Party, Study, Coffee, Gaming, etc.)
+- ✅ See exactly how notifications will look
+- ✅ Verify emoji and text formatting
+
+**Batch Tests:**
+- ✅ Send 3 notifications (3s apart) - Test multiple notifications
+- ✅ Send 5 notifications (2s apart) - Test notification grouping
+
+**Features:**
+- ✅ Check permission status
+- ✅ Request permissions if needed
+- ✅ Clear all notifications
+- ✅ Reset badge count
+
+#### **How to Use:**
+
+```
+1. Open app → Go to Profile
+2. Tap "Test 🔔" button
+3. Choose a test scenario
+4. Notification will appear in 2 seconds
+5. Pull down from top to see notification
+6. Tap notification to test tap handling
+```
+
+#### **Benefits of Local Testing:**
+- ⚡ **Instant feedback** - No need to wait for Firebase deployment
+- 🔄 **Rapid iteration** - Test notification text and formatting quickly
+- 📱 **Works on Simulator** - Local notifications work on iOS Simulator
+- 🧪 **Test all categories** - Try every event type without creating real events
+- 🐛 **Debug easily** - See console logs immediately
+
+---
+
+## 🧪 Testing Scenarios (After Firebase Deployment)
 
 ### **Test 1: Interest Match ✅**
 - User interests: `["Coffee/Hangout"]`

@@ -248,6 +248,15 @@ struct ProfileView: View {
             interactionButton(icon: "person.badge.plus", title: "Add Friend") {
                 print("Add Friend tapped")
             }
+            
+            #if DEBUG
+            interactionButton(icon: "bell.badge", title: "Test 🔔") {
+                viewModel.showNotificationTester = true
+            }
+            #endif
+        }
+        .sheet(isPresented: $viewModel.showNotificationTester) {
+            NotificationTestView()
         }
     }
 
