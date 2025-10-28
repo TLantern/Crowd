@@ -26,6 +26,18 @@ final class AppState: ObservableObject {
             let userId = try await FirebaseManager.shared.signInAnonymously()
             print("✅ Authenticated with Firebase: \(userId)")
             
+            // Fetch and load user profile
+            do {
+                let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
+                await MainActor.run {
+                    self.sessionUser = profile
+                    print("✅ Loaded user profile: \(profile.displayName)")
+                }
+            } catch {
+                print("⚠️ Failed to load profile, using anonymous: \(error.localizedDescription)")
+                // Keep anonymous as fallback
+            }
+            
             // Start monitoring location updates
             startLocationMonitoring(userId: userId)
         } catch {
