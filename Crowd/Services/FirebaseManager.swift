@@ -11,6 +11,7 @@ import FirebaseFirestore
 import FirebaseFunctions
 import FirebaseAuth
 import FirebaseAnalytics
+import FirebaseMessaging
 
 final class FirebaseManager {
     static let shared = FirebaseManager()
@@ -86,6 +87,12 @@ final class FirebaseManager {
     
     func getCurrentUserId() -> String? {
         return auth.currentUser?.uid
+    }
+    
+    // MARK: - Push Notifications Helper
+    
+    func getFCMToken() -> String? {
+        return Messaging.messaging().fcmToken
     }
 }
 
