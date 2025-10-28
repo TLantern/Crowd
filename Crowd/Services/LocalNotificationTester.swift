@@ -120,6 +120,10 @@ final class LocalNotificationTester {
             return "Movie Night"
         case .networking:
             return "Career Mixer"
+        case .official:
+            return "University Event"
+        case .unknown:
+            return "General Event"
         }
     }
     
