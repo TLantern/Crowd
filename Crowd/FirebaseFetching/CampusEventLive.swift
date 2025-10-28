@@ -7,7 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
-import FirebaseFirestoreSwift
+//import FirebaseFirestoreSwift
 
 struct CampusEventLive: Codable, Identifiable {
     @DocumentID var id: String?

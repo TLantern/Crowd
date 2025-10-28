@@ -40,7 +40,6 @@ private struct Presentation75Detent: ViewModifier {
 // MARK: - Profile View
 struct ProfileView: View {
     @ObservedObject var viewModel: ProfileViewModel
-    @State private var showShareSheet = false
     @State private var showInterestPicker = false
     @State private var showImagePicker = false
     @State private var isLoading = true
@@ -53,11 +52,9 @@ struct ProfileView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
                         identityBlock
-                        statsRow
                         tagsSection
-                        interactionBar
-                        gallerySection
-                        suggestedConnectionsSection
+                        statsRow
+                        attendedEventsSection
 
                     }
                     .padding(16)
@@ -229,131 +226,105 @@ struct ProfileView: View {
             }
         }
     }
-
-    // MARK: - Interaction Bar
-    private var interactionBar: some View {
-        HStack(spacing: 10) {
-            interactionButton(icon: "envelope", title: "Invite") {
-                showShareSheet = true
-            }
-
-            interactionButton(icon: "qrcode", title: "QR") {
-                print("QR Share tapped")
-            }
-
-            interactionButton(icon: "message", title: "DM") {
-                print("DM tapped")
-            }
-
-            interactionButton(icon: "person.badge.plus", title: "Add Friend") {
-                print("Add Friend tapped")
-            }
-            
-            #if DEBUG
-            interactionButton(icon: "bell.badge", title: "Test 🔔") {
-                viewModel.showNotificationTester = true
-            }
-            #endif
-        }
-        .sheet(isPresented: $viewModel.showNotificationTester) {
-            NotificationTestView()
-        }
-    }
-
-    private func interactionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color(.systemBackground), in: Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.24), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Gallery Section
-    private var gallerySection: some View {
+    
+    // MARK: - Attended Events Section
+    private var attendedEventsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Hosted Events")
+            Text("Attended Events")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12)], spacing: 12) {
-                ForEach(viewModel.gallery) { event in
-                    Button(action: { print("Event tapped: \(event.title)") }) {
-                        eventCard(event)
+            
+            let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
+            
+            if attendedEvents.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.checkmark")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.gray.opacity(0.6))
+                    
+                    Text("No events attended yet")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                    
+                    Text("Join events from the calendar to see them here")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(attendedEvents.prefix(5)) { event in
+                        AttendedEventRow(event: event)
                     }
-                    .buttonStyle(.plain)
+                    
+                    if attendedEvents.count > 5 {
+                        Text("+ \(attendedEvents.count - 5) more events")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                    }
                 }
             }
         }
     }
+}
+
+// MARK: - Attended Event Row
+struct AttendedEventRow: View {
+    let event: CrowdEvent
     
-
-    private func eventCard(_ event: CrowdEvent) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.accentColor.opacity(0.2))
-                .frame(height: 110)
+    var body: some View {
+        HStack(spacing: 12) {
+            // Event icon
+            Circle()
+                .fill(Color.accentColor.opacity(0.1))
+                .frame(width: 40, height: 40)
                 .overlay(
-                    VStack {
-                        Image(systemName: iconForEvent(event))
-                            .font(.system(size: 32))
-                            .foregroundStyle(.primary)
-                        Text("\(event.attendeeCount)")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    Image(systemName: "calendar.badge.checkmark")
+                        .foregroundColor(.accentColor)
+                        .font(.system(size: 16, weight: .medium))
                 )
-
-            VStack(alignment: .leading, spacing: 4) {
+            
+            // Event details
+            VStack(alignment: .leading, spacing: 2) {
                 Text(event.title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
-
-                if let tag = event.tags.first {
-                    Text(tag)
-                        .font(.system(size: 11))
+                
+                if let startsAt = event.startsAt {
+                    Text(formatEventDate(startsAt))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.systemBackground))
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.24), lineWidth: 1))
-    }
-
-    private func iconForEvent(_ event: CrowdEvent) -> String {
-        guard let tag = event.tags.first else { return "star.fill" }
-        switch tag.lowercased() {
-        case "study": return "book.fill"
-        case "sports": return "basketball.fill"
-        case "social": return "cup.and.saucer.fill"
-        case "music": return "music.note"
-        case "tech": return "laptopcomputer"
-        case "art": return "paintpalette.fill"
-        default: return "star.fill"
-        }
-    }
-
-    // MARK: - Suggested Connections
-    private var suggestedConnectionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("People Like You")
-                .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
-
-            ForEach(viewModel.suggestedUsers.prefix(3)) { user in
-                UserCardView(user: user)
+            
+            Spacer()
+            
+            // Status indicator
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.system(size: 14))
+                
+                Text("Attended")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.green)
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(8)
+    }
+    
+    private func formatEventDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 

@@ -6,10 +6,13 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct OnboardingProfileView: View {
     @Binding var username: String
     @Binding var selectedCampus: String
+    @State private var showingImagePicker = false
+    @State private var selectedImage: UIImage?
     
     let onNext: () -> Void
     
@@ -30,6 +33,7 @@ struct OnboardingProfileView: View {
                 .resizable()
                 .scaledToFill()
                 .ignoresSafeArea()
+                .preferredColorScheme(.light)
 
             VStack(spacing: 20) {
                 Spacer()
@@ -37,51 +41,38 @@ struct OnboardingProfileView: View {
                 RoundedRectangle(cornerRadius: 32)
                     .fill(.ultraThinMaterial)
                     .shadow(radius: 24, y: 8)
+                    .preferredColorScheme(.light)
                     .overlay(
                         VStack(spacing: 16) {
                             Text("Almost done ✨")
                                 .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.black)
+                                .preferredColorScheme(.light)
 
                             Text("How should friends see you?")
                                 .font(.system(size: 16))
                                 .foregroundColor(.black.opacity(0.7))
 
                             // Profile Image Section
-                            ZStack {
-                                Button(action: {
-                                    // TODO: Implement profile image picker
-                                    print("Profile image tapped - open image picker")
-                                }) {
-                                    Image("ProfilePlaceholder")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 170, height: 100)
-                                        .clipShape(Circle())
-                                }
-                                
-                                // Camera button overlay - positioned to overlap the corner
-                                VStack {
-                                    Spacer()
-                                    HStack {
-                                        Spacer()
-                                        Button(action: {
-                                            // TODO: Implement camera/image picker
-                                            print("Camera button tapped - open image picker")
-                                        }) {
-                                            Image(systemName: "camera.fill")
-                                                .font(.system(size: 16))
-                                                .foregroundColor(.white)
-                                                .frame(width: 28, height: 28)
-                                                .background(
-                                                    Circle()
-                                                        .fill(Color.black.opacity(0.8))
-                                                )
-                                        }
+                            Button(action: {
+                                showingImagePicker = true
+                                print("Profile image tapped - open image picker")
+                            }) {
+                                Group {
+                                    if let selectedImage = selectedImage {
+                                        Image(uiImage: selectedImage)
+                                            .resizable()
+                                            .scaledToFill()
+                                    } else {
+                                        Image("ProfilePlaceholder")
+                                            .resizable()
+                                            .scaledToFit()
                                     }
-                                    .offset(x: -8, y: -8) // Overlap the corner
                                 }
+                                .frame(width: 170, height: 100)
+                                .clipShape(Circle())
                             }
+                            
 
                             TextField("Ex. Scrappy", text: $username)
                                 .padding()
@@ -133,6 +124,52 @@ struct OnboardingProfileView: View {
                     .frame(maxHeight: 600)
                 
                 Spacer()
+            }
+        }
+        .sheet(isPresented: $showingImagePicker) {
+            ImagePicker(selectedImage: $selectedImage)
+        }
+    }
+}
+
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration()
+        config.filter = .images
+        config.selectionLimit = 1
+        
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let parent: ImagePicker
+        
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+        
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            
+            guard let provider = results.first?.itemProvider else { return }
+            
+            if provider.canLoadObject(ofClass: UIImage.self) {
+                provider.loadObject(ofClass: UIImage.self) { image, _ in
+                    DispatchQueue.main.async {
+                        self.parent.selectedImage = image as? UIImage
+                    }
+                }
             }
         }
     }
