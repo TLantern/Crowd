@@ -7,6 +7,7 @@
 
 import SwiftUI
 import MapKit
+import Combine
 import FirebaseFirestore
 
 struct CrowdHomeView: View {
@@ -293,6 +294,11 @@ struct CrowdHomeView: View {
         .onChange(of: selectedRegion) { _, newRegion in
             startListeningToEvents(region: newRegion)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { note in
+            if let id = note.object as? String {
+                removeEvent(withId: id)
+            }
+        }
     }
     
     // MARK: - Real-Time Event Listening
@@ -319,6 +325,13 @@ struct CrowdHomeView: View {
         eventListener?.remove()
         eventListener = nil
         print("🛑 Stopped listening to events")
+    }
+
+    private func removeEvent(withId id: String) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            firebaseEvents.removeAll { $0.id == id }
+            hostedEvents.removeAll { $0.id == id }
+        }
     }
 
     // MARK: - Camera snap helper
@@ -849,6 +862,7 @@ struct EventDetailView: View {
                 AnalyticsService.shared.trackEventDeleted(eventId: event.id)
                 
                 print("✅ Event deleted: \(event.id)")
+                NotificationCenter.default.post(name: .eventDeleted, object: event.id)
                 
                 await MainActor.run {
                     dismiss()
