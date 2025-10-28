@@ -48,15 +48,39 @@ struct OnboardingProfileView: View {
                                 .foregroundColor(.black.opacity(0.7))
 
                             // Profile Image Section
-                            Button(action: {
-                                // TODO: Implement profile image picker
-                                print("Profile image tapped - open image picker")
-                            }) {
-                                Image("ProfilePlaceholder")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 170, height: 100)
-                                    .clipShape(Circle())
+                            ZStack {
+                                Button(action: {
+                                    // TODO: Implement profile image picker
+                                    print("Profile image tapped - open image picker")
+                                }) {
+                                    Image("ProfilePlaceholder")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 170, height: 100)
+                                        .clipShape(Circle())
+                                }
+                                
+                                // Camera button overlay - positioned to overlap the corner
+                                VStack {
+                                    Spacer()
+                                    HStack {
+                                        Spacer()
+                                        Button(action: {
+                                            // TODO: Implement camera/image picker
+                                            print("Camera button tapped - open image picker")
+                                        }) {
+                                            Image(systemName: "camera.fill")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(.white)
+                                                .frame(width: 28, height: 28)
+                                                .background(
+                                                    Circle()
+                                                        .fill(Color.black.opacity(0.8))
+                                                )
+                                        }
+                                    }
+                                    .offset(x: -8, y: -8) // Overlap the corner
+                                }
                             }
 
                             TextField("Ex. Scrappy", text: $username)
@@ -111,7 +135,6 @@ struct OnboardingProfileView: View {
                 Spacer()
             }
         }
-        .preferredColorScheme(.light)
     }
 }
 

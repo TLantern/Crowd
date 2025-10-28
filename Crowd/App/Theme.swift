@@ -17,10 +17,4 @@ enum Theme {
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
-    
-    // Dark mode adaptive colors
-    static let primaryText = Color.primary
-    static let secondaryText = Color.secondary
-    static let cardBackground = Color(.systemBackground)
-    static let glassFill = Color(.systemBackground).opacity(0.7)
 }

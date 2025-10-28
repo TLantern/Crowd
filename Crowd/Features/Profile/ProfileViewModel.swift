@@ -8,7 +8,6 @@
 import Foundation
 import SwiftUI
 import Combine
-import FirebaseFirestore
 
 // MARK: - Mini User Model
 struct MiniUser: Identifiable, Hashable {
@@ -183,7 +182,14 @@ final class ProfileViewModel: ObservableObject {
             MiniUser(id: "4", name: "Jordan Lee", avatarColor: .green, tags: ["Tech"], mutualFriendsCount: 6),
             MiniUser(id: "5", name: "Taylor Brown", avatarColor: .blue, tags: ["Art", "Music"], mutualFriendsCount: 10)
         ],
-        gallery: [], // Load from Firebase
+        gallery: [
+            CrowdEvent(id: "g1", title: "Study Session", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 50, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 8, attendeeCount: 12, tags: ["Study"], category: "Study Session", description: nil),
+            CrowdEvent(id: "g2", title: "Basketball Game", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 100, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 9, attendeeCount: 24, tags: ["Sports"], category: "Pickup Game", description: nil),
+            CrowdEvent(id: "g3", title: "Coffee Meetup", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 30, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 6, attendeeCount: 8, tags: ["Social"], category: "Coffee/Hangout", description: nil),
+            CrowdEvent(id: "g4", title: "Concert", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 200, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 10, attendeeCount: 150, tags: ["Music"], category: "Music/Concert", description: nil),
+            CrowdEvent(id: "g5", title: "Hackathon", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 80, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 7, attendeeCount: 35, tags: ["Tech"], category: "Networking", description: nil),
+            CrowdEvent(id: "g6", title: "Art Gallery", hostId: "user1", hostName: "Guest", latitude: 33.2, longitude: -97.1, radiusMeters: 60, startsAt: Date(), endsAt: nil, createdAt: Date(), signalStrength: 5, attendeeCount: 18, tags: ["Art"], category: "Party", description: nil)
+        ],
         suggestedUsers: [
             MiniUser(id: "s1", name: "Emma Wilson", avatarColor: .indigo, tags: ["Music", "Food"], mutualFriendsCount: 5),
             MiniUser(id: "s2", name: "Ryan Garcia", avatarColor: .teal, tags: ["Tech", "Sports"], mutualFriendsCount: 9),
@@ -217,78 +223,8 @@ final class ProfileViewModel: ObservableObject {
             
             print("✅ Profile loaded from Firebase for: \(profile.displayName)")
             
-            // Load user's hosted events for gallery
-            await loadHostedEvents(userId: userId)
-            
         } catch {
             print("❌ Error loading profile: \(error)")
-        }
-    }
-    
-    @MainActor
-    func loadHostedEvents(userId: String) async {
-        do {
-            print("📸 Loading hosted events for gallery...")
-            
-            let snapshot = try await FirebaseManager.shared.db
-                .collection("events")
-                .whereField("hostId", isEqualTo: userId)
-                .order(by: "createdAt", descending: true)
-                .limit(to: 6)
-                .getDocuments()
-            
-            let events = snapshot.documents.compactMap { doc -> CrowdEvent? in
-                let data = doc.data()
-                
-                guard let id = data["id"] as? String,
-                      let title = data["title"] as? String,
-                      let latitude = data["latitude"] as? Double,
-                      let longitude = data["longitude"] as? Double,
-                      let radiusMeters = data["radiusMeters"] as? Double,
-                      let hostId = data["hostId"] as? String,
-                      let hostName = data["hostName"] as? String else {
-                    return nil
-                }
-                
-                let startsAtTimestamp = data["startsAt"] as? TimeInterval
-                let endsAtTimestamp = data["endsAt"] as? TimeInterval
-                let createdAtTimestamp = data["createdAt"] as? TimeInterval ?? Date().timeIntervalSince1970
-                
-                let startsAt = startsAtTimestamp.map { Date(timeIntervalSince1970: $0) }
-                let endsAt = endsAtTimestamp.map { Date(timeIntervalSince1970: $0) }
-                let createdAt = Date(timeIntervalSince1970: createdAtTimestamp)
-                
-                let signalStrength = data["signalStrength"] as? Int ?? 1
-                let attendeeCount = data["attendeeCount"] as? Int ?? 0
-                let tags = data["tags"] as? [String] ?? []
-                let category = data["category"] as? String
-                let description = data["description"] as? String
-                
-                return CrowdEvent(
-                    id: id,
-                    title: title,
-                    hostId: hostId,
-                    hostName: hostName,
-                    latitude: latitude,
-                    longitude: longitude,
-                    radiusMeters: radiusMeters,
-                    startsAt: startsAt,
-                    endsAt: endsAt,
-                    createdAt: createdAt,
-                    signalStrength: signalStrength,
-                    attendeeCount: attendeeCount,
-                    tags: tags,
-                    category: category,
-                    description: description
-                )
-            }
-            
-            self.gallery = events
-            print("✅ Loaded \(events.count) events for gallery")
-            
-        } catch {
-            print("❌ Failed to load hosted events: \(error.localizedDescription)")
-            self.gallery = []
         }
     }
     

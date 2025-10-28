@@ -7,7 +7,6 @@
 
 import Foundation
 import CoreLocation
-import FirebaseFirestore
 
 protocol EventRepository {
     func fetchEvents(in region: CampusRegion) async throws -> [CrowdEvent]
@@ -15,5 +14,4 @@ protocol EventRepository {
     func join(eventId: String, userId: String) async throws
     func deleteEvent(eventId: String) async throws
     func boostSignal(eventId: String, delta: Int) async throws
-    func listenToEvents(in region: CampusRegion, onChange: @escaping ([CrowdEvent]) -> Void) -> ListenerRegistration
 }

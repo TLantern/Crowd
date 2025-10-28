@@ -7,7 +7,6 @@
 
 import SwiftUI
 import MapKit
-import FirebaseFirestore
 
 struct CrowdHomeView: View {
     @Environment(\.appEnvironment) var env
@@ -27,7 +26,6 @@ struct CrowdHomeView: View {
     @State private var hostedEvents: [CrowdEvent] = []
     @State private var firebaseEvents: [CrowdEvent] = []
     @State private var isLoadingEvents = false
-    @State private var eventListener: ListenerRegistration?
 
     // MARK: - Bottom overlay routing
     enum OverlayRoute { case none, profile, leaderboard }
@@ -177,11 +175,11 @@ struct CrowdHomeView: View {
                                         Text("🔥")
                                         Text(selectedRegion.rawValue)
                                             .font(.system(size: 16, weight: .semibold))
-                                            .foregroundStyle(.primary)
+                                            .foregroundStyle(.black)
                                             .lineLimit(1)
                                         Image(systemName: "chevron.down")
                                             .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(.primary.opacity(0.8))
+                                            .foregroundStyle(.black.opacity(0.8))
                                     }
                                     .padding(.horizontal, 12)
                                 }
@@ -234,6 +232,7 @@ struct CrowdHomeView: View {
                                         baseSize: 54,
                                         targetSize: 72,
                                         frostOpacity: 0.22,
+                                        iconBaseColor: .black,
                                         highlightColor: Color(red: 0.63, green: 0.82, blue: 1.0)
                                     ) {
                                         route = .profile
@@ -250,6 +249,7 @@ struct CrowdHomeView: View {
                                         baseSize: 54,
                                         targetSize: 72,
                                         frostOpacity: 0.22,
+                                        iconBaseColor: .black,
                                         highlightColor: .yellow
                                     ) {
                                         route = .leaderboard
@@ -263,7 +263,7 @@ struct CrowdHomeView: View {
 
                                 Text("Start a Crowd")
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.primary.opacity(0.78))
+                                    .foregroundStyle(.black.opacity(0.78))
                                     .padding(.top, -8)
                             }
                         }
@@ -323,41 +323,36 @@ struct CrowdHomeView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        .onAppear {
-            startListeningToEvents()
-        }
-        .onDisappear {
-            stopListeningToEvents()
+        .task {
+            await loadFirebaseEvents()
         }
         .onChange(of: selectedRegion) { _, newRegion in
-            startListeningToEvents(region: newRegion)
-        }
-    }
-    
-    // MARK: - Real-Time Event Listening
-    
-    private func startListeningToEvents(region: CampusRegion? = nil) {
-        // Remove existing listener if any
-        stopListeningToEvents()
-        
-        let targetRegion = region ?? selectedRegion
-        print("🔄 Starting real-time listener for region: \(targetRegion.rawValue)")
-        
-        isLoadingEvents = true
-        
-        eventListener = env.eventRepo.listenToEvents(in: targetRegion) { [self] events in
-            DispatchQueue.main.async {
-                self.firebaseEvents = events
-                self.isLoadingEvents = false
-                print("✅ Real-time update: Loaded \(events.count) events from Firebase")
+            Task {
+                await loadFirebaseEvents(region: newRegion)
             }
         }
     }
     
-    private func stopListeningToEvents() {
-        eventListener?.remove()
-        eventListener = nil
-        print("🛑 Stopped listening to events")
+    // MARK: - Firebase Event Loading
+    
+    private func loadFirebaseEvents(region: CampusRegion? = nil) async {
+        let targetRegion = region ?? selectedRegion
+        isLoadingEvents = true
+        
+        do {
+            let events = try await env.eventRepo.fetchEvents(in: targetRegion)
+            await MainActor.run {
+                firebaseEvents = events
+                isLoadingEvents = false
+                print("✅ Loaded \(events.count) events from Firebase for region: \(targetRegion.rawValue)")
+            }
+        } catch {
+            await MainActor.run {
+                firebaseEvents = []
+                isLoadingEvents = false
+                print("❌ Failed to load Firebase events: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Camera snap helper
