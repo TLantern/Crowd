@@ -245,21 +245,19 @@ struct CrowdHomeView: View {
                                     .accessibilityLabel("Open profile")
                                     .offset(x: -spread, y: sideYOffset)
 
-                                    // Right — Leaderboard
+                                    // Right — Calendar
                                     FrostedIconButton(
-                                        systemName: "trophy",
+                                        systemName: "calendar",
                                         baseSize: 54,
                                         targetSize: 72,
                                         frostOpacity: 0.22,
                                         iconBaseColor: .black,
-                                        highlightColor: .yellow
+                                        highlightColor: Color(red: 0.95, green: 0.75, blue: 0.95)
                                     ) {
-                                        route = .leaderboard
-                                        overlaySnapIndex = 1
-                                        overlayPresented = true
+                                        showCalendar = true
                                         Haptics.light()
                                     }
-                                    .accessibilityLabel("Open leaderboard")
+                                    .accessibilityLabel("Open calendar")
                                     .offset(x: spread, y: sideYOffset)
                                 }
 
@@ -275,7 +273,11 @@ struct CrowdHomeView: View {
 
                     // === FLOATING GLASS BUTTONS ===
                     VStack(alignment: .trailing, spacing: 16) {
-                        GlassIconButton(systemName: "calendar") { showCalendar = true }
+                        GlassIconButton(systemName: "trophy") { 
+                            route = .leaderboard
+                            overlaySnapIndex = 1
+                            overlayPresented = true
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .padding(.trailing, 24)
