@@ -57,21 +57,6 @@ struct CrowdHomeView: View {
         }
     }
     
-    var mostCommonEventEmoji: String {
-        // Count event categories and return the most common emoji
-        let categoryCounts = allEvents.compactMap { event in
-            event.category.flatMap { EventCategory(rawValue: $0) }
-        }.reduce(into: [EventCategory: Int]()) { counts, category in
-            counts[category, default: 0] += 1
-        }
-        
-        // Return the emoji of the most common category, or default to hangout
-        if let mostCommon = categoryCounts.max(by: { $0.value < $1.value })?.key {
-            return mostCommon.emoji
-        }
-        
-        return EventCategory.hangout.emoji // Default fallback
-    }
 
     var body: some View {
         NavigationStack {
@@ -166,13 +151,17 @@ struct CrowdHomeView: View {
 
                             Menu {
                                 ForEach(CampusRegion.allCases) { region in
-                                    Button(region.rawValue) { selectedRegion = region }
+                                    Button {
+                                        selectedRegion = region
+                                    } label: {
+                                        Text(region.rawValue)
+                                            .font(.system(size: 16))
+                                    }
                                 }
                             } label: {
                                 GlassPill(height: 48, horizontalPadding: 20) {
                                     HStack(spacing: 10) {
-                                        Text(mostCommonEventEmoji)
-                                        Text(selectedRegion.rawValue)
+                                        Text(selectedRegion.displayName)
                                             .font(.system(size: 16, weight: .semibold))
                                             .foregroundStyle(.primary)
                                             .lineLimit(1)

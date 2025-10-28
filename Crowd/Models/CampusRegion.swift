@@ -13,11 +13,29 @@ enum CampusRegion: String, CaseIterable, Identifiable {
     case dentonSquare = "Denton Square"
     case dorms = "Dorms"
     case athletics = "Athletics"
-    case sororitiesFrats = "Sororities/Frats"
+    case sororitiesFrats = "Greek Life"
     case fryStreet = "Fry Street"
     case discoveryPark = "Discovery Park"
 
     var id: String { rawValue }
+    
+    /// Emoji associated with each campus region
+    var emoji: String {
+        switch self {
+        case .mainCampus: return "🏫"
+        case .dentonSquare: return "🪩"
+        case .dorms: return "🚪"
+        case .athletics: return "🏋️‍♂️"
+        case .sororitiesFrats: return "🏛️"
+        case .fryStreet: return "🎉"
+        case .discoveryPark: return "📚"
+        }
+    }
+    
+    /// Display name with emoji
+    var displayName: String {
+        return "\(emoji) \(rawValue)"
+    }
 
     /// Configuration for how the map behaves in this region.
     var spec: RegionSpec {

@@ -8,26 +8,14 @@
 import SwiftUI
 import FirebaseFirestore
 
-struct ChatMessage: Identifiable {
-    let id = UUID()
-    let author: String
-    let message: String
-    let isCurrentUser: Bool
-}
 
 struct EventDetailView: View {
     let event: CrowdEvent
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel = EventDetailViewModel()
-    @State private var hasJoined = false
-    @State private var chatMessage = ""
-    @State private var chatMessages: [ChatMessage] = [
-        ChatMessage(author: "Sarah", message: "Hey everyone! Excited for this!", isCurrentUser: false),
-        ChatMessage(author: "Mike", message: "Same here! What time are we starting?", isCurrentUser: false)
-    ]
-    @FocusState private var isChatFocused: Bool
     @EnvironmentObject private var appState: AppState
     @State private var showCancelConfirmation = false
+    @State private var showNavigationModal = false
     
     var currentUserName: String {
         appState.sessionUser?.displayName ?? "You"
@@ -100,115 +88,38 @@ struct EventDetailView: View {
                     Divider()
                         .padding(.horizontal)
                     
-                    if hasJoined {
-                        // Chat view
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Event Chat")
-                                .font(.system(size: 18, weight: .semibold))
-                                .frame(maxWidth: .infinity, alignment: .center)
-                            
-                            // Chat messages
-                            ScrollViewReader { proxy in
-                                VStack(alignment: .leading, spacing: 12) {
-                                    ForEach(chatMessages) { message in
-                                        ChatMessageBubble(
-                                            message: message.message,
-                                            author: message.author,
-                                            isCurrentUser: message.isCurrentUser
-                                        )
-                                        .id(message.id)
-                                    }
-                                }
-                                .frame(maxWidth: .infinity)
-                                .onChange(of: chatMessages.count) { _, _ in
-                                    if let lastMessage = chatMessages.last {
-                                        withAnimation {
-                                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                                        }
-                                    }
-                                }
-                            }
+                    // Event details
+                    VStack(spacing: 20) {
+                        // Crowd Size (centered)
+                        VStack(spacing: 8) {
+                            Text("Crowd Size")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            Text("\(event.attendeeCount)")
+                                .font(.system(size: 32, weight: .bold))
+                                .foregroundColor(.primary)
                         }
-                        .padding(.horizontal)
-                        .frame(minHeight: 200)
-                    } else {
-                        // Event details
-                        VStack(spacing: 20) {
-                            // Crowd Size (centered)
+                        
+                        // Time
+                        if let start = event.startsAt, let end = event.endsAt {
                             VStack(spacing: 8) {
-                                Text("Crowd Size")
+                                Text("Time")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.secondary)
-                                Text("\(event.attendeeCount)")
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundColor(.primary)
-                            }
-                            
-                            // Time
-                            if let start = event.startsAt, let end = event.endsAt {
-                                VStack(spacing: 8) {
-                                    Text("Time")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.secondary)
-                                    Text(formatTime(start, end))
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.primary)
-                                }
-                            }
-                            
-                            // Location
-                            VStack(spacing: 8) {
-                                Text("Location")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                Text("Within \(Int(event.radiusMeters))m")
+                                Text(formatTime(start, end))
                                     .font(.system(size: 16))
                                     .foregroundColor(.primary)
                             }
-                            
-                            Divider()
-                                .padding(.horizontal)
-                            
-                            // Friends Attending
-                            VStack(spacing: 12) {
-                                Text("Friends Attending")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                
-                                if viewModel.isLoadingFriends {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                } else if viewModel.friendsAttending.isEmpty {
-                                    Text("No friends attending yet")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.secondary)
-                                } else {
-                                    HStack(spacing: -8) {
-                                        ForEach(viewModel.friendsAttending.prefix(5)) { friend in
-                                            AvatarView(
-                                                name: friend.displayName,
-                                                color: friend.avatarColor,
-                                                size: 40
-                                            )
-                                            .overlay(
-                                                Circle()
-                                                    .strokeBorder(.white, lineWidth: 2)
-                                            )
-                                        }
-                                        
-                                        if viewModel.friendsAttending.count > 5 {
-                                            ZStack {
-                                                Circle()
-                                                    .fill(.ultraThinMaterial)
-                                                    .frame(width: 40, height: 40)
-                                                Text("+\(viewModel.friendsAttending.count - 5)")
-                                                    .font(.system(size: 12, weight: .semibold))
-                                            }
-                                        }
-                                    }
-                                    .padding(.horizontal)
-                                }
-                            }
+                        }
+                        
+                        // Location
+                        VStack(spacing: 8) {
+                            Text("Location")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            Text("Within \(Int(event.radiusMeters))m")
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
                         }
                     }
                     
@@ -216,42 +127,13 @@ struct EventDetailView: View {
                 }
             }
             
-            // Chat input (only when joined)
-            if hasJoined {
-                HStack(spacing: 12) {
-                    TextField("Type a message...", text: $chatMessage)
-                        .textFieldStyle(.plain)
-                        .padding(12)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(20)
-                        .focused($isChatFocused)
-                    
-                    Button {
-                        sendMessage()
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(chatMessage.isEmpty ? .gray : Color(hex: 0x02853E))
-                    }
-                    .disabled(chatMessage.isEmpty)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
-            }
             
             // Action button
             Button {
-                if hasJoined {
-                    // Open invite friends sheet
-                } else {
-                    Task {
-                        let success = await viewModel.joinEvent(eventId: event.id)
-                        if success {
-                            withAnimation(.spring(response: 0.3)) {
-                                hasJoined = true
-                            }
-                        }
+                Task {
+                    let success = await viewModel.joinEvent(eventId: event.id)
+                    if success {
+                        showNavigationModal = true
                     }
                 }
             } label: {
@@ -261,7 +143,7 @@ struct EventDetailView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .controlSize(.small)
                     }
-                    Text(hasJoined ? "Invite Friends" : "Join Crowd")
+                    Text("Join Crowd")
                         .font(.system(size: 18, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -282,7 +164,6 @@ struct EventDetailView: View {
         }
         .task {
             await viewModel.loadHostProfile(hostId: event.hostId)
-            await viewModel.loadFriendsAttending(eventId: event.id)
         }
         .alert("Error", isPresented: .constant(viewModel.joinError != nil)) {
             Button("OK") {
@@ -299,6 +180,9 @@ struct EventDetailView: View {
         } message: {
             Text("Are you sure you want to cancel this crowd? This action cannot be undone.")
         }
+        .fullScreenCover(isPresented: $showNavigationModal) {
+            EventNavigationModal(event: event)
+        }
     }
     
     private func formatTime(_ start: Date, _ end: Date) -> String {
@@ -307,29 +191,31 @@ struct EventDetailView: View {
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
     
-    private func sendMessage() {
-        guard !chatMessage.isEmpty else { return }
-        
-        // Add message to chat
-        let newMessage = ChatMessage(
-            author: currentUserName,
-            message: chatMessage,
-            isCurrentUser: true
-        )
-        chatMessages.append(newMessage)
-        
-        // TODO: Send message to Firebase
-        print("Sending message: \(chatMessage)")
-        chatMessage = ""
-    }
     
     private func cancelEvent() {
-        // Verify user is the host
-        guard let currentUserId = FirebaseManager.shared.getCurrentUserId(),
-              currentUserId == event.hostId else {
-            print("⚠️ Only the host can delete the event")
+        // Get current user ID with detailed logging
+        let currentUserId = FirebaseManager.shared.getCurrentUserId()
+        print("🔍 Delete Event Debug:")
+        print("   - Current User ID: \(currentUserId ?? "nil")")
+        print("   - Event Host ID: \(event.hostId)")
+        print("   - Event ID: \(event.id)")
+        print("   - User authenticated: \(currentUserId != nil)")
+        
+        // Verify user is authenticated
+        guard let currentUserId = currentUserId else {
+            print("❌ User not authenticated - cannot delete event")
+            // TODO: Show user-friendly error message
             return
         }
+        
+        // Verify user is the host
+        guard currentUserId == event.hostId else {
+            print("❌ User (\(currentUserId)) is not the host (\(event.hostId)) - cannot delete event")
+            // TODO: Show user-friendly error message
+            return
+        }
+        
+        print("✅ User is authenticated and is the host - proceeding with deletion")
         
         Task {
             do {
@@ -345,33 +231,12 @@ struct EventDetailView: View {
                 }
             } catch {
                 print("❌ Failed to delete event: \(error)")
+                // TODO: Show user-friendly error message
             }
         }
     }
 }
 
-struct ChatMessageBubble: View {
-    let message: String
-    let author: String
-    let isCurrentUser: Bool
-    
-    var body: some View {
-        VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
-            Text(author)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
-            
-            Text(message)
-                .font(.system(size: 15))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(isCurrentUser ? Color(hex: 0x02853E) : Color(.systemGray5))
-                .foregroundColor(isCurrentUser ? .white : .primary)
-                .cornerRadius(16)
-        }
-        .frame(maxWidth: .infinity, alignment: isCurrentUser ? .trailing : .leading)
-    }
-}
 
 struct DetailRow: View {
     let icon: String

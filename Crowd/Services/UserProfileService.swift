@@ -27,15 +27,25 @@ final class UserProfileService {
         displayName: String,
         campus: String,
         interests: [String],
-        avatarColorHex: String? = nil
+        avatarColorHex: String? = nil,
+        profileImage: UIImage? = nil
     ) async throws {
         print("🔧 UserProfileService: Creating profile for userId: \(userId)")
         print("   - displayName: \(displayName)")
         print("   - campus: \(campus)")
         print("   - interests: \(interests)")
+        print("   - profileImage: \(profileImage != nil ? "provided" : "nil")")
         
         let color = avatarColorHex ?? generateRandomColor()
         let handle = "@\(displayName.lowercased().replacingOccurrences(of: " ", with: ""))"
+        
+        // Upload profile image if provided
+        var profileImageURL: String? = nil
+        if let image = profileImage {
+            print("📸 UserProfileService: Uploading profile image...")
+            profileImageURL = try await uploadProfileImage(image, userId: userId)
+            print("✅ UserProfileService: Profile image uploaded: \(profileImageURL ?? "nil")")
+        }
         
         let profile = UserProfile(
             id: userId,
@@ -46,7 +56,7 @@ final class UserProfileService {
             interests: interests,
             auraPoints: 0,
             avatarColorHex: color,
-            profileImageURL: nil,
+            profileImageURL: profileImageURL,
             hostedCount: 0,
             joinedCount: 0,
             friendsCount: 0,
@@ -102,6 +112,26 @@ final class UserProfileService {
         profileCache.removeValue(forKey: userId)
         
         print("✅ Profile updated for user: \(userId)")
+    }
+    
+    // MARK: - Profile Image Upload
+    
+    func uploadProfileImage(_ image: UIImage, userId: String) async throws -> String {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw NSError(domain: "UserProfileService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+        }
+        
+        let storage = Storage.storage()
+        let storageRef = storage.reference()
+        let imageRef = storageRef.child("profile_images/\(userId).jpg")
+        
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
+        let _ = try await imageRef.putDataAsync(imageData, metadata: metadata)
+        let downloadURL = try await imageRef.downloadURL()
+        
+        return downloadURL.absoluteString
     }
     
     // MARK: - Fetch Profile

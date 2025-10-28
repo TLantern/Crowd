@@ -47,6 +47,49 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         print("📍 Stopped location updates")
     }
     
+    func ensureLocationAvailable() async -> CLLocationCoordinate2D? {
+        // If we already have a location, return it
+        if let location = lastKnown {
+            print("📍 LocationService: Using existing location: \(location.latitude), \(location.longitude)")
+            return location
+        }
+        
+        // Request authorization if not determined
+        if authorizationStatus == .notDetermined {
+            print("📍 LocationService: Requesting location authorization")
+            requestSoftAuth()
+            
+            // Wait a bit for authorization to be granted
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        }
+        
+        // Start updating location if authorized
+        if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
+            print("📍 LocationService: Starting location updates to get current location")
+            startUpdatingLocation()
+            
+            // Wait for location update (max 5 seconds)
+            for _ in 0..<50 {
+                if let location = lastKnown {
+                    print("📍 LocationService: Got location after waiting: \(location.latitude), \(location.longitude)")
+                    return location
+                }
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
+            }
+        }
+        
+        // Fallback to debug location
+        #if DEBUG
+        let fallbackLocation = CLLocationCoordinate2D(latitude: 33.2099, longitude: -97.1515)
+        print("📍 LocationService: Using fallback location: \(fallbackLocation.latitude), \(fallbackLocation.longitude)")
+        lastKnown = fallbackLocation
+        return fallbackLocation
+        #else
+        print("❌ LocationService: No location available and not in debug mode")
+        return nil
+        #endif
+    }
+    
     // MARK: - Firestore Location Sync
     
     func saveLocationToProfile(userId: String, coordinate: CLLocationCoordinate2D) async {
@@ -95,8 +138,14 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
             startUpdatingLocation()
         case .denied, .restricted:
             print("⚠️ Location access denied")
+            // Use fallback location when denied
+            #if DEBUG
+            lastKnown = CLLocationCoordinate2D(latitude: 33.2099, longitude: -97.1515)
+            print("📍 Using fallback location due to denied access")
+            #endif
         case .notDetermined:
-            break
+            print("📍 Location authorization not determined, requesting...")
+            requestSoftAuth()
         @unknown default:
             break
         }

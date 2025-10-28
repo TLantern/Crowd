@@ -146,8 +146,10 @@ final class ProfileViewModel: ObservableObject {
         
         Task {
             do {
-                let imageURL = try await UserProfileService.shared.uploadProfileImage(userId: userId, image: image)
-                print("✅ Profile image uploaded: \(imageURL)")
+                // Upload image and update profile
+                let imageURL = try await UserProfileService.shared.uploadProfileImage(image, userId: userId)
+                try await UserProfileService.shared.updateProfile(userId: userId, updates: ["profileImageURL": imageURL])
+                print("✅ Profile image uploaded and updated: \(imageURL)")
             } catch {
                 print("❌ Failed to upload profile image: \(error)")
             }
@@ -197,6 +199,21 @@ final class ProfileViewModel: ObservableObject {
         ]
     )
 
+    // MARK: - Profile Image Loading
+    
+    @MainActor
+    private func loadProfileImage(from url: URL) async {
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let image = UIImage(data: data) {
+                self.profileImage = image
+                print("✅ Profile image loaded from URL")
+            }
+        } catch {
+            print("❌ Failed to load profile image: \(error)")
+        }
+    }
+    
     // MARK: - Firebase Integration
     
     @MainActor
@@ -219,6 +236,11 @@ final class ProfileViewModel: ObservableObject {
             // Convert interests from strings to Interest objects
             self.interests = profile.interests.compactMap { interestName in
                 Interest.allInterests.first { $0.name == interestName }
+            }
+            
+            // Load profile image if URL exists
+            if let imageURL = profile.profileImageURL, let url = URL(string: imageURL) {
+                await loadProfileImage(from: url)
             }
             
             print("✅ Profile loaded from Firebase for: \(profile.displayName)")

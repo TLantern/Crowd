@@ -86,7 +86,11 @@ final class FirebaseManager {
     }
     
     func getCurrentUserId() -> String? {
-        return auth.currentUser?.uid
+        let userId = auth.currentUser?.uid
+        print("🔍 FirebaseManager.getCurrentUserId(): \(userId ?? "nil")")
+        print("🔍 Auth current user: \(auth.currentUser?.uid ?? "nil")")
+        print("🔍 Auth is anonymous: \(auth.currentUser?.isAnonymous ?? false)")
+        return userId
     }
     
     // MARK: - Push Notifications Helper

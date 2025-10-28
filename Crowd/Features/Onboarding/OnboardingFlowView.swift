@@ -12,6 +12,7 @@ struct OnboardingFlowView: View {
     @State private var username: String = ""
     @State private var selectedCampus: String = ""
     @State private var selectedInterests: [String] = []
+    @State private var selectedProfileImage: UIImage?
     @State private var isSaving = false
     @State private var showError = false
     @State private var errorMessage = ""
@@ -40,7 +41,8 @@ struct OnboardingFlowView: View {
             if currentStep == .profile {
                 OnboardingProfileView(
                     username: $username,
-                    selectedCampus: $selectedCampus
+                    selectedCampus: $selectedCampus,
+                    selectedProfileImage: $selectedProfileImage
                 ) {
                     withAnimation(.easeInOut(duration: 0.6)) {
                         currentStep = .interests
@@ -95,7 +97,8 @@ struct OnboardingFlowView: View {
                 userId: userId,
                 displayName: username.isEmpty ? "Guest" : username,
                 campus: selectedCampus.isEmpty ? "UNT" : selectedCampus,
-                interests: selectedInterests
+                interests: selectedInterests,
+                profileImage: selectedProfileImage
             )
             
             print("✅ Profile created successfully!")

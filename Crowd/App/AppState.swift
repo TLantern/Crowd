@@ -21,6 +21,9 @@ final class AppState: ObservableObject {
     private var lastLocationSaveTime: Date?
 
     func bootstrap() async {
+        // Clean up expired attended events first
+        AttendedEventsService.shared.refreshAttendedEvents()
+        
         // Authenticate anonymously with Firebase
         do {
             let userId = try await FirebaseManager.shared.signInAnonymously()

@@ -391,3 +391,163 @@ exports.deleteEvent = functions.https.onCall(async (data, context) => {
   }
 });
 
+// Create a signal (join an event)
+exports.createSignal = functions.https.onCall(async (data, context) => {
+  try {
+    // Check authentication
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    
+    const { eventId, latitude, longitude, signalStrength } = data;
+    const userId = context.auth.uid;
+    
+    console.log(`📡 Creating signal for event ${eventId} by user ${userId}`);
+    console.log(`   Location: (${latitude}, ${longitude})`);
+    console.log(`   Signal strength: ${signalStrength}`);
+    
+    // Validate required fields
+    if (!eventId || !latitude || !longitude) {
+      throw new functions.https.HttpsError('invalid-argument', 'Missing required fields: eventId, latitude, longitude');
+    }
+    
+    // Check if event exists
+    const eventDoc = await db.collection('events').doc(eventId).get();
+    const userEventDoc = await db.collection('userEvents').doc(eventId).get();
+    
+    if (!eventDoc.exists && !userEventDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Event not found');
+    }
+    
+    // Check if user already has a signal for this event
+    const existingSignalQuery = await db.collection('signals')
+      .where('eventId', '==', eventId)
+      .where('userId', '==', userId)
+      .get();
+    
+    if (!existingSignalQuery.empty) {
+      console.log(`⚠️ User ${userId} already has a signal for event ${eventId}`);
+      return { success: true, message: 'Already joined event' };
+    }
+    
+    // Create signal document
+    const signalData = {
+      eventId: eventId,
+      userId: userId,
+      latitude: latitude,
+      longitude: longitude,
+      signalStrength: signalStrength || 3,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastSeenAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    // Add to signals collection
+    const signalRef = db.collection('signals').doc();
+    await signalRef.set(signalData);
+    
+    // Update event attendee count
+    const eventRef = eventDoc.exists ? db.collection('events').doc(eventId) : db.collection('userEvents').doc(eventId);
+    await eventRef.update({
+      attendeeCount: admin.firestore.FieldValue.increment(1),
+      signalStrength: admin.firestore.FieldValue.increment(signalStrength || 3)
+    });
+    
+    console.log(`✅ Signal created successfully: ${signalRef.id}`);
+    
+    return { 
+      success: true, 
+      signalId: signalRef.id,
+      message: 'Successfully joined event'
+    };
+  } catch (error) {
+    console.error('❌ Error creating signal:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// Test function: Add sample campus events to campus_events_live collection
+exports.addSampleCampusEvents = functions.https.onCall(async (data, context) => {
+  try {
+    console.log('📝 Adding sample campus events to campus_events_live collection');
+    
+    const sampleEvents = [
+      {
+        title: "Halloween Bash",
+        locationName: "Student Union Ballroom",
+        startTimeLocal: "2024-10-31T19:00:00-05:00",
+        endTimeLocal: "2024-10-31T23:00:00-05:00",
+        sourceType: "instagram",
+        sourceOrg: "bsu_unt",
+        sourceUrl: "https://instagram.com/p/sample1",
+        confidence: 0.95,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      {
+        title: "Study Session - Finals Prep",
+        locationName: "Willis Library Room 241",
+        startTimeLocal: "2024-11-01T18:00:00-05:00",
+        endTimeLocal: "2024-11-01T21:00:00-05:00",
+        sourceType: "official",
+        sourceOrg: "UNT Academic Success",
+        sourceUrl: "https://unt.edu/events/study-session",
+        confidence: 0.98,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      {
+        title: "Basketball Pickup Game",
+        locationName: "Pohl Recreation Center",
+        startTimeLocal: "2024-11-02T16:00:00-05:00",
+        endTimeLocal: "2024-11-02T18:00:00-05:00",
+        sourceType: "instagram",
+        sourceOrg: "unt_rec_sports",
+        sourceUrl: "https://instagram.com/p/sample2",
+        confidence: 0.87,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      {
+        title: "Coffee & Networking Meetup",
+        locationName: "Starbucks - Union",
+        startTimeLocal: "2024-11-03T10:00:00-05:00",
+        endTimeLocal: "2024-11-03T11:30:00-05:00",
+        sourceType: "instagram",
+        sourceOrg: "unt_business_club",
+        sourceUrl: "https://instagram.com/p/sample3",
+        confidence: 0.92,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      {
+        title: "Movie Night - Horror Films",
+        locationName: "Union Theater",
+        startTimeLocal: "2024-11-04T19:30:00-05:00",
+        endTimeLocal: "2024-11-04T22:00:00-05:00",
+        sourceType: "official",
+        sourceOrg: "UNT Student Activities",
+        sourceUrl: "https://unt.edu/events/movie-night",
+        confidence: 0.94,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastSeenAt: admin.firestore.FieldValue.serverTimestamp()
+      }
+    ];
+    
+    const batch = db.batch();
+    
+    sampleEvents.forEach((event, index) => {
+      const docRef = db.collection('campus_events_live').doc(`sample_event_${index + 1}`);
+      batch.set(docRef, event);
+    });
+    
+    await batch.commit();
+    
+    console.log(`✅ Added ${sampleEvents.length} sample campus events`);
+    
+    return { success: true, count: sampleEvents.length };
+  } catch (error) {
+    console.error('❌ Error adding sample campus events:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+

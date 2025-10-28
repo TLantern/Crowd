@@ -16,17 +16,25 @@ struct CalenderView: View {
     
     // Filtered events based on selected interests
     var filteredEvents: [CrowdEvent] {
+        print("🔍 CalenderView: Filtering events - Total: \(campusEventsVM.crowdEvents.count), Selected interests: \(selectedInterests.count)")
+        
         if selectedInterests.isEmpty {
+            print("🔍 CalenderView: No interests selected, returning all \(campusEventsVM.crowdEvents.count) events")
             return campusEventsVM.crowdEvents
         }
         
-        return campusEventsVM.crowdEvents.filter { event in
+        let filtered = campusEventsVM.crowdEvents.filter { event in
             // Check if any of the event's tags match any selected interest
             let eventTags = Set(event.tags.map { $0.lowercased() })
             let selectedInterestNames = Set(selectedInterests.map { $0.name.lowercased() })
             
-            return !eventTags.isDisjoint(with: selectedInterestNames)
+            let matches = !eventTags.isDisjoint(with: selectedInterestNames)
+            print("🔍 CalenderView: Event '\(event.title)' - Tags: \(event.tags), Matches: \(matches)")
+            return matches
         }
+        
+        print("🔍 CalenderView: Filtered to \(filtered.count) events")
+        return filtered
     }
     
     var body: some View {
@@ -100,9 +108,25 @@ struct CalenderView: View {
             }
             .onAppear {
                 campusEventsVM.start()
+                // Refresh attended events to clean up expired ones
+                AttendedEventsService.shared.refreshAttendedEvents()
+                // Add sample campus events for testing
+                addSampleCampusEvents()
             }
             .onDisappear {
                 campusEventsVM.stop()
+            }
+        }
+    }
+    
+    private func addSampleCampusEvents() {
+        Task {
+            do {
+                let functions = FirebaseManager.shared.functions
+                let result = try await functions.httpsCallable("addSampleCampusEvents").call()
+                print("✅ Sample campus events added: \(result.data)")
+            } catch {
+                print("❌ Failed to add sample campus events: \(error)")
             }
         }
     }
@@ -204,13 +228,15 @@ struct EventCardView: View {
                 Spacer()
                 
                 Button(action: {
-                    isAttending.toggle()
-                    if isAttending {
-                        // Add to attended events
-                        AttendedEventsService.shared.addAttendedEvent(event)
-                    } else {
-                        // Remove from attended events
-                        AttendedEventsService.shared.removeAttendedEvent(event.id)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isAttending.toggle()
+                        if isAttending {
+                            // Add to attended events
+                            AttendedEventsService.shared.addAttendedEvent(event)
+                        } else {
+                            // Remove from attended events
+                            AttendedEventsService.shared.removeAttendedEvent(event.id)
+                        }
                     }
                 }) {
                     HStack(spacing: 6) {
@@ -248,6 +274,10 @@ struct EventCardView: View {
         }
         .onAppear {
             // Check if user is already attending this event
+            isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
+        }
+        .onChange(of: AttendedEventsService.shared.attendedEvents) { _, _ in
+            // Update state when attended events list changes
             isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
         }
     }

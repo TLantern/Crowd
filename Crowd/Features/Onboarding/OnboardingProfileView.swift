@@ -11,14 +11,15 @@ import PhotosUI
 struct OnboardingProfileView: View {
     @Binding var username: String
     @Binding var selectedCampus: String
+    @Binding var selectedProfileImage: UIImage?
     @State private var showingImagePicker = false
-    @State private var selectedImage: UIImage?
     
     let onNext: () -> Void
     
-    init(username: Binding<String> = .constant(""), selectedCampus: Binding<String> = .constant("UNT"), onNext: @escaping () -> Void) {
+    init(username: Binding<String> = .constant(""), selectedCampus: Binding<String> = .constant("UNT"), selectedProfileImage: Binding<UIImage?> = .constant(nil), onNext: @escaping () -> Void) {
         self._username = username
         self._selectedCampus = selectedCampus
+        self._selectedProfileImage = selectedProfileImage
         self.onNext = onNext
         
         // Set default if empty
@@ -59,7 +60,7 @@ struct OnboardingProfileView: View {
                                 print("Profile image tapped - open image picker")
                             }) {
                                 Group {
-                                    if let selectedImage = selectedImage {
+                                    if let selectedImage = selectedProfileImage {
                                         Image(uiImage: selectedImage)
                                             .resizable()
                                             .scaledToFill()
@@ -127,7 +128,7 @@ struct OnboardingProfileView: View {
             }
         }
         .sheet(isPresented: $showingImagePicker) {
-            ImagePicker(selectedImage: $selectedImage)
+            ImagePicker(selectedImage: $selectedProfileImage)
         }
     }
 }

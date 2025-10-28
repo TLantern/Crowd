@@ -13,15 +13,15 @@ service cloud.firestore {
       // Anyone can read events
       allow read: if true;
       
-      // Authenticated users can create events
+      // Authenticated users (including anonymous) can create events
       allow create: if request.auth != null
                     && request.resource.data.hostId == request.auth.uid;
       
-      // Users can only delete their own events
+      // Users can only delete their own events (including anonymous users)
       allow delete: if request.auth != null
                     && resource.data.hostId == request.auth.uid;
       
-      // Users can only update their own events
+      // Users can only update their own events (including anonymous users)
       allow update: if request.auth != null
                     && resource.data.hostId == request.auth.uid;
     }
@@ -42,6 +42,26 @@ service cloud.firestore {
       
       // Authenticated users can create/update/delete their own signals
       allow create, update, delete: if request.auth != null;
+    }
+    
+    // Event chat messages collection
+    match /eventChats/{eventId}/messages/{messageId} {
+      // Authenticated users can read messages
+      allow read: if request.auth != null;
+      
+      // Authenticated users can create messages
+      allow create: if request.auth != null
+                    && request.auth.uid == resource.data.userId;
+      
+      // Users can only update/delete their own messages
+      allow update, delete: if request.auth != null
+                            && resource.data.userId == request.auth.uid;
+    }
+    
+    // Campus events live collection (read-only for users)
+    match /campus_events_live/{eventId} {
+      allow read: if true;
+      allow write: if false; // Only Cloud Functions can write
     }
   }
 }

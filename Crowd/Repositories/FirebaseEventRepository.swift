@@ -58,6 +58,16 @@ final class FirebaseEventRepository: EventRepository {
     }
     
     func create(event: CrowdEvent) async throws {
+        // Check authentication status before attempting creation
+        guard let currentUserId = FirebaseManager.shared.getCurrentUserId() else {
+            print("❌ No authenticated user - cannot create event")
+            throw CrowdError.custom("User not authenticated")
+        }
+        
+        print("🔍 Creating event with user ID: \(currentUserId)")
+        print("🔍 Event host ID: \(event.hostId)")
+        print("🔍 User authenticated: \(currentUserId == event.hostId)")
+        
         // Calculate geohash for proximity queries
         let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
         let geohash = coordinate.geohash(precision: 6)
@@ -82,6 +92,7 @@ final class FirebaseEventRepository: EventRepository {
         ]
         
         print("📝 Creating user event in userEvents collection with geohash: \(geohash)")
+        print("📝 Data being sent: \(data)")
         
         // Save directly to Firestore userEvents collection (no Cloud Function needed)
         try await db.collection("userEvents").document(event.id).setData(data)
@@ -90,10 +101,15 @@ final class FirebaseEventRepository: EventRepository {
     }
     
     func join(eventId: String, userId: String) async throws {
-        // Get user's current location
-        guard let location = await AppEnvironment.current.location.lastKnown else {
+        print("🔍 FirebaseEventRepository: Attempting to join event \(eventId) for user \(userId)")
+        
+        // Get user's current location with fallback handling
+        guard let location = await AppEnvironment.current.location.ensureLocationAvailable() else {
+            print("❌ FirebaseEventRepository: No location available")
             throw CrowdError.custom("Location not available. Please enable location services.")
         }
+        
+        print("📍 FirebaseEventRepository: User location: (\(location.latitude), \(location.longitude))")
         
         // Create a signal for the event with user's location
         let data: [String: Any] = [
@@ -103,16 +119,56 @@ final class FirebaseEventRepository: EventRepository {
             "signalStrength": 3 // Default signal strength
         ]
         
-        let callable = functions.httpsCallable("createSignal")
-        _ = try await callable.call(data)
+        print("📡 FirebaseEventRepository: Calling createSignal with data: \(data)")
         
-        print("✅ Joined event \(eventId) at location (\(location.latitude), \(location.longitude))")
+        do {
+            let callable = functions.httpsCallable("createSignal")
+            let result = try await callable.call(data)
+            print("✅ FirebaseEventRepository: createSignal result: \(result.data)")
+        } catch {
+            print("❌ FirebaseEventRepository: createSignal failed with error: \(error)")
+            print("   Error type: \(type(of: error))")
+            if let nsError = error as NSError? {
+                print("   Error domain: \(nsError.domain)")
+                print("   Error code: \(nsError.code)")
+                print("   Error description: \(nsError.localizedDescription)")
+            }
+            throw error
+        }
+        
+        print("✅ FirebaseEventRepository: Successfully joined event \(eventId) at location (\(location.latitude), \(location.longitude))")
     }
     
     func deleteEvent(eventId: String) async throws {
         print("🗑️ Deleting event from userEvents: \(eventId)")
         
-        // Delete directly from Firestore userEvents collection (no Cloud Function needed)
+        // Check authentication status before attempting deletion
+        guard let currentUserId = FirebaseManager.shared.getCurrentUserId() else {
+            print("❌ No authenticated user - cannot delete event")
+            throw CrowdError.custom("User not authenticated")
+        }
+        
+        print("🔍 Current user ID: \(currentUserId)")
+        
+        // First, get the event to verify ownership
+        let eventDoc = try await db.collection("userEvents").document(eventId).getDocument()
+        
+        guard eventDoc.exists else {
+            print("❌ Event not found: \(eventId)")
+            throw CrowdError.custom("Event not found")
+        }
+        
+        let eventData = eventDoc.data() ?? [:]
+        let eventHostId = eventData["hostId"] as? String ?? ""
+        
+        print("🔍 Event host ID: \(eventHostId)")
+        
+        guard eventHostId == currentUserId else {
+            print("❌ User (\(currentUserId)) is not the host (\(eventHostId)) of event \(eventId)")
+            throw CrowdError.custom("Only the event host can delete this event")
+        }
+        
+        // Delete directly from Firestore userEvents collection
         try await db.collection("userEvents").document(eventId).delete()
         
         // Also delete any associated signals
@@ -296,13 +352,5 @@ final class FirebaseEventRepository: EventRepository {
             attendeeCount: attendeeCount,
             tags: tags
         )
-    }
-    
-    // MARK: - Distance Calculation Helper
-    
-    private func calculateDistance(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
-        let locationFrom = CLLocation(latitude: from.latitude, longitude: from.longitude)
-        let locationTo = CLLocation(latitude: to.latitude, longitude: to.longitude)
-        return locationFrom.distance(from: locationTo) / 1000.0 // Convert to km
     }
 }

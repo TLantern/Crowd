@@ -19,6 +19,7 @@ final class AttendedEventsService: ObservableObject {
     
     private init() {
         loadAttendedEvents()
+        cleanupExpiredEvents()
     }
     
     // MARK: - Public Methods
@@ -53,6 +54,10 @@ final class AttendedEventsService: ObservableObject {
         return attendedEvents
     }
     
+    func refreshAttendedEvents() {
+        cleanupExpiredEvents()
+    }
+    
     // MARK: - Private Methods
     
     private func loadAttendedEvents() {
@@ -73,5 +78,29 @@ final class AttendedEventsService: ObservableObject {
         // This would typically update the user's profile in Firebase
         // For now, we'll just log the count
         print("📊 User has attended \(attendedEvents.count) events")
+    }
+    
+    private func cleanupExpiredEvents() {
+        let now = Date()
+        let originalCount = attendedEvents.count
+        
+        // Remove events that have ended more than 1 hour ago
+        let oneHourAgo = Calendar.current.date(byAdding: .hour, value: -1, to: now) ?? now
+        
+        attendedEvents.removeAll { event in
+            guard let endsAt = event.endsAt else {
+                // If no end time, check if event started more than 4 hours ago
+                guard let startsAt = event.startsAt else { return false }
+                let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+                return startsAt < fourHoursAgo
+            }
+            return endsAt < oneHourAgo
+        }
+        
+        let removedCount = originalCount - attendedEvents.count
+        if removedCount > 0 {
+            print("🧹 Cleaned up \(removedCount) expired events from attended list")
+            saveAttendedEvents()
+        }
     }
 }
