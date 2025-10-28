@@ -16,6 +16,7 @@ final class AppState: ObservableObject {
     @Published var selectedRegion: CampusRegion = .mainCampus
     @Published var camera: MapCameraPosition = .automatic
     @Published var unreadRewardNotice: Bool = false
+    @Published var attendingEvents: [CrowdEvent] = []
     
     private var locationUpdateCancellable: AnyCancellable?
     private var lastLocationSaveTime: Date?

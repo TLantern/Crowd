@@ -65,7 +65,7 @@ struct ConfettiPieceView: View {
     let animate: Bool
     
     var body: some View {
-        shapeView
+        anyShape
             .fill(piece.color)
             .frame(width: piece.size, height: piece.size)
             .rotationEffect(.degrees(animate ? piece.rotation + 720 : piece.rotation))
@@ -80,20 +80,26 @@ struct ConfettiPieceView: View {
             )
     }
     
-    @ViewBuilder
-    private var shapeView: some Shape {
+    private var anyShape: AnyShape {
         switch piece.shape {
         case .circle:
-            Circle()
+            return AnyShape(Circle())
         case .square:
-            Rectangle()
+            return AnyShape(Rectangle())
         case .triangle:
-            Triangle()
+            return AnyShape(ConfettiTriangle())
         }
     }
 }
 
-struct Triangle: Shape {
+// Simple type-erased Shape for conditional shapes
+struct AnyShape: Shape {
+    private let _path: (CGRect) -> Path
+    init<S: Shape>(_ shape: S) { _path = { rect in shape.path(in: rect) } }
+    func path(in rect: CGRect) -> Path { _path(rect) }
+}
+
+struct ConfettiTriangle: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: CGPoint(x: rect.midX, y: rect.minY))
@@ -132,4 +138,5 @@ extension View {
         modifier(ConfettiModifier(isPresented: isPresented))
     }
 }
+
 
