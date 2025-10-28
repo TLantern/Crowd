@@ -220,6 +220,43 @@ final class UserProfileService {
         )
     }
     
+    // MARK: - Profile Image Upload
+    
+    func uploadProfileImage(userId: String, image: UIImage) async throws -> String {
+        print("📸 UserProfileService: Uploading profile image for userId: \(userId)")
+        
+        // Convert UIImage to Data
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw NSError(domain: "UserProfileService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+        }
+        
+        // Create storage reference
+        let storage = Storage.storage()
+        let storageRef = storage.reference()
+        let imageRef = storageRef.child("profile_images/\(userId).jpg")
+        
+        // Upload image
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
+        
+        let _ = try await imageRef.putDataAsync(imageData, metadata: metadata)
+        
+        // Get download URL
+        let downloadURL = try await imageRef.downloadURL()
+        let imageURLString = downloadURL.absoluteString
+        
+        print("✅ UserProfileService: Profile image uploaded successfully")
+        print("   - URL: \(imageURLString)")
+        
+        // Update user profile with image URL
+        try await updateProfile(userId: userId, updates: [
+            "profileImageURL": imageURLString,
+            "lastProfileImageUpdate": Timestamp(date: Date())
+        ])
+        
+        return imageURLString
+    }
+    
     // MARK: - Utility
     
     func clearCache() {

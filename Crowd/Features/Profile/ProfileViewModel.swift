@@ -38,6 +38,10 @@ final class ProfileViewModel: ObservableObject {
     @Published var suggestedUsers: [MiniUser]
     @Published var isEditMode: Bool = false
     @Published var profileImage: UIImage?
+    
+    #if DEBUG
+    @Published var showNotificationTester: Bool = false
+    #endif
 
     let availableInterests: [Interest] = Interest.allInterests
 

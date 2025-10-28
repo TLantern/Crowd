@@ -22,10 +22,10 @@ struct AppEnvironment {
         return AppEnvironment(
             config: config,
             eventRepo: FirebaseEventRepository(),  // Connected to local emulators
-            analytics: AnalyticsService(),
+            analytics: AnalyticsService.shared,
             presence: PresenceService(),
             location: LocationService(),
-            notifications: NotificationService(),
+            notifications: NotificationService.shared,
             shareLink: ShareLinkService()
         )
     }()

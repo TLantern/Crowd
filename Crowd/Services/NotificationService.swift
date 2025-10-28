@@ -9,9 +9,13 @@ import UserNotifications
 import FirebaseMessaging
 import FirebaseFirestore
 import UIKit
+import Combine
 
 final class NotificationService: NSObject, ObservableObject, UNUserNotificationCenterDelegate, MessagingDelegate {
     static let shared = NotificationService()
+    
+    // ObservableObject requirement
+    let objectWillChange = PassthroughSubject<Void, Never>()
     
     private override init() {
         super.init()
