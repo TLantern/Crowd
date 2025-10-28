@@ -24,8 +24,8 @@ struct CrowdHomeView: View {
     // MARK: - UI state
     @State private var showHostSheet = false
     @State private var hostedEvents: [CrowdEvent] = []
-    @State private var firebaseEvents: [CrowdEvent] = [] // Events loaded from Firebase
-    @State private var isLoadingEvents = true
+    @State private var firebaseEvents: [CrowdEvent] = []
+    @State private var isLoadingEvents = false
 
     // MARK: - Bottom overlay routing
     enum OverlayRoute { case none, profile, leaderboard }
@@ -39,11 +39,6 @@ struct CrowdHomeView: View {
     // MARK: - Event detail
     @State private var selectedEvent: CrowdEvent?
     @State private var showEventDetail = false
-    
-    #if DEBUG
-    @State private var showMockUploadAlert = false
-    @State private var uploadStatus = ""
-    #endif
     
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
@@ -328,22 +323,36 @@ struct CrowdHomeView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        .onAppear {
-            startFirebaseEventListener()
-            #if DEBUG
-            checkAndUploadMockDataIfNeeded()
-            #endif
+        .task {
+            await loadFirebaseEvents()
         }
-        #if DEBUG
-        .alert("Upload Mock Events", isPresented: $showMockUploadAlert) {
-            Button("Upload Now") {
-                uploadMockEventsToFirebase()
+        .onChange(of: selectedRegion) { _, newRegion in
+            Task {
+                await loadFirebaseEvents(region: newRegion)
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(uploadStatus)
         }
-        #endif
+    }
+    
+    // MARK: - Firebase Event Loading
+    
+    private func loadFirebaseEvents(region: CampusRegion? = nil) async {
+        let targetRegion = region ?? selectedRegion
+        isLoadingEvents = true
+        
+        do {
+            let events = try await env.eventRepo.fetchEvents(in: targetRegion)
+            await MainActor.run {
+                firebaseEvents = events
+                isLoadingEvents = false
+                print("✅ Loaded \(events.count) events from Firebase for region: \(targetRegion.rawValue)")
+            }
+        } catch {
+            await MainActor.run {
+                firebaseEvents = []
+                isLoadingEvents = false
+                print("❌ Failed to load Firebase events: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Camera snap helper
@@ -352,60 +361,6 @@ struct CrowdHomeView: View {
             cameraPosition = MapCameraController.position(from: region.spec)
         }
     }
-    
-    // MARK: - Firebase Real-time Event Listener
-    
-    private func startFirebaseEventListener() {
-        print("🔄 Starting Firebase real-time event listener for region: \(selectedRegion.rawValue)")
-        
-        // Use the existing Firebase event repository with real-time listener
-        env.eventRepo.listenToEvents(in: selectedRegion) { events in
-            DispatchQueue.main.async {
-                self.firebaseEvents = events
-                self.isLoadingEvents = false
-                print("📊 Loaded \(events.count) events from Firebase")
-            }
-        }
-    }
-    
-    #if DEBUG
-    // MARK: - Mock Data Upload (Debug Only)
-    
-    private func checkAndUploadMockDataIfNeeded() {
-        Task {
-            do {
-                let exists = try await MockDataUploader.shared.checkIfMockEventsExist()
-                if !exists {
-                    await MainActor.run {
-                        uploadStatus = "No mock events found in Firebase. Upload them now?"
-                        showMockUploadAlert = true
-                    }
-                } else {
-                    print("✅ Mock events already exist in Firebase")
-                }
-            } catch {
-                print("❌ Error checking mock events: \(error)")
-            }
-        }
-    }
-    
-    private func uploadMockEventsToFirebase() {
-        Task {
-            do {
-                try await MockDataUploader.shared.uploadMockEventsToFirebase()
-                await MainActor.run {
-                    uploadStatus = "✅ Mock events uploaded successfully!"
-                    print("✅ Mock events uploaded to Firebase")
-                }
-            } catch {
-                await MainActor.run {
-                    uploadStatus = "❌ Failed to upload: \(error.localizedDescription)"
-                    print("❌ Error uploading mock events: \(error)")
-                }
-            }
-        }
-    }
-    #endif
 }
 
 // MARK: - Tiny haptics helper
