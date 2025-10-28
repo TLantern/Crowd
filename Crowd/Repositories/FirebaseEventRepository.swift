@@ -24,25 +24,37 @@ final class FirebaseEventRepository: EventRepository {
     
     func fetchEvents(in region: CampusRegion) async throws -> [CrowdEvent] {
         let center = region.spec.center
+        let radiusKm = region.spec.distance / 1000.0
         
-        // Call Cloud Function to get events in region
-        let data: [String: Any] = [
-            "latitude": center.latitude,
-            "longitude": center.longitude,
-            "radiusKm": region.spec.distance / 1000.0 // Convert meters to km
-        ]
+        print("📍 Fetching events from both 'events' and 'userEvents' collections")
         
-        let callable = functions.httpsCallable("getEventsInRegion")
-        let result = try await callable.call(data)
+        var allEvents: [CrowdEvent] = []
         
-        guard let response = result.data as? [String: Any],
-              let eventsData = response["events"] as? [[String: Any]] else {
-            return []
+        // Fetch from official 'events' collection (Firebase-generated/scraped events)
+        let eventsSnapshot = try await db.collection("events").getDocuments()
+        for document in eventsSnapshot.documents {
+            if let event = try? parseEvent(from: document.data()) {
+                let distance = calculateDistance(from: center, to: event.coordinates)
+                if distance <= radiusKm {
+                    allEvents.append(event)
+                }
+            }
         }
         
-        return eventsData.compactMap { eventDict -> CrowdEvent? in
-            try? parseEvent(from: eventDict)
+        // Fetch from 'userEvents' collection (user-created events)
+        let userEventsSnapshot = try await db.collection("userEvents").getDocuments()
+        for document in userEventsSnapshot.documents {
+            if let event = try? parseEvent(from: document.data()) {
+                let distance = calculateDistance(from: center, to: event.coordinates)
+                if distance <= radiusKm {
+                    allEvents.append(event)
+                }
+            }
         }
+        
+        print("✅ Fetched \(allEvents.count) total events (\(eventsSnapshot.documents.count) official + \(userEventsSnapshot.documents.count) user)")
+        
+        return allEvents
     }
     
     func create(event: CrowdEvent) async throws {
@@ -63,13 +75,18 @@ final class FirebaseEventRepository: EventRepository {
             "geohash": geohash,
             "hostId": event.hostId,
             "hostName": event.hostName,
-            "description": event.description ?? ""
+            "description": event.description ?? "",
+            "createdAt": FieldValue.serverTimestamp(),
+            "attendeeCount": 0,
+            "signalStrength": 1
         ]
         
-        print("📝 Creating event with geohash: \(geohash)")
+        print("📝 Creating user event in userEvents collection with geohash: \(geohash)")
         
-        let callable = functions.httpsCallable("createEvent")
-        _ = try await callable.call(data)
+        // Save directly to Firestore userEvents collection (no Cloud Function needed)
+        try await db.collection("userEvents").document(event.id).setData(data)
+        
+        print("✅ Event created in userEvents: \(event.id)")
     }
     
     func join(eventId: String, userId: String) async throws {
@@ -93,18 +110,22 @@ final class FirebaseEventRepository: EventRepository {
     }
     
     func deleteEvent(eventId: String) async throws {
-        let callable = functions.httpsCallable("deleteEvent")
-        let data: [String: Any] = ["id": eventId]
+        print("🗑️ Deleting event from userEvents: \(eventId)")
         
-        let result = try await callable.call(data)
+        // Delete directly from Firestore userEvents collection (no Cloud Function needed)
+        try await db.collection("userEvents").document(eventId).delete()
         
-        guard let response = result.data as? [String: Any],
-              let success = response["success"] as? Bool,
-              success else {
-            throw CrowdError.invalidResponse
+        // Also delete any associated signals
+        let signalsSnapshot = try await db.collection("signals")
+            .whereField("eventId", isEqualTo: eventId)
+            .getDocuments()
+        
+        // Delete all signals for this event
+        for document in signalsSnapshot.documents {
+            try await document.reference.delete()
         }
         
-        print("✅ Event deleted: \(eventId)")
+        print("✅ Event deleted from userEvents: \(eventId) (and \(signalsSnapshot.documents.count) signals)")
     }
     
     func boostSignal(eventId: String, delta: Int) async throws {
@@ -275,5 +296,13 @@ final class FirebaseEventRepository: EventRepository {
             attendeeCount: attendeeCount,
             tags: tags
         )
+    }
+    
+    // MARK: - Distance Calculation Helper
+    
+    private func calculateDistance(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
+        let locationFrom = CLLocation(latitude: from.latitude, longitude: from.longitude)
+        let locationTo = CLLocation(latitude: to.latitude, longitude: to.longitude)
+        return locationFrom.distance(from: locationTo) / 1000.0 // Convert to km
     }
 }
