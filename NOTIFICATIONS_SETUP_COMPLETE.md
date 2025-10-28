@@ -192,11 +192,108 @@ After adding, you should see three new entries in Info.plist:
 **Status:** ❓ UNKNOWN
 **Time Required:** 1 minute
 
-1. Go to Signing & Capabilities tab
-2. Add "Push Notifications" capability
-3. Add "Background Modes" → check "Remote notifications"
-
 **Why:** Tells iOS your app needs push notifications
+
+#### **Detailed Steps:**
+
+1. **Open Xcode** (if not already open)
+
+2. **Navigate to Signing & Capabilities**
+   - In the left sidebar, click the top **"Crowd"** project (blue icon)
+   - Under "TARGETS", select **"Crowd"**
+   - Click the **"Signing & Capabilities"** tab at the top
+
+3. **Check if Push Notifications Already Exists**
+   - Scroll through the capabilities list
+   - Look for a section titled **"Push Notifications"**
+   
+   **If you see it:** ✅ Skip to step 5
+   
+   **If you don't see it:** Continue to step 4
+
+4. **Add Push Notifications Capability**
+   - Look for the **"+ Capability"** button in the top-left area (below the tabs)
+   - Click **"+ Capability"**
+   - A library/search window will appear
+   - In the search box, type: `push`
+   - You should see **"Push Notifications"** with an icon
+   - **Double-click** on "Push Notifications" (or click once and press Enter)
+   - It should now appear in your capabilities list
+
+5. **Check if Background Modes Already Exists**
+   - Look for a section titled **"Background Modes"**
+   
+   **If you see it:** 
+   - Make sure **"Remote notifications"** checkbox is ✅ checked
+   - If checked, you're done! Skip to verification.
+   
+   **If you don't see it:** Continue to step 6
+
+6. **Add Background Modes Capability**
+   - Click **"+ Capability"** again
+   - Type: `background`
+   - You should see **"Background Modes"**
+   - **Double-click** on "Background Modes"
+   - It should now appear in your capabilities list
+
+7. **Enable Remote Notifications**
+   - In the **Background Modes** section, you'll see a list of checkboxes
+   - Find and check: ☑️ **"Remote notifications"**
+
+8. **Save** - Press **Cmd+S**
+
+#### **Verification:**
+You should now see these two sections in Signing & Capabilities:
+- ✅ **Push Notifications** (no checkboxes, just the section existing is enough)
+- ✅ **Background Modes** with **"Remote notifications"** checked
+
+#### **Troubleshooting:**
+
+**Problem: "+ Capability" button is grayed out or missing**
+- **Solution 1:** Make sure you're looking at the **TARGETS** → **Crowd** settings, not the PROJECT settings
+- **Solution 2:** Check if automatic signing is enabled:
+  - Look for "Signing (Debug)" or "Signing (Release)" sections
+  - Make sure "Automatically manage signing" is checked
+  - Select your Team from the dropdown
+
+**Problem: "Push Notifications" doesn't appear in the capability library**
+- **Solution 1:** Update Xcode to the latest version
+- **Solution 2:** Make sure you have a valid Apple Developer account signed in:
+  - Xcode → Settings (or Preferences) → Accounts
+  - Add your Apple ID if not already added
+  - Make sure the account shows a valid team
+
+**Problem: Can't find the capability library after clicking "+ Capability"**
+- **Solution:** Make sure you're clicking the "+ Capability" button on the LEFT side of the tab bar, not somewhere else
+- It should be right below the "Signing & Capabilities" tab name
+
+**Problem: Push Notifications shows a warning or error**
+- **Solution 1:** This is normal during development - the warning will resolve when you configure APNs key in Firebase
+- **Solution 2:** Make sure your Bundle ID matches: `com.tenbandz.Crowd`
+
+**Alternative: Add Capabilities Manually (Advanced)**
+
+If the UI method doesn't work, you can add capabilities by editing the entitlements file:
+
+1. In Xcode, go to File → New → File
+2. Choose **"Property List"**
+3. Name it: `Crowd.entitlements`
+4. Save it in the Crowd folder
+5. Add this content:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>
+```
+
+6. In Build Settings, search for "Code Signing Entitlements"
+7. Set the value to: `Crowd/Crowd.entitlements`
 
 ---
 
