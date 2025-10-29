@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseFirestore
 
 @MainActor
 final class EventDetailViewModel: ObservableObject {
@@ -40,6 +41,9 @@ final class EventDetailViewModel: ObservableObject {
         do {
             try await eventRepo.join(eventId: event.id, userId: userId)
             
+            // Create attendance record in userAttendances collection
+            try await createAttendanceRecord(eventId: event.id, userId: userId)
+            
             // Add to attended events
             attendedEventsService.addAttendedEvent(event)
             
@@ -53,6 +57,18 @@ final class EventDetailViewModel: ObservableObject {
             print("❌ Failed to join event: \(error)")
             return false
         }
+    }
+    
+    private func createAttendanceRecord(eventId: String, userId: String) async throws {
+        let db = FirebaseManager.shared.db
+        let attendanceData: [String: Any] = [
+            "userId": userId,
+            "eventId": eventId,
+            "joinedAt": FieldValue.serverTimestamp()
+        ]
+        
+        try await db.collection("userAttendances").addDocument(data: attendanceData)
+        print("✅ Created attendance record for user \(userId) and event \(eventId)")
     }
     
     func loadHostProfile(hostId: String) async {

@@ -40,6 +40,7 @@ private struct Presentation75Detent: ViewModifier {
 // MARK: - Profile View
 struct ProfileView: View {
     @ObservedObject var viewModel: ProfileViewModel
+    @StateObject private var statsService = UserStatsService.shared
     @State private var showInterestPicker = false
     @State private var showImagePicker = false
     @State private var isLoading = true
@@ -79,6 +80,12 @@ struct ProfileView: View {
         }
         .task {
             await loadProfile()
+            if let userId = FirebaseManager.shared.getCurrentUserId() {
+                statsService.startListening(userId: userId)
+            }
+        }
+        .onDisappear {
+            statsService.stopListening()
         }
         .sheet(isPresented: $showImagePicker) {
             ProfileImagePicker(selectedImage: $viewModel.profileImage)
@@ -156,9 +163,9 @@ struct ProfileView: View {
     // MARK: - Stats Row
     private var statsRow: some View {
         HStack(spacing: 12) {
-            statCard(title: "Hosted", value: "0")
-            statCard(title: "Joined", value: "0")
-            statCard(title: "Upcoming", value: "0")
+            statCard(title: "Hosted", value: "\(statsService.hostedCount)")
+            statCard(title: "Joined", value: "\(statsService.joinedCount)")
+            statCard(title: "Upcoming", value: "\(statsService.upcomingCount)")
         }
         .frame(maxWidth: .infinity)
     }

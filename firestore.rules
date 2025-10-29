@@ -72,6 +72,23 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false; // Only Cloud Functions can write
     }
+    
+    // User attendances collection (tracking which events users are attending)
+    match /userAttendances/{attendanceId} {
+      // Authenticated users can read attendances
+      allow read: if request.auth != null;
+      
+      // Authenticated users can create their own attendances
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      
+      // Users can only delete their own attendances
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+      
+      // No updates allowed (create/delete only)
+      allow update: if false;
+    }
   }
 }
 
