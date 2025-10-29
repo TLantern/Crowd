@@ -65,6 +65,39 @@ struct CrowdHomeView: View {
     var currentEventsClusters: [EventCluster] {
         EventClusteringService.clusterEvents(firebaseEvents + hostedEvents)
     }
+    
+    // MARK: - Expansion Radius Helper
+    private func expansionRadius(for cluster: EventCluster) -> CGFloat {
+        switch cluster.eventCount {
+        case 1...3: return 60.0
+        case 4...6: return 95.0
+        case 7...9: return 130.0
+        default: return 165.0
+        }
+    }
+    
+    // MARK: - Coordinate Calculation for Expanded Pins
+    private func calculateExpandedCoordinate(
+        center: CLLocationCoordinate2D,
+        angle: Double,
+        radiusPoints: CGFloat
+    ) -> CLLocationCoordinate2D {
+        // Convert screen points to meters based on current zoom
+        // Approximate: at camera distance of 1000m, 1 point ≈ 1 meter
+        let metersPerPoint = currentCameraDistance / 500.0
+        let offsetMeters = Double(radiusPoints) * metersPerPoint
+        
+        // Convert meters to degrees
+        // At equator: 1 degree latitude ≈ 111,000 meters
+        // Longitude varies by latitude: 111,000 * cos(latitude)
+        let latOffset = (offsetMeters * cos(angle)) / 111000.0
+        let lonOffset = (offsetMeters * sin(angle)) / (111000.0 * cos(center.latitude * .pi / 180.0))
+        
+        return CLLocationCoordinate2D(
+            latitude: center.latitude + latOffset,
+            longitude: center.longitude + lonOffset
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -73,20 +106,43 @@ struct CrowdHomeView: View {
                 Map(position: $cameraPosition) {
                     // Clustered event annotations (Firebase + user-created)
                     ForEach(currentEventsClusters) { cluster in
-                        Annotation("", coordinate: cluster.centerCoordinate) {
-                            ClusterAnnotationView(
-                                cluster: cluster,
-                                isExpanded: expandedClusterId == cluster.id,
-                                cameraDistance: currentCameraDistance,
-                                onTap: {
-                                    handleClusterTap(cluster)
-                                },
-                                onEventTap: { event in
-                                    handleEventTap(event)
+                        if expandedClusterId == cluster.id && cluster.eventCount > 1 {
+                            // EXPANDED: Show individual annotations at calculated positions
+                            ForEach(Array(cluster.events.enumerated()), id: \.element.id) { index, event in
+                                let angle = (2.0 * .pi * Double(index)) / Double(cluster.eventCount)
+                                let radius = expansionRadius(for: cluster)
+                                let expandedCoord = calculateExpandedCoordinate(
+                                    center: cluster.centerCoordinate,
+                                    angle: angle,
+                                    radiusPoints: radius
+                                )
+                                
+                                Annotation("", coordinate: expandedCoord) {
+                                    EventAnnotationView(event: event, isInExpandedCluster: true)
+                                        .onTapGesture {
+                                            print("📍 Expanded event tapped: \(event.title)")
+                                            handleEventTap(event)
+                                        }
                                 }
-                            )
+                                .annotationTitles(.hidden)
+                            }
+                        } else {
+                            // COLLAPSED: Show cluster annotation
+                            Annotation("", coordinate: cluster.centerCoordinate) {
+                                ClusterAnnotationView(
+                                    cluster: cluster,
+                                    isExpanded: false,
+                                    cameraDistance: currentCameraDistance,
+                                    onTap: {
+                                        handleClusterTap(cluster)
+                                    },
+                                    onEventTap: { event in
+                                        handleEventTap(event)
+                                    }
+                                )
+                            }
+                            .annotationTitles(.hidden)
                         }
-                        .annotationTitles(.hidden)
                     }
                     
                     // Upcoming events annotations removed per request
