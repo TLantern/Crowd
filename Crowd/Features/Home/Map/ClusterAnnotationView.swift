@@ -46,24 +46,14 @@ struct ClusterAnnotationView: View {
             if isExpanded && cluster.eventCount > 1 {
                 // Expanded: Show events in circle
                 ForEach(Array(cluster.events.enumerated()), id: \.element.id) { index, event in
-                    let angle = (2.0 * .pi * Double(index)) / Double(cluster.eventCount)
-                    let xOffset = expansionRadius * cos(angle)
-                    let yOffset = expansionRadius * sin(angle)
-                    
-                    EventAnnotationView(event: event, isInExpandedCluster: true)
-                        .contentShape(Circle())
-                        .onTapGesture {
-                            print("📍 Event tapped in expanded cluster: \(event.title)")
-                            onEventTap(event)
-                        }
-                    .offset(
-                        x: animationTrigger ? xOffset : 0,
-                        y: animationTrigger ? yOffset : 0
+                    ExpandedEventView(
+                        event: event,
+                        index: index,
+                        totalCount: cluster.eventCount,
+                        expansionRadius: expansionRadius,
+                        animationTrigger: animationTrigger,
+                        onEventTap: onEventTap
                     )
-                    .scaleEffect(animationTrigger ? 1.0 : 0.8)
-                    .opacity(animationTrigger ? 1.0 : 0.0)
-                    .animation(.easeOut(duration: 0.3), value: animationTrigger)
-                    .zIndex(100 + index)
                 }
             } else {
                 // Collapsed: Show single cluster pin
@@ -217,5 +207,44 @@ struct ClusterAnnotationView: View {
         )
     }
     .padding()
+}
+
+// MARK: - Expanded Event View
+private struct ExpandedEventView: View {
+    let event: CrowdEvent
+    let index: Int
+    let totalCount: Int
+    let expansionRadius: CGFloat
+    let animationTrigger: Bool
+    let onEventTap: (CrowdEvent) -> Void
+    
+    private var angle: Double {
+        (2.0 * .pi * Double(index)) / Double(totalCount)
+    }
+    
+    private var xOffset: CGFloat {
+        expansionRadius * cos(angle)
+    }
+    
+    private var yOffset: CGFloat {
+        expansionRadius * sin(angle)
+    }
+    
+    var body: some View {
+        EventAnnotationView(event: event, isInExpandedCluster: true)
+            .contentShape(Circle())
+            .onTapGesture {
+                print("📍 Event tapped in expanded cluster: \(event.title)")
+                onEventTap(event)
+            }
+            .offset(
+                x: animationTrigger ? xOffset : 0,
+                y: animationTrigger ? yOffset : 0
+            )
+            .scaleEffect(animationTrigger ? 1.0 : 0.8)
+            .opacity(animationTrigger ? 1.0 : 0.0)
+            .animation(.easeOut(duration: 0.3), value: animationTrigger)
+            .zIndex(100 + index)
+    }
 }
 
