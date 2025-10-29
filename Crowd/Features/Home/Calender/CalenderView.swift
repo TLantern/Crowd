@@ -13,28 +13,30 @@ struct CalenderView: View {
     @StateObject private var campusEventsVM = CampusEventsViewModel()
     @EnvironmentObject private var appState: AppState
     @State private var selectedInterests: Set<Interest> = []
+    @State private var displayedEventCount = 10
+    private let eventsPerPage = 10
     
     // Filtered events based on selected interests
     var filteredEvents: [CrowdEvent] {
-        print("🔍 CalenderView: Filtering events - Total: \(campusEventsVM.crowdEvents.count), Selected interests: \(selectedInterests.count)")
-        
         if selectedInterests.isEmpty {
-            print("🔍 CalenderView: No interests selected, returning all \(campusEventsVM.crowdEvents.count) events")
             return campusEventsVM.crowdEvents
         }
         
-        let filtered = campusEventsVM.crowdEvents.filter { event in
-            // Check if any of the event's tags match any selected interest
-            let eventTags = Set(event.tags.map { $0.lowercased() })
-            let selectedInterestNames = Set(selectedInterests.map { $0.name.lowercased() })
-            
-            let matches = !eventTags.isDisjoint(with: selectedInterestNames)
-            print("🔍 CalenderView: Event '\(event.title)' - Tags: \(event.tags), Matches: \(matches)")
-            return matches
-        }
+        let selectedInterestNames = Set(selectedInterests.map { $0.name.lowercased() })
         
-        print("🔍 CalenderView: Filtered to \(filtered.count) events")
-        return filtered
+        return campusEventsVM.crowdEvents.filter { event in
+            let eventTags = event.tags.map { $0.lowercased() }
+            return eventTags.contains { selectedInterestNames.contains($0) }
+        }
+    }
+    
+    // Paginated events for display
+    var displayedEvents: [CrowdEvent] {
+        Array(filteredEvents.prefix(displayedEventCount))
+    }
+    
+    var hasMoreEvents: Bool {
+        displayedEventCount < filteredEvents.count
     }
     
     var body: some View {
@@ -50,8 +52,8 @@ struct CalenderView: View {
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundStyle(.primary)
                             
-                            Text("Live campus events from Instagram & official sources")
-                                .font(.system(size: 14))
+                            Text("\(displayedEvents.count) of \(filteredEvents.count) events")
+                                .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(.secondary)
                         }
                         
@@ -84,8 +86,32 @@ struct CalenderView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) {
-                            ForEach(filteredEvents) { event in
+                            ForEach(displayedEvents) { event in
                                 EventCardView(event: event)
+                            }
+                            
+                            // Load more button
+                            if hasMoreEvents {
+                                Button(action: {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        displayedEventCount += eventsPerPage
+                                    }
+                                }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "arrow.down.circle.fill")
+                                            .font(.system(size: 16))
+                                        Text("Load More Events")
+                                            .font(.system(size: 16, weight: .medium))
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .fill(Color.accentColor)
+                                    )
+                                }
+                                .padding(.top, 8)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -115,6 +141,10 @@ struct CalenderView: View {
             }
             .onDisappear {
                 campusEventsVM.stop()
+            }
+            .onChange(of: selectedInterests) { _, _ in
+                // Reset pagination when filter changes
+                displayedEventCount = eventsPerPage
             }
         }
     }
@@ -245,14 +275,28 @@ struct EventCardView: View {
                 
                 // Attending button
                 Button(action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isAttending.toggle()
-                        if isAttending {
-                            // Add to attended events
-                            AttendedEventsService.shared.addAttendedEvent(event)
+                    Task {
+                        if !isAttending {
+                            // Join the event through the proper flow
+                            do {
+                                try await AppEnvironment.current.eventRepo.join(eventId: event.id, userId: FirebaseManager.shared.getCurrentUserId() ?? "")
+                                await MainActor.run {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        isAttending = true
+                                        AttendedEventsService.shared.addAttendedEvent(event)
+                                    }
+                                }
+                            } catch {
+                                print("❌ Failed to join event: \(error)")
+                            }
                         } else {
                             // Remove from attended events
-                            AttendedEventsService.shared.removeAttendedEvent(event.id)
+                            await MainActor.run {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isAttending = false
+                                    AttendedEventsService.shared.removeAttendedEvent(event.id)
+                                }
+                            }
                         }
                     }
                 }) {
@@ -283,10 +327,6 @@ struct EventCardView: View {
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         .onAppear {
             // Check if user is already attending this event
-            isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
-        }
-        .onChange(of: AttendedEventsService.shared.attendedEvents) { _, _ in
-            // Update state when attended events list changes
             isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
         }
     }
@@ -339,193 +379,108 @@ struct EventCardView: View {
         }
     }
     
-    private func getEventEmoji(for tags: [String]) -> String {
-        let tagEmojis: [String: String] = [
-            // Music & Entertainment
-            "music": "🎵",
-            "concert": "🎤",
-            "party": "🎉",
-            "festival": "🎪",
-            "dance": "💃",
-            "dancing": "💃",
-            "live": "🎵",
-            "performance": "🎭",
-            
-            // Food & Dining
-            "food": "🍕",
-            "dining": "🍽️",
-            "restaurant": "🍽️",
-            "cafe": "☕",
-            "coffee": "☕",
-            "lunch": "🍽️",
-            "dinner": "🍽️",
-            "breakfast": "🥞",
-            "snack": "🍿",
-            
-            // Sports & Fitness
-            "sports": "⚽",
-            "basketball": "🏀",
-            "football": "🏈",
-            "soccer": "⚽",
-            "tennis": "🎾",
-            "volleyball": "🏐",
-            "baseball": "⚾",
-            "fitness": "💪",
-            "gym": "💪",
-            "workout": "💪",
-            "yoga": "🧘",
-            "running": "🏃",
-            "cycling": "🚴",
-            
-            // Academic & Education
-            "study": "📚",
-            "academic": "🎓",
-            "lecture": "🎓",
-            "workshop": "🔧",
-            "seminar": "🎓",
-            "conference": "🎓",
-            "education": "🎓",
-            "learning": "📚",
-            "research": "🔬",
-            "science": "🔬",
-            "tech": "💻",
-            "technology": "💻",
-            "coding": "💻",
-            "programming": "💻",
-            
-            // Arts & Culture
-            "art": "🎨",
-            "creative": "🎨",
-            "culture": "🌍",
-            "cultural": "🌍",
-            "international": "🌍",
-            "language": "🗣️",
-            "film": "🎬",
-            "movie": "🎬",
-            "theater": "🎭",
-            "drama": "🎭",
-            "comedy": "😂",
-            "standup": "🎤",
-            "photography": "📸",
-            "gallery": "🖼️",
-            
-            // Social & Networking
-            "social": "👥",
-            "networking": "🤝",
-            "meetup": "👥",
-            "community": "🏘️",
-            "volunteer": "🤝",
-            "charity": "❤️",
-            "fundraising": "💰",
-            "career": "💼",
-            "job": "💼",
-            "business": "💼",
-            "entrepreneur": "🚀",
-            "startup": "🚀",
-            
-            // Health & Wellness
-            "health": "🏥",
-            "wellness": "💚",
-            "mental": "🧠",
-            "spiritual": "🙏",
-            "religious": "⛪",
-            "faith": "⛪",
-            "meditation": "🧘",
-            "mindfulness": "🧘",
-            
-            // Outdoor & Nature
-            "outdoor": "🏔️",
-            "hiking": "🥾",
-            "camping": "⛺",
-            "nature": "🌿",
-            "environment": "🌱",
-            "sustainability": "🌱",
-            "travel": "✈️",
-            "adventure": "🗺️",
-            
-            // Gaming & Entertainment
-            "gaming": "🎮",
-            "esports": "🎮",
-            "board": "🎲",
-            "trivia": "🧠",
-            "puzzle": "🧩",
-            "card": "🃏",
-            
-            // Lifestyle & Hobbies
-            "fashion": "👗",
-            "beauty": "💄",
-            "cooking": "👨‍🍳",
-            "baking": "🧁",
-            "wine": "🍷",
-            "beer": "🍺",
-            "tea": "🍵",
-            "book": "📖",
-            "reading": "📖",
-            "writing": "✍️",
-            "poetry": "📝",
-            "blog": "✍️",
-            
-            // Politics & Activism
-            "politics": "🏛️",
-            "debate": "🗣️",
-            "activism": "✊",
-            "protest": "✊",
-            "voting": "🗳️",
-            "election": "🗳️",
-            
-            // Special Events
-            "graduation": "🎓",
-            "celebration": "🎉",
-            "anniversary": "🎂",
-            "birthday": "🎂",
-            "holiday": "🎄",
-            "christmas": "🎄",
-            "halloween": "🎃",
-            "valentine": "💕",
-            "newyear": "🎊",
-            
-            // Source Types
-            "official": "🏛️",
-            "student": "🎓",
-            "instagram": "📸",
-            "social": "👥"
-        ]
+    private static let tagEmojis: [String: String] = [
+        // Music & Entertainment
+        "music": "🎵", "concert": "🎤", "party": "🎉", "festival": "🎪", "dance": "💃",
+        "dancing": "💃", "live": "🎵", "performance": "🎭",
         
+        // Food & Dining
+        "food": "🍕", "dining": "🍽️", "restaurant": "🍽️", "cafe": "☕", "coffee": "☕",
+        "lunch": "🍽️", "dinner": "🍽️", "breakfast": "🥞", "snack": "🍿",
+        
+        // Sports & Fitness
+        "sports": "⚽", "basketball": "🏀", "football": "🏈", "soccer": "⚽", "tennis": "🎾",
+        "volleyball": "🏐", "baseball": "⚾", "fitness": "💪", "gym": "💪", "workout": "💪",
+        "yoga": "🧘", "running": "🏃", "cycling": "🚴",
+        
+        // Academic & Education
+        "study": "📚", "academic": "🎓", "lecture": "🎓", "workshop": "🔧", "seminar": "🎓",
+        "conference": "🎓", "education": "🎓", "learning": "📚", "research": "🔬", "science": "🔬",
+        "tech": "💻", "technology": "💻", "coding": "💻", "programming": "💻",
+        
+        // Arts & Culture
+        "art": "🎨", "creative": "🎨", "culture": "🌍", "cultural": "🌍", "international": "🌍",
+        "language": "🗣️", "film": "🎬", "movie": "🎬", "theater": "🎭", "drama": "🎭",
+        "comedy": "😂", "standup": "🎤", "photography": "📸", "gallery": "🖼️",
+        
+        // Social & Networking
+        "networking": "🤝", "meetup": "👥", "community": "🏘️", "volunteer": "🤝", "charity": "❤️",
+        "fundraising": "💰", "career": "💼", "job": "💼", "business": "💼", "entrepreneur": "🚀",
+        "startup": "🚀",
+        
+        // Health & Wellness
+        "health": "🏥", "wellness": "💚", "mental": "🧠", "spiritual": "🙏", "religious": "⛪",
+        "faith": "⛪", "meditation": "🧘", "mindfulness": "🧘",
+        
+        // Outdoor & Nature
+        "outdoor": "🏔️", "hiking": "🥾", "camping": "⛺", "nature": "🌿", "environment": "🌱",
+        "sustainability": "🌱", "travel": "✈️", "adventure": "🗺️",
+        
+        // Gaming & Entertainment
+        "gaming": "🎮", "esports": "🎮", "board": "🎲", "trivia": "🧠", "puzzle": "🧩", "card": "🃏",
+        
+        // Lifestyle & Hobbies
+        "fashion": "👗", "beauty": "💄", "cooking": "👨‍🍳", "baking": "🧁", "wine": "🍷",
+        "beer": "🍺", "tea": "🍵", "book": "📖", "reading": "📖", "writing": "✍️",
+        "poetry": "📝", "blog": "✍️",
+        
+        // Politics & Activism
+        "politics": "🏛️", "debate": "🗣️", "activism": "✊", "protest": "✊", "voting": "🗳️",
+        "election": "🗳️",
+        
+        // Special Events
+        "graduation": "🎓", "celebration": "🎉", "anniversary": "🎂", "birthday": "🎂",
+        "holiday": "🎄", "christmas": "🎄", "halloween": "🎃", "valentine": "💕", "newyear": "🎊",
+        
+        // Source Types
+        "official": "🏛️", "student": "🎓", "instagram": "📸", "social": "👥"
+    ]
+    
+    private func getEventEmoji(for tags: [String]) -> String {
         // Check for exact matches first
         for tag in tags {
             let lowercaseTag = tag.lowercased()
-            if let emoji = tagEmojis[lowercaseTag] {
+            if let emoji = Self.tagEmojis[lowercaseTag] {
                 return emoji
             }
         }
         
-        // Check for partial matches
-        for tag in tags {
+        // Check for partial matches (only for first few tags to avoid performance issues)
+        let tagsToCheck = Array(tags.prefix(3))
+        for tag in tagsToCheck {
             let lowercaseTag = tag.lowercased()
-            for (keyword, emoji) in tagEmojis {
+            for (keyword, emoji) in Self.tagEmojis {
                 if lowercaseTag.contains(keyword) {
                     return emoji
                 }
             }
         }
         
-        // Default emoji if no match found
         return "📅"
     }
     
-    private func formatEventTime(_ date: Date) -> String {
+    private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .none
         formatter.timeStyle = .short
-        
+        return formatter
+    }()
+    
+    private static let dateTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
+    
+    private func formatEventTime(_ date: Date) -> String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) {
-            return "Today \(formatter.string(from: date))"
+            return "Today \(Self.timeFormatter.string(from: date))"
         } else if calendar.isDateInTomorrow(date) {
-            return "Tomorrow \(formatter.string(from: date))"
+            return "Tomorrow \(Self.timeFormatter.string(from: date))"
         } else {
-            formatter.dateStyle = .short
-            return formatter.string(from: date)
+            return Self.dateTimeFormatter.string(from: date)
         }
     }
 }

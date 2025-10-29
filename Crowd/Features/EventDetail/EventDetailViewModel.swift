@@ -20,13 +20,14 @@ final class EventDetailViewModel: ObservableObject {
     
     private let profileService = UserProfileService.shared
     private let attendeesService = EventAttendeesService.shared
+    private let attendedEventsService = AttendedEventsService.shared
     private let eventRepo: EventRepository
     
     init(eventRepo: EventRepository = AppEnvironment.current.eventRepo) {
         self.eventRepo = eventRepo
     }
     
-    func joinEvent(eventId: String) async -> Bool {
+    func joinEvent(event: CrowdEvent) async -> Bool {
         guard let userId = FirebaseManager.shared.getCurrentUserId() else {
             joinError = "Not logged in"
             return false
@@ -37,12 +38,15 @@ final class EventDetailViewModel: ObservableObject {
         defer { isJoining = false }
         
         do {
-            try await eventRepo.join(eventId: eventId, userId: userId)
+            try await eventRepo.join(eventId: event.id, userId: userId)
+            
+            // Add to attended events
+            attendedEventsService.addAttendedEvent(event)
             
             // Track analytics
-            AnalyticsService.shared.trackEventJoined(eventId: eventId, title: "Event")
+            AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title)
             
-            print("✅ Successfully joined event: \(eventId)")
+            print("✅ Successfully joined event: \(event.id)")
             return true
         } catch {
             joinError = "Failed to join event"

@@ -135,7 +135,7 @@ struct EventDetailView: View {
             // Action button
             Button {
                 Task {
-                    let success = await viewModel.joinEvent(eventId: event.id)
+                    let success = await viewModel.joinEvent(event: event)
                     if success {
                         showNavigationModal = true
                     }
