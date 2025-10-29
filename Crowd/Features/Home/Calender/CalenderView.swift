@@ -12,21 +12,22 @@ struct CalenderView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var campusEventsVM = CampusEventsViewModel()
     @EnvironmentObject private var appState: AppState
-    @State private var selectedInterests: Set<Interest> = []
+    @State private var selectedCategories: Set<EventCategory> = []
     @State private var displayedEventCount = 10
     private let eventsPerPage = 10
     
-    // Filtered events based on selected interests
+    // Filtered events based on selected categories
     var filteredEvents: [CrowdEvent] {
-        if selectedInterests.isEmpty {
+        if selectedCategories.isEmpty {
             return campusEventsVM.crowdEvents
         }
         
-        let selectedInterestNames = Set(selectedInterests.map { $0.name.lowercased() })
-        
         return campusEventsVM.crowdEvents.filter { event in
-            let eventTags = event.tags.map { $0.lowercased() }
-            return eventTags.contains { selectedInterestNames.contains($0) }
+            // Use the event's category if available, otherwise try to classify it
+            let eventCategory = event.category.flatMap { EventCategory(rawValue: $0) } 
+                ?? EventCategory.guess(from: event.title, sourceType: "user", locationName: nil)
+            
+            return selectedCategories.contains(eventCategory)
         }
     }
     
@@ -59,7 +60,7 @@ struct CalenderView: View {
                         
                         Spacer()
                         
-                        InterestFilterDropdown(selectedInterests: $selectedInterests)
+                        CategoryFilterDropdown(selectedCategories: $selectedCategories)
                     }
                 }
                 .padding(.top, 20)
@@ -72,11 +73,11 @@ struct CalenderView: View {
                             .font(.system(size: 48))
                             .foregroundStyle(.gray.opacity(0.5))
                         
-                        Text(selectedInterests.isEmpty ? "No upcoming events" : "No events match your interests")
+                        Text(selectedCategories.isEmpty ? "No upcoming events" : "No events match selected categories")
                             .font(.system(size: 18, weight: .medium))
                             .foregroundStyle(.secondary)
                         
-                        Text(selectedInterests.isEmpty ? "Check back later for new campus events" : "Try selecting different interests or clear the filter")
+                        Text(selectedCategories.isEmpty ? "Check back later for new campus events" : "Try selecting different categories or clear the filter")
                             .font(.system(size: 14))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -142,7 +143,7 @@ struct CalenderView: View {
             .onDisappear {
                 campusEventsVM.stop()
             }
-            .onChange(of: selectedInterests) { _, _ in
+            .onChange(of: selectedCategories) { _, _ in
                 // Reset pagination when filter changes
                 displayedEventCount = eventsPerPage
             }

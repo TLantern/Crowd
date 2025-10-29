@@ -33,7 +33,7 @@ struct LeaderboardView: View {
     // MARK: - Sections
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .center, spacing: 4) {
             Text("Leaderboard").font(.title3.bold())
             Text("Earn Aura by hosting and joining crowds.")
                 .font(.footnote)
@@ -50,7 +50,7 @@ struct LeaderboardView: View {
                         viewModel.switchTo(tf)
                     }
                 } label: {
-                    Text(tf.rawValue)
+                    Text(tf.displayName)
                         .font(.footnote.weight(.semibold))
                         .padding(.vertical, 8)
                         .padding(.horizontal, 12)
@@ -60,8 +60,8 @@ struct LeaderboardView: View {
                         )
                 }
             }
-            Spacer()
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var podium: some View {
