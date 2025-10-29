@@ -13,6 +13,21 @@ struct TagPillView: View {
     let onDelete: () -> Void
     let onTap: () -> Void
     
+    // 5 different color schemes for randomization
+    private let colorSchemes: [(background: Color, border: Color, text: Color)] = [
+        (Color.blue.opacity(0.15), Color.blue.opacity(0.3), Color.blue),
+        (Color.green.opacity(0.15), Color.green.opacity(0.3), Color.green),
+        (Color.purple.opacity(0.15), Color.purple.opacity(0.3), Color.purple),
+        (Color.orange.opacity(0.15), Color.orange.opacity(0.3), Color.orange),
+        (Color.pink.opacity(0.15), Color.pink.opacity(0.3), Color.pink)
+    ]
+    
+    // Get consistent color based on interest name hash
+    private var colorScheme: (background: Color, border: Color, text: Color) {
+        let hash = abs(interest.name.hashValue)
+        return colorSchemes[hash % colorSchemes.count]
+    }
+    
     init(interest: Interest, isEditMode: Bool = false, onDelete: @escaping () -> Void = {}, onTap: @escaping () -> Void = {}) {
         self.interest = interest
         self.isEditMode = isEditMode
@@ -43,11 +58,11 @@ struct TagPillView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(colorScheme.text)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Color.accentColor.opacity(0.15), in: Capsule())
-            .overlay(Capsule().stroke(Color.accentColor.opacity(0.3), lineWidth: 1))
+            .background(colorScheme.background, in: Capsule())
+            .overlay(Capsule().stroke(colorScheme.border, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }

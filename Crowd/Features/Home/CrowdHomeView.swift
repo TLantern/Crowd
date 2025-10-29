@@ -318,11 +318,12 @@ struct CrowdHomeView: View {
 
                     // === FLOATING GLASS BUTTONS ===
                     VStack(alignment: .trailing, spacing: 16) {
-                        GlassIconButton(systemName: "trophy") { 
-                            route = .leaderboard
-                            overlaySnapIndex = 1
-                            overlayPresented = true
-                        }
+                        // Achievement icon commented out for now
+                        // GlassIconButton(systemName: "trophy") { 
+                        //     route = .leaderboard
+                        //     overlaySnapIndex = 1
+                        //     overlayPresented = true
+                        // }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .padding(.trailing, 24)

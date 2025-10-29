@@ -8,6 +8,7 @@
 import Foundation
 import FirebaseFirestore
 import Combine
+import FirebaseAuth
 
 struct ChatMessage: Identifiable, Codable {
     let id: String

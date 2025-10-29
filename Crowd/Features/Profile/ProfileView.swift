@@ -50,7 +50,7 @@ struct ProfileView: View {
                 ProgressView("Loading profile...")
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 12) {
                         identityBlock
                         tagsSection
                         statsRow
@@ -143,11 +143,6 @@ struct ProfileView: View {
             Text(viewModel.handle)
                 .font(.system(size: 18, weight: .bold))
 
-            // last seen -> black text
-            Text(viewModel.activeStatusText)
-                .font(.system(size: 13))
-                .foregroundStyle(.primary)
-
             // bio -> editable in edit mode, black in read mode
             if viewModel.isEditMode {
                 TextEditor(text: $viewModel.bio)
@@ -168,14 +163,12 @@ struct ProfileView: View {
                     .padding(.horizontal, 20)
             }
 
-            AuraBadgeView(points: viewModel.points, rank: viewModel.auraRank)
-
             Text(viewModel.affiliation)
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        .padding(.vertical, 12)
     }
 
     // MARK: - Stats Row
@@ -184,7 +177,6 @@ struct ProfileView: View {
             HStack(spacing: 12) {
                 statCard(title: "Hosted", value: "\(viewModel.hostedCount)")
                 statCard(title: "Joined", value: "\(viewModel.joinedCount)")
-                statCard(title: "Friends", value: "\(viewModel.friendsCount)")
                 statCard(title: "Upcoming", value: "\(viewModel.upcomingEventsCount)")
             }
         }
@@ -227,46 +219,52 @@ struct ProfileView: View {
         }
     }
     
-    // MARK: - Attended Events Section
+    // MARK: - Attending Events Section
     private var attendedEventsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Attended Events")
+            Text("Attending")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
             
             let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
             
-            if attendedEvents.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "calendar.badge.checkmark")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.gray.opacity(0.6))
-                    
-                    Text("No events attended yet")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                    
-                    Text("Join events from the calendar to see them here")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else {
-                LazyVStack(spacing: 8) {
-                    ForEach(attendedEvents.prefix(5)) { event in
-                        AttendedEventRow(event: event)
-                    }
-                    
-                    if attendedEvents.count > 5 {
-                        Text("+ \(attendedEvents.count - 5) more events")
+            VStack(spacing: 12) {
+                if attendedEvents.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "calendar.badge.checkmark")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.gray.opacity(0.6))
+                        
+                        Text("No events attending yet")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                        
+                        Text("Join events from the calendar to see them here")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
-                            .padding(.top, 4)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                } else {
+                    LazyVStack(spacing: 8) {
+                        ForEach(attendedEvents.prefix(5)) { event in
+                            AttendedEventRow(event: event)
+                        }
+                        
+                        if attendedEvents.count > 5 {
+                            Text("+ \(attendedEvents.count - 5) more events")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 4)
+                        }
                     }
                 }
             }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 12)
+            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.24), lineWidth: 1))
         }
     }
 }
