@@ -35,26 +35,25 @@ struct ClusterAnnotationView: View {
                     let yOffset = expansionRadius * sin(angle)
                     
                     Button {
+                        print("📍 Event tapped in expanded cluster: \(event.title)")
                         onEventTap(event)
                     } label: {
                         EventAnnotationView(event: event, isInExpandedCluster: true)
                     }
+                    .buttonStyle(.plain)
                     .offset(
                         x: animationTrigger ? xOffset : 0,
                         y: animationTrigger ? yOffset : 0
                     )
-                    .scaleEffect(animationTrigger ? 1.0 : 0.5)
+                    .scaleEffect(animationTrigger ? 1.0 : 0.8)
                     .opacity(animationTrigger ? 1.0 : 0.0)
-                    .animation(
-                        .spring(response: 0.5, dampingFraction: 0.7)
-                            .delay(Double(index) * 0.05),
-                        value: animationTrigger
-                    )
+                    .animation(.easeOut(duration: 0.3), value: animationTrigger)
                     .zIndex(10)
                 }
             } else {
                 // Collapsed: Show single cluster pin
                 Button {
+                    print("📍 Cluster tapped: \(cluster.eventCount) events")
                     onTap()
                 } label: {
                     ZStack {
@@ -90,17 +89,19 @@ struct ClusterAnnotationView: View {
                         }
                     }
                 }
+                .buttonStyle(.plain)
             }
         }
         .onChange(of: isExpanded) { _, newValue in
+            print("📍 Cluster expansion state changed: \(newValue)")
             if newValue {
                 // Trigger expansion animation
-                withAnimation {
+                withAnimation(.easeOut(duration: 0.3)) {
                     animationTrigger = true
                 }
             } else {
                 // Trigger collapse animation
-                withAnimation {
+                withAnimation(.easeOut(duration: 0.3)) {
                     animationTrigger = false
                 }
             }

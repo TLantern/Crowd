@@ -151,14 +151,6 @@ struct CrowdHomeView: View {
                             )
                         }
                     }
-                    .onTapGesture {
-                        // Collapse expanded cluster when tapping on map
-                        if expandedClusterId != nil {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                                expandedClusterId = nil
-                            }
-                        }
-                    }
 
                 // === OVERLAYS & CONTROLS ===
                 GeometryReader { geo in
@@ -450,15 +442,18 @@ struct CrowdHomeView: View {
     
     // MARK: - Cluster Handlers
     private func handleClusterTap(_ cluster: EventCluster) {
+        print("🎯 handleClusterTap called - isSingleEvent: \(cluster.isSingleEvent), count: \(cluster.eventCount)")
         if cluster.isSingleEvent {
             // Single event - show detail directly
             if let event = cluster.events.first {
+                print("✅ Showing detail for single event: \(event.title)")
                 selectedEvent = event
                 showEventDetail = true
             }
         } else {
             // Multi-event cluster - toggle expansion
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+            print("🔄 Toggling cluster expansion - current: \(expandedClusterId ?? "none"), new: \(cluster.id)")
+            withAnimation(.easeOut(duration: 0.3)) {
                 if expandedClusterId == cluster.id {
                     expandedClusterId = nil
                 } else {
@@ -469,6 +464,7 @@ struct CrowdHomeView: View {
     }
     
     private func handleEventTap(_ event: CrowdEvent) {
+        print("✅ handleEventTap called for: \(event.title)")
         selectedEvent = event
         showEventDetail = true
     }
