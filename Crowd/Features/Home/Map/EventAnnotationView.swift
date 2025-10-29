@@ -66,7 +66,12 @@ struct EventAnnotationView: View {
                         .font(.system(size: 40))
                 )
         }
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Circle())
         .scaleEffect(scaleMultiplier)
+        .accessibilityLabel("\(emoji) event pin, \(event.attendeeCount) attendees")
+        .accessibilityHint("Double tap to view event details")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

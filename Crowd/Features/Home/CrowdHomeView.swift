@@ -116,9 +116,18 @@ struct CrowdHomeView: View {
                                     angle: angle,
                                     radiusPoints: radius
                                 )
+                                // Add stagger delay per pin
+                                let staggerDelay = Double(index) * 0.025 // 25ms per pin
                                 
                                 Annotation("", coordinate: expandedCoord) {
                                     EventAnnotationView(event: event, isInExpandedCluster: true)
+                                        .scaleEffect(expandedClusterId == cluster.id ? 1.0 : 0.001)
+                                        .opacity(expandedClusterId == cluster.id ? 1.0 : 0.0)
+                                        .animation(
+                                            .spring(response: 0.35, dampingFraction: 0.8)
+                                            .delay(staggerDelay),
+                                            value: expandedClusterId
+                                        )
                                         .onTapGesture {
                                             print("📍 Expanded event tapped: \(event.title)")
                                             handleEventTap(event)
@@ -174,6 +183,16 @@ struct CrowdHomeView: View {
                             }
                         }
                         .annotationTitles(.hidden)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // Collapse any expanded cluster when tapping map background
+                    if expandedClusterId != nil {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            expandedClusterId = nil
+                        }
+                        print("📍 Collapsed cluster via background tap")
                     }
                 }
                 .mapControls { MapCompass() }
