@@ -42,6 +42,10 @@ struct CrowdHomeView: View {
     @State private var selectedEvent: CrowdEvent?
     @State private var showEventDetail = false
     
+    // MARK: - Clustering
+    @State private var expandedClusterId: String?
+    @State private var currentCameraDistance: Double = 1200
+    
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
         firebaseEvents + hostedEvents + upcomingEvents
@@ -57,21 +61,30 @@ struct CrowdHomeView: View {
         }
     }
     
+    // MARK: - Clustered current events
+    var currentEventsClusters: [EventCluster] {
+        EventClusteringService.clusterEvents(firebaseEvents + hostedEvents)
+    }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 // === MAP ===
                 Map(position: $cameraPosition) {
-                    // Regular event annotations (Firebase + user-created)
-                    ForEach(firebaseEvents + hostedEvents) { event in
-                        Annotation(event.title, coordinate: event.coordinates) {
-                            Button {
-                                selectedEvent = event
-                                showEventDetail = true
-                            } label: {
-                                EventAnnotationView(event: event)
-                            }
+                    // Clustered event annotations (Firebase + user-created)
+                    ForEach(currentEventsClusters) { cluster in
+                        Annotation("", coordinate: cluster.centerCoordinate) {
+                            ClusterAnnotationView(
+                                cluster: cluster,
+                                isExpanded: expandedClusterId == cluster.id,
+                                cameraDistance: currentCameraDistance,
+                                onTap: {
+                                    handleClusterTap(cluster)
+                                },
+                                onEventTap: { event in
+                                    handleEventTap(event)
+                                }
+                            )
                         }
                         .annotationTitles(.hidden)
                     }
@@ -124,6 +137,7 @@ struct CrowdHomeView: View {
                     .onChange(of: selectedRegion) { _, new in snapTo(new) }
                     .onMapCameraChange { ctx in
                         currentCamera = ctx.camera
+                        currentCameraDistance = ctx.camera.distance
                         let spec = selectedRegion.spec
                         let clamped = min(max(ctx.camera.distance, spec.minZoom), spec.maxZoom)
                         if abs(clamped - ctx.camera.distance) > 1 {
@@ -135,6 +149,14 @@ struct CrowdHomeView: View {
                                     pitch: ctx.camera.pitch
                                 )
                             )
+                        }
+                    }
+                    .onTapGesture {
+                        // Collapse expanded cluster when tapping on map
+                        if expandedClusterId != nil {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                expandedClusterId = nil
+                            }
                         }
                     }
 
@@ -424,6 +446,31 @@ struct CrowdHomeView: View {
         withAnimation(.easeInOut(duration: 0.35)) {
             cameraPosition = MapCameraController.position(from: region.spec)
         }
+    }
+    
+    // MARK: - Cluster Handlers
+    private func handleClusterTap(_ cluster: EventCluster) {
+        if cluster.isSingleEvent {
+            // Single event - show detail directly
+            if let event = cluster.events.first {
+                selectedEvent = event
+                showEventDetail = true
+            }
+        } else {
+            // Multi-event cluster - toggle expansion
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                if expandedClusterId == cluster.id {
+                    expandedClusterId = nil
+                } else {
+                    expandedClusterId = cluster.id
+                }
+            }
+        }
+    }
+    
+    private func handleEventTap(_ event: CrowdEvent) {
+        selectedEvent = event
+        showEventDetail = true
     }
 }
 

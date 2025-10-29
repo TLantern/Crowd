@@ -1,0 +1,207 @@
+//
+//  ClusterAnnotationView.swift
+//  Crowd
+//
+//  Created by AI Assistant on 10/29/25.
+//
+
+import SwiftUI
+import CoreLocation
+
+struct ClusterAnnotationView: View {
+    let cluster: EventCluster
+    let isExpanded: Bool
+    let cameraDistance: Double
+    let onTap: () -> Void
+    let onEventTap: (CrowdEvent) -> Void
+    
+    @State private var animationTrigger = false
+    
+    // Convert 20 meters to screen points based on map zoom
+    private var expansionRadius: CGFloat {
+        // Approximate conversion: at 1000m altitude, ~1 meter = 0.3 points
+        // This is a simplified formula - adjust based on testing
+        let metersToPoints = 1000.0 / cameraDistance * 0.3
+        return CGFloat(20.0 * metersToPoints)
+    }
+    
+    var body: some View {
+        ZStack {
+            if isExpanded && cluster.eventCount > 1 {
+                // Expanded: Show events in circle
+                ForEach(Array(cluster.events.enumerated()), id: \.element.id) { index, event in
+                    let angle = (2.0 * .pi * Double(index)) / Double(cluster.eventCount)
+                    let xOffset = expansionRadius * cos(angle)
+                    let yOffset = expansionRadius * sin(angle)
+                    
+                    Button {
+                        onEventTap(event)
+                    } label: {
+                        EventAnnotationView(event: event, isInExpandedCluster: true)
+                    }
+                    .offset(
+                        x: animationTrigger ? xOffset : 0,
+                        y: animationTrigger ? yOffset : 0
+                    )
+                    .scaleEffect(animationTrigger ? 1.0 : 0.5)
+                    .opacity(animationTrigger ? 1.0 : 0.0)
+                    .animation(
+                        .spring(response: 0.5, dampingFraction: 0.7)
+                            .delay(Double(index) * 0.05),
+                        value: animationTrigger
+                    )
+                    .zIndex(10)
+                }
+            } else {
+                // Collapsed: Show single cluster pin
+                Button {
+                    onTap()
+                } label: {
+                    ZStack {
+                        // Use the first event's emoji for the cluster pin
+                        if let firstEvent = cluster.events.first {
+                            EventAnnotationView(event: firstEvent, isInExpandedCluster: false)
+                        }
+                        
+                        // Badge showing event count (only if > 1)
+                        if cluster.eventCount > 1 {
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.white)
+                                            .frame(width: 24, height: 24)
+                                        
+                                        Circle()
+                                            .stroke(Color.red, lineWidth: 2)
+                                            .frame(width: 24, height: 24)
+                                        
+                                        Text("\(cluster.eventCount)")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.black)
+                                    }
+                                    .offset(x: 10, y: -10)
+                                }
+                                Spacer()
+                            }
+                            .frame(width: 90, height: 90)
+                            .scaleEffect(0.75) // Match EventAnnotationView scale
+                        }
+                    }
+                }
+            }
+        }
+        .onChange(of: isExpanded) { _, newValue in
+            if newValue {
+                // Trigger expansion animation
+                withAnimation {
+                    animationTrigger = true
+                }
+            } else {
+                // Trigger collapse animation
+                withAnimation {
+                    animationTrigger = false
+                }
+            }
+        }
+        .onAppear {
+            // Set initial state
+            animationTrigger = isExpanded
+        }
+    }
+}
+
+#Preview {
+    VStack(spacing: 50) {
+        // Single event cluster
+        ClusterAnnotationView(
+            cluster: EventCluster(events: [
+                CrowdEvent(
+                    id: "1",
+                    title: "Single Event",
+                    hostId: "123",
+                    hostName: "Host",
+                    latitude: 33.21,
+                    longitude: -97.15,
+                    radiusMeters: 60,
+                    startsAt: Date(),
+                    endsAt: Date().addingTimeInterval(3600),
+                    createdAt: Date(),
+                    signalStrength: 3,
+                    attendeeCount: 5,
+                    tags: [],
+                    category: "hangout",
+                    description: "Test"
+                )
+            ]),
+            isExpanded: false,
+            cameraDistance: 1000,
+            onTap: { print("Tapped") },
+            onEventTap: { _ in print("Event tapped") }
+        )
+        
+        // Multi-event cluster
+        ClusterAnnotationView(
+            cluster: EventCluster(events: [
+                CrowdEvent(
+                    id: "1",
+                    title: "Event 1",
+                    hostId: "123",
+                    hostName: "Host",
+                    latitude: 33.21,
+                    longitude: -97.15,
+                    radiusMeters: 60,
+                    startsAt: Date(),
+                    endsAt: Date().addingTimeInterval(3600),
+                    createdAt: Date(),
+                    signalStrength: 3,
+                    attendeeCount: 5,
+                    tags: [],
+                    category: "hangout",
+                    description: "Test"
+                ),
+                CrowdEvent(
+                    id: "2",
+                    title: "Event 2",
+                    hostId: "124",
+                    hostName: "Host 2",
+                    latitude: 33.21,
+                    longitude: -97.15,
+                    radiusMeters: 60,
+                    startsAt: Date(),
+                    endsAt: Date().addingTimeInterval(3600),
+                    createdAt: Date(),
+                    signalStrength: 4,
+                    attendeeCount: 8,
+                    tags: [],
+                    category: "party",
+                    description: "Test 2"
+                ),
+                CrowdEvent(
+                    id: "3",
+                    title: "Event 3",
+                    hostId: "125",
+                    hostName: "Host 3",
+                    latitude: 33.21,
+                    longitude: -97.15,
+                    radiusMeters: 60,
+                    startsAt: Date(),
+                    endsAt: Date().addingTimeInterval(3600),
+                    createdAt: Date(),
+                    signalStrength: 2,
+                    attendeeCount: 3,
+                    tags: [],
+                    category: "study",
+                    description: "Test 3"
+                )
+            ]),
+            isExpanded: false,
+            cameraDistance: 1000,
+            onTap: { print("Cluster tapped") },
+            onEventTap: { _ in print("Event tapped") }
+        )
+    }
+    .padding()
+}
+

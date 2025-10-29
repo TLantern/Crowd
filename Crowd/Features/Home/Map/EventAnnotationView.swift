@@ -9,6 +9,8 @@ import SwiftUI
 
 struct EventAnnotationView: View {
     let event: CrowdEvent
+    var isInExpandedCluster: Bool = false
+    var onTap: (() -> Void)? = nil
     
     var emoji: String {
         // Map category to emoji using EventCategory enum
@@ -21,6 +23,10 @@ struct EventAnnotationView: View {
     
     var isOnFire: Bool {
         event.attendeeCount > 5
+    }
+    
+    var scaleMultiplier: CGFloat {
+        isInExpandedCluster ? 0.65 : 0.75
     }
 
     var body: some View {
@@ -61,7 +67,10 @@ struct EventAnnotationView: View {
                         .font(.system(size: 40))
                 )
         }
-        .scaleEffect(0.75)  // Reduced by 25% from 1.0
+        .scaleEffect(scaleMultiplier)
+        .onTapGesture {
+            onTap?()
+        }
     }
 }
 
