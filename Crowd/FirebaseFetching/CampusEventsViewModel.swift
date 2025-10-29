@@ -32,11 +32,14 @@ final class CampusEventsViewModel: ObservableObject {
             let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) {
                 var tmp: [CrowdEvent] = []
                 for d in docs {
-                    if let live = try? d.data(as: CampusEventLive.self),
-                       let ce = mapCampusEventLiveToCrowdEvent(live) {
-                        // Filter for future events only
-                        if let startDate = ce.startsAt, startDate >= now {
-                            tmp.append(ce)
+                    if var live = try? d.data(as: CampusEventLive.self) {
+                        // Use Firestore document ID as stable identifier
+                        live.id = d.documentID
+                        if let ce = mapCampusEventLiveToCrowdEvent(live) {
+                            // Filter for future events only
+                            if let startDate = ce.startsAt, startDate >= now {
+                                tmp.append(ce)
+                            }
                         }
                     }
                 }
@@ -84,13 +87,15 @@ final class CampusEventsViewModel: ObservableObject {
 
                 for d in docs {
                     do {
-                        let live = try d.data(as: CampusEventLive.self)
-                        print("📝 CampusEventsViewModel: Parsed CampusEventLive: \(live.title)")
+                        var live = try d.data(as: CampusEventLive.self)
+                        // Use Firestore document ID as stable identifier
+                        live.id = d.documentID
+                        print("📝 CampusEventsViewModel: Parsed CampusEventLive: \(live.title) (id: \(d.documentID))")
                         
                         if let ce = mapCampusEventLiveToCrowdEvent(live) {
                             // Filter for future events only
                             if let startDate = ce.startsAt, startDate >= now {
-                                print("✅ CampusEventsViewModel: Mapped to CrowdEvent: \(ce.title)")
+                                print("✅ CampusEventsViewModel: Mapped to CrowdEvent: \(ce.title) (id: \(ce.id))")
                                 mapped.append(ce)
                             } else {
                                 print("⏭️ CampusEventsViewModel: Skipping past event: \(ce.title)")
