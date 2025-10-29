@@ -204,14 +204,13 @@ struct CrowdHomeView: View {
                         let previousDistance = currentCameraDistance
                         currentCameraDistance = ctx.camera.distance
                         
-                        // Auto-collapse expanded clusters when zooming out significantly
+                        // Auto-collapse expanded clusters when zooming out to distance 3500 or more
                         if expandedClusterId != nil {
-                            let zoomOutThreshold = 1.5 // Collapse if user zooms out 50% or more
-                            if currentCameraDistance > previousDistance * zoomOutThreshold {
+                            if currentCameraDistance >= 3500 {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                     expandedClusterId = nil
                                 }
-                                print("📍 Auto-collapsed cluster due to zoom out")
+                                print("📍 Auto-collapsed cluster at distance 3500")
                             }
                         }
                         
@@ -555,12 +554,12 @@ struct CrowdHomeView: View {
                     cameraPosition = .camera(
                         MapCamera(
                             centerCoordinate: cluster.centerCoordinate,
-                            distance: 15,
+                            distance: 25,
                             heading: currentCamera.heading,
                             pitch: currentCamera.pitch
                         )
                     )
-                    print("📍 Zoomed to cluster at distance 15")
+                    print("📍 Zoomed to cluster at distance 25")
                 }
             }
         }
