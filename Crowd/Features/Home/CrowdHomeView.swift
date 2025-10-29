@@ -550,6 +550,17 @@ struct CrowdHomeView: View {
                     expandedClusterId = nil
                 } else {
                     expandedClusterId = cluster.id
+                    
+                    // Zoom in to cluster when expanding
+                    cameraPosition = .camera(
+                        MapCamera(
+                            centerCoordinate: cluster.centerCoordinate,
+                            distance: 15,
+                            heading: currentCamera.heading,
+                            pitch: currentCamera.pitch
+                        )
+                    )
+                    print("📍 Zoomed to cluster at distance 15")
                 }
             }
         }
