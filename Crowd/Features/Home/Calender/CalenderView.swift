@@ -329,7 +329,6 @@ struct EventCardView: View {
                     )
                 }
             }
-            }
             .padding(16)
             .background(.ultraThinMaterial)
             .cornerRadius(12)
