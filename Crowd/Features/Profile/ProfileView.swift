@@ -50,7 +50,7 @@ struct ProfileView: View {
                 ProgressView("Loading profile...")
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
                         identityBlock
                         tagsSection
                         statsRow
