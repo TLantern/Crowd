@@ -351,10 +351,24 @@ struct CrowdHomeView: View {
             removeExpiredEvents()
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { notification in
-            // Remove deleted event from hostedEvents array
+            // Remove deleted event from ALL event arrays
             if let eventId = notification.object as? String {
                 hostedEvents.removeAll { $0.id == eventId }
-                print("🗑️ Removed deleted event from hostedEvents: \(eventId)")
+                firebaseEvents.removeAll { $0.id == eventId }
+                upcomingEvents.removeAll { $0.id == eventId }
+                
+                print("🗑️ Removed deleted event from all arrays: \(eventId)")
+                print("   - Current hosted events: \(hostedEvents.count)")
+                print("   - Current firebase events: \(firebaseEvents.count)")
+                print("   - Clusters will auto-update with new counts")
+                
+                // Collapse any expanded cluster that might have contained this event
+                if expandedClusterId != nil {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        expandedClusterId = nil
+                    }
+                    print("   - Collapsed expanded cluster")
+                }
             }
         }
     }
