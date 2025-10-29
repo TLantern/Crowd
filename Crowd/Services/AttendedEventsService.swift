@@ -25,7 +25,10 @@ final class AttendedEventsService: ObservableObject {
     // MARK: - Public Methods
     
     func addAttendedEvent(_ event: CrowdEvent) {
-        guard !isAttendingEvent(event.id) else { return }
+        guard !isAttendingEvent(event.id) else {
+            print("⚠️ Event already in attended list: \(event.title) (id: \(event.id))")
+            return
+        }
         
         attendedEvents.append(event)
         saveAttendedEvents()
@@ -33,7 +36,8 @@ final class AttendedEventsService: ObservableObject {
         // Update user profile joined count
         updateUserJoinedCount()
         
-        print("✅ Added event to attended: \(event.title)")
+        print("✅ Added event to attended: \(event.title) (id: \(event.id))")
+        print("📊 Total attended events: \(attendedEvents.count)")
     }
     
     func removeAttendedEvent(_ eventId: String) {

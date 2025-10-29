@@ -89,18 +89,7 @@ struct CrowdHomeView: View {
                         .annotationTitles(.hidden)
                     }
                     
-                    // Upcoming events (next 2 days) with different styling
-                    ForEach(upcomingEventsInNext2Days) { event in
-                        Annotation(event.title, coordinate: event.coordinates) {
-                            Button {
-                                selectedEvent = event
-                                showEventDetail = true
-                            } label: {
-                                UpcomingEventAnnotationView(event: event)
-                            }
-                        }
-                        .annotationTitles(.hidden)
-                    }
+                    // Upcoming events annotations removed per request
                     
                     // User event pin at user's location
                     
