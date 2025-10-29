@@ -49,10 +49,8 @@ struct EventDetailView: View {
                     Button {
                         showCancelConfirmation = true
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
+                        Text("🗑️")
                             .font(.system(size: 28))
-                            .foregroundColor(.red)
-                            .background(Circle().fill(Color(.systemBackground)))
                     }
                     .padding(.trailing, 16)
                     .padding(.top, 8)
