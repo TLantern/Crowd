@@ -15,11 +15,11 @@ struct TagPillView: View {
     
     // 5 different color schemes for randomization
     private let colorSchemes: [(background: Color, border: Color, text: Color)] = [
-        (Color.blue.opacity(0.15), Color.blue.opacity(0.3), Color.blue),
-        (Color.green.opacity(0.15), Color.green.opacity(0.3), Color.green),
-        (Color.purple.opacity(0.15), Color.purple.opacity(0.3), Color.purple),
-        (Color.orange.opacity(0.15), Color.orange.opacity(0.3), Color.orange),
-        (Color.pink.opacity(0.15), Color.pink.opacity(0.3), Color.pink)
+        (Color.blue.opacity(0.25), Color.blue.opacity(0.5), Color.blue),
+        (Color.green.opacity(0.25), Color.green.opacity(0.5), Color.green),
+        (Color.purple.opacity(0.25), Color.purple.opacity(0.5), Color.purple),
+        (Color.orange.opacity(0.25), Color.orange.opacity(0.5), Color.orange),
+        (Color.pink.opacity(0.25), Color.pink.opacity(0.5), Color.pink)
     ]
     
     // Get consistent color based on interest name hash

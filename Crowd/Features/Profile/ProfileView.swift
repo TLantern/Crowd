@@ -173,13 +173,12 @@ struct ProfileView: View {
 
     // MARK: - Stats Row
     private var statsRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                statCard(title: "Hosted", value: "\(viewModel.hostedCount)")
-                statCard(title: "Joined", value: "\(viewModel.joinedCount)")
-                statCard(title: "Upcoming", value: "\(viewModel.upcomingEventsCount)")
-            }
+        HStack(spacing: 12) {
+            statCard(title: "Hosted", value: "\(viewModel.hostedCount)")
+            statCard(title: "Joined", value: "\(viewModel.joinedCount)")
+            statCard(title: "Upcoming", value: "\(viewModel.upcomingEventsCount)")
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func statCard(title: String, value: String) -> some View {
@@ -307,7 +306,7 @@ struct AttendedEventRow: View {
                     .foregroundColor(.green)
                     .font(.system(size: 14))
                 
-                Text("Attended")
+                Text("Attending")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.green)
             }

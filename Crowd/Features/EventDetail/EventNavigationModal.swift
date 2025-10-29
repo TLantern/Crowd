@@ -90,10 +90,19 @@ struct EventNavigationModal: View {
 
                             // Center title: emoji + event name
                             Text("\(eventEmoji) \(event.title)")
-                                .font(.custom("Inter-Bold", size: 32))
+                                .font(.custom("Lato-Bold", size: 32))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
+                                .overlay(
+                                    Text("\(eventEmoji) \(event.title)")
+                                        .font(.custom("Lato-Bold", size: 32))
+                                        .foregroundColor(.black.opacity(0.3))
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                        .offset(x: 1, y: 1)
+                                        .blendMode(.multiply)
+                                )
 
                             HStack {
                                 Spacer()
