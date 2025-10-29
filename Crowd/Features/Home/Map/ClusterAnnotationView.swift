@@ -44,6 +44,7 @@ struct ClusterAnnotationView: View {
                             
                             Text(badgeText)
                                 .font(.system(size: 12, weight: .bold))
+                                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                                 .foregroundColor(.black)
                         }
                         .offset(x: 10, y: -10)
@@ -54,6 +55,11 @@ struct ClusterAnnotationView: View {
                 .scaleEffect(0.75) // Match EventAnnotationView scale
             }
         }
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityLabel("Event cluster with \(cluster.eventCount) events")
+        .accessibilityHint("Double tap to expand and see individual events")
+        .accessibilityAddTraits(.isButton)
         .onTapGesture {
             print("📍 Cluster tapped: \(cluster.eventCount) events")
             onTap()
@@ -152,44 +158,5 @@ struct ClusterAnnotationView: View {
         )
     }
     .padding()
-}
-
-// MARK: - Expanded Event View
-private struct ExpandedEventView: View {
-    let event: CrowdEvent
-    let index: Int
-    let totalCount: Int
-    let expansionRadius: CGFloat
-    let animationTrigger: Bool
-    let onEventTap: (CrowdEvent) -> Void
-    
-    private var angle: Double {
-        (2.0 * .pi * Double(index)) / Double(totalCount)
-    }
-    
-    private var xOffset: CGFloat {
-        expansionRadius * cos(angle)
-    }
-    
-    private var yOffset: CGFloat {
-        expansionRadius * sin(angle)
-    }
-    
-    var body: some View {
-        EventAnnotationView(event: event, isInExpandedCluster: true)
-            .contentShape(Circle())
-            .onTapGesture {
-                print("📍 Event tapped in expanded cluster: \(event.title)")
-                onEventTap(event)
-            }
-            .offset(
-                x: animationTrigger ? xOffset : 0,
-                y: animationTrigger ? yOffset : 0
-            )
-            .scaleEffect(animationTrigger ? 1.0 : 0.8)
-            .opacity(animationTrigger ? 1.0 : 0.0)
-            .animation(.easeOut(duration: 0.3), value: animationTrigger)
-            .zIndex(Double(100 + index))
-    }
 }
 
