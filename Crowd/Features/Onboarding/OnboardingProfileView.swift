@@ -104,7 +104,21 @@ struct OnboardingProfileView: View {
 
                             Menu {
                                 Button("UNT") { selectedCampus = "UNT" }
-                                Button("SMU") { selectedCampus = "SMU" }
+                                
+                                Divider()
+                                
+                                Text("UT Dallas (coming soon)")
+                                    .disabled(true)
+                                Text("UT Arlington (coming soon)")
+                                    .disabled(true)
+                                Text("UT Austin (coming soon)")
+                                    .disabled(true)
+                                Text("UT San Antonio (coming soon)")
+                                    .disabled(true)
+                                Text("University of Houston (coming soon)")
+                                    .disabled(true)
+                                Text("Texas State University (coming soon)")
+                                    .disabled(true)
                             } label: {
                                 HStack {
                                     Text(selectedCampus.isEmpty ? "Campus" : selectedCampus)
