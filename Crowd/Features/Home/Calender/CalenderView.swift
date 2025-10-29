@@ -192,11 +192,8 @@ struct EventCardView: View {
                         }
                         // Always show time (from event starts/ends) directly below meta
                         if let startsAt = event.startsAt {
-                            var timeText = formatEventTime(startsAt)
-                            if let endsAt = event.endsAt {
-                                timeText += " – " + formatEventTime(endsAt)
-                            }
-                            Text(timeText)
+                            let endText = event.endsAt.map { " – " + formatEventTime($0) } ?? ""
+                            Text(formatEventTime(startsAt) + endText)
                                 .font(.system(size: 14))
                                 .foregroundStyle(.secondary)
                         }
