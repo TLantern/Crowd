@@ -58,7 +58,7 @@ struct TagPillView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .foregroundStyle(colorScheme.text)
+            .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(colorScheme.background, in: Capsule())

@@ -143,25 +143,7 @@ struct ProfileView: View {
             Text(viewModel.handle)
                 .font(.system(size: 18, weight: .bold))
 
-            // bio -> editable in edit mode, black in read mode
-            if viewModel.isEditMode {
-                TextEditor(text: $viewModel.bio)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .frame(minHeight: 60, maxHeight: 100)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.18), lineWidth: 1))
-                    .submitLabel(.done)
-            } else {
-                Text(viewModel.bio)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-                    .padding(.horizontal, 20)
-            }
+            // bio removed
 
             Text(viewModel.affiliation)
                 .font(.system(size: 14))
