@@ -49,8 +49,10 @@ struct EventDetailView: View {
                     Button {
                         showCancelConfirmation = true
                     } label: {
-                        Text("🗑️")
+                        Image(systemName: "trash.circle.fill")
                             .font(.system(size: 28))
+                            .foregroundColor(.red)
+                            .background(Circle().fill(Color(.systemBackground)))
                     }
                     .padding(.trailing, 16)
                     .padding(.top, 8)
