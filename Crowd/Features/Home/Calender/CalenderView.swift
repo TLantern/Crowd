@@ -200,38 +200,23 @@ struct EventCardView: View {
                                 .font(.system(size: 14))
                                 .foregroundStyle(.secondary)
                         }
-                        // Only when expanded, reveal the remaining description lines
-                        if isExpanded && lines.count > 1 {
-                            Text(lines.dropFirst().joined(separator: "\n"))
+                        // Only when expanded, reveal additional description lines beyond location/org and time
+                        if isExpanded && lines.count > 2 {
+                            Text(lines.dropFirst(2).joined(separator: "\n"))
                                 .font(.system(size: 14))
                                 .foregroundStyle(.secondary)
+                                .padding(.top, 4)
                         }
                     }
                 }
                 
                 Spacer()
                 
-                HStack(spacing: 8) {
-                    VStack(alignment: .trailing, spacing: 4) {
-                        if let startsAt = event.startsAt {
-                            Text(formatEventTime(startsAt))
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.black)
-                        }
-                        
-                        if let endsAt = event.endsAt {
-                            Text(formatEventTime(endsAt))
-                                .font(.system(size: 10, weight: .regular))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    // Grey arrow indicating clickable
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                }
+                // Grey arrow indicating clickable
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
             
             // Event URL section (shown when expanded)
