@@ -42,10 +42,14 @@ struct EventNavigationModal: View {
         NavigationView {
             GeometryReader { geo in
                 VStack(spacing: 0) {
+                    // Top area with green background
+                    Color(hex: 0x02853E)
+                        .frame(height: 40)
+                        .ignoresSafeArea(edges: .top)
+                    
                     // Top map route view (dynamic)
                     RouteMapView(destination: event.coordinates, userCoordinate: userLocation)
-                    .frame(height: isChatMinimized ? geo.size.height * 0.85 : geo.size.height * 0.5)
-                    .padding(.top, 40)
+                    .frame(height: isChatMinimized ? geo.size.height * 0.85 - 40 : geo.size.height * 0.5 - 40)
 
                     // Bottom (chat) - adjustable by splitter
                     VStack(spacing: 0) {
