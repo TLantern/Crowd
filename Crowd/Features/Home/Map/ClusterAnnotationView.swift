@@ -17,12 +17,28 @@ struct ClusterAnnotationView: View {
     
     @State private var animationTrigger = false
     
-    // Convert 20 meters to screen points based on map zoom
+    // Convert meters to screen points based on map zoom and cluster size
     private var expansionRadius: CGFloat {
         // Approximate conversion: at 1000m altitude, ~1 meter = 0.3 points
-        // This is a simplified formula - adjust based on testing
         let metersToPoints = 1000.0 / cameraDistance * 0.3
-        return CGFloat(20.0 * metersToPoints)
+        
+        // Scale radius based on event count to prevent overlap
+        // More events = larger circle for better spacing and clickability
+        let baseRadius: Double = {
+            switch cluster.eventCount {
+            case 1...3: return 20.0
+            case 4...6: return 30.0
+            case 7...9: return 40.0
+            default: return 50.0  // 10+ events
+            }
+        }()
+        
+        return CGFloat(baseRadius * metersToPoints)
+    }
+    
+    // Badge text showing count or "9+" for 10+
+    private var badgeText: String {
+        cluster.eventCount > 9 ? "9+" : "\(cluster.eventCount)"
     }
     
     var body: some View {
@@ -35,6 +51,7 @@ struct ClusterAnnotationView: View {
                     let yOffset = expansionRadius * sin(angle)
                     
                     EventAnnotationView(event: event, isInExpandedCluster: true)
+                        .contentShape(Circle())
                         .onTapGesture {
                             print("📍 Event tapped in expanded cluster: \(event.title)")
                             onEventTap(event)
@@ -46,7 +63,7 @@ struct ClusterAnnotationView: View {
                     .scaleEffect(animationTrigger ? 1.0 : 0.8)
                     .opacity(animationTrigger ? 1.0 : 0.0)
                     .animation(.easeOut(duration: 0.3), value: animationTrigger)
-                    .zIndex(10)
+                    .zIndex(100 + index)
                 }
             } else {
                 // Collapsed: Show single cluster pin
@@ -70,7 +87,7 @@ struct ClusterAnnotationView: View {
                                         .stroke(Color.red, lineWidth: 2)
                                         .frame(width: 24, height: 24)
                                     
-                                    Text("\(cluster.eventCount)")
+                                    Text(badgeText)
                                         .font(.system(size: 12, weight: .bold))
                                         .foregroundColor(.black)
                                 }
