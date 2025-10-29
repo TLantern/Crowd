@@ -208,12 +208,6 @@ struct EventCardView: View {
                 }
                 
                 Spacer()
-                
-                // Grey arrow indicating clickable
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
             
             // Event URL section (shown when expanded)
