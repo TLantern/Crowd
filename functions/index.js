@@ -353,6 +353,69 @@ exports.getEventsInRegion = functions.https.onCall(async (data, context) => {
   }
 });
 
+// Scheduled cleanup: delete chats for events that have ended
+exports.cleanupExpiredEventChats = functions.pubsub
+  .schedule('every 30 minutes')
+  .timeZone('Etc/UTC')
+  .onRun(async (context) => {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const expiredEventIds = new Set();
+
+    function normalizeEndsAt(endsAt) {
+      if (!endsAt) return null;
+      if (typeof endsAt === 'number') return endsAt;
+      if (endsAt._seconds) return endsAt._seconds; // Firestore Timestamp object
+      return null;
+    }
+
+    async function collectExpired(collectionName) {
+      const snapshot = await db.collection(collectionName).get();
+      snapshot.forEach(doc => {
+        const endsAt = normalizeEndsAt(doc.data().endsAt);
+        if (endsAt && endsAt < nowSeconds) {
+          expiredEventIds.add(doc.id);
+        }
+      });
+    }
+
+    // Gather expired events from both sources
+    await Promise.all([
+      collectExpired('events'),
+      collectExpired('userEvents'),
+    ]);
+
+    if (expiredEventIds.size === 0) {
+      console.log('🧹 No expired events found for chat cleanup');
+      return null;
+    }
+
+    console.log(`🧹 Cleaning chats for ${expiredEventIds.size} expired event(s)`);
+
+    async function deleteEventChat(eventId) {
+      const messagesRef = db.collection('eventChats').doc(eventId).collection('messages');
+      const batchSize = 500;
+      let deletedTotal = 0;
+
+      while (true) {
+        const snap = await messagesRef.limit(batchSize).get();
+        if (snap.empty) break;
+        const batch = db.batch();
+        snap.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        deletedTotal += snap.size;
+        if (snap.size < batchSize) break;
+      }
+
+      // Delete the parent chat doc if it exists
+      await db.collection('eventChats').doc(eventId).delete().catch(() => {});
+      console.log(`🗑️ Deleted ${deletedTotal} message(s) and chat doc for event ${eventId}`);
+    }
+
+    await Promise.all(Array.from(expiredEventIds).map(deleteEventChat));
+    console.log('✅ Chat cleanup complete');
+    return null;
+  });
+
 // Delete an event
 exports.deleteEvent = functions.https.onCall(async (data, context) => {
   try {

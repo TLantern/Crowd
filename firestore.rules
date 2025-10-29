@@ -58,7 +58,7 @@ service cloud.firestore {
       
       // Authenticated users can create messages
       allow create: if request.auth != null
-                    && request.auth.uid == resource.data.userId;
+                    && request.auth.uid == request.resource.data.userId;
       
       // Users can only update/delete their own messages
       allow update, delete: if request.auth != null

@@ -24,6 +24,8 @@ struct EventNavigationModal: View {
     @State private var bearingToEvent: Double = 0
     @State private var compassRotation: Double = 0
     @State private var locationUpdateTimer: Timer?
+    @State private var chatHeightRatio: CGFloat = 0.4 // 40% chat by default
+    @State private var dragStartRatio: CGFloat = 0.4
     
     @EnvironmentObject private var appState: AppState
     @FocusState private var isChatFocused: Bool
@@ -38,9 +40,10 @@ struct EventNavigationModal: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Top 1/3: Compass View
-                VStack(spacing: 20) {
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    // Top (compass/direction) - adjustable by splitter
+                    VStack(spacing: 20) {
                     // Compass
                     ZStack {
                         // Compass background circle
@@ -63,6 +66,12 @@ struct EventNavigationModal: View {
                             .foregroundColor(.red)
                             .offset(y: -100)
                         
+                        // Event direction marker (emoji) on perimeter
+                        Text(eventEmoji)
+                            .font(.system(size: 18))
+                            .rotationEffect(.degrees(compassRotation))
+                            .offset(y: -110)
+                        
                         // Direction arrow
                         Image(systemName: "arrow.up")
                             .font(.system(size: 40, weight: .bold))
@@ -80,12 +89,33 @@ struct EventNavigationModal: View {
                             .font(.system(size: 16))
                             .foregroundColor(.secondary)
                     }
-                }
-                .frame(maxHeight: .infinity)
-                .padding(.top, 40)
-                
-                // Bottom 2/3: Chat View
-                VStack(spacing: 0) {
+                    }
+                    .frame(height: max(0, geo.size.height * (1 - chatHeightRatio)))
+                    .padding(.top, 40)
+
+                    // Splitter handle
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 8)
+                        .overlay(
+                            Capsule()
+                                .fill(Color.secondary.opacity(0.5))
+                                .frame(width: 64, height: 4)
+                        )
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let delta = value.translation.height / geo.size.height
+                                    let computed = dragStartRatio + delta
+                                    chatHeightRatio = min(max(computed, 0.2), 0.85)
+                                }
+                                .onEnded { _ in
+                                    dragStartRatio = chatHeightRatio
+                                }
+                        )
+
+                    // Bottom (chat) - adjustable by splitter
+                    VStack(spacing: 0) {
                     // Chat header
                     HStack {
                         Text("Event Chat")
@@ -149,10 +179,10 @@ struct EventNavigationModal: View {
                     .padding(.horizontal)
                     .padding(.vertical, 12)
                     .background(.ultraThinMaterial)
+                    .frame(height: max(0, geo.size.height * chatHeightRatio))
                 }
-                .frame(maxHeight: .infinity)
+                .navigationBarHidden(true)
             }
-            .navigationBarHidden(true)
         }
         .onAppear {
             startLocationUpdates()
@@ -193,6 +223,13 @@ struct EventNavigationModal: View {
         case 292..<338: return "Northwest"
         default: return "Unknown"
         }
+    }
+    
+    private var eventEmoji: String {
+        if let category = event.category, let cat = EventCategory(rawValue: category) {
+            return cat.emoji
+        }
+        return EventCategory.other.emoji
     }
     
     private func startLocationUpdates() {

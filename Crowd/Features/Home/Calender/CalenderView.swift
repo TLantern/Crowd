@@ -253,7 +253,7 @@ struct EventCardView: View {
                             UIApplication.shared.open(url)
                         }
                     }) {
-                        Text("RSVP/Tickets")
+                        Text("More Info")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white)
                             .padding(.horizontal, 12)
