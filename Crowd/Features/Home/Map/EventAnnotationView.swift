@@ -25,7 +25,7 @@ struct EventAnnotationView: View {
     }
     
     var scaleMultiplier: CGFloat {
-        isInExpandedCluster ? 0.65 : 0.75
+        isInExpandedCluster ? 0.5 : 0.75  // Shrink to 50% when expanded
     }
 
     var body: some View {

@@ -15,6 +15,8 @@ struct ClusterAnnotationView: View {
     let onTap: () -> Void
     let onEventTap: (CrowdEvent) -> Void
     
+    @State private var isPulsing = false
+    
     // Badge text showing count or "9+" for 10+
     private var badgeText: String {
         cluster.eventCount > 9 ? "9+" : "\(cluster.eventCount)"
@@ -57,12 +59,28 @@ struct ClusterAnnotationView: View {
         }
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
+        .scaleEffect(isPulsing ? 1.15 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPulsing)
         .accessibilityLabel("Event cluster with \(cluster.eventCount) events")
         .accessibilityHint("Double tap to expand and see individual events")
         .accessibilityAddTraits(.isButton)
         .onTapGesture {
+            // Pulse animation on tap
+            isPulsing = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                isPulsing = false
+            }
             print("📍 Cluster tapped: \(cluster.eventCount) events")
             onTap()
+        }
+        .onChange(of: isExpanded) { _, newValue in
+            // Pulse when expanding
+            if newValue {
+                isPulsing = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    isPulsing = false
+                }
+            }
         }
     }
 }

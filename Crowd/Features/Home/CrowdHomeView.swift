@@ -69,10 +69,10 @@ struct CrowdHomeView: View {
     // MARK: - Expansion Radius Helper
     private func expansionRadius(for cluster: EventCluster) -> CGFloat {
         switch cluster.eventCount {
-        case 1...3: return 60.0
-        case 4...6: return 95.0
-        case 7...9: return 130.0
-        default: return 165.0
+        case 1...3: return 35.0   // Tight circle for small clusters
+        case 4...6: return 50.0   // Slightly larger for medium
+        case 7...9: return 65.0   // Moderate expansion for large
+        default: return 80.0      // Max radius for 10+ events
         }
     }
     
@@ -201,7 +201,20 @@ struct CrowdHomeView: View {
                     .onChange(of: selectedRegion) { _, new in snapTo(new) }
                     .onMapCameraChange { ctx in
                         currentCamera = ctx.camera
+                        let previousDistance = currentCameraDistance
                         currentCameraDistance = ctx.camera.distance
+                        
+                        // Auto-collapse expanded clusters when zooming out significantly
+                        if expandedClusterId != nil {
+                            let zoomOutThreshold = 1.5 // Collapse if user zooms out 50% or more
+                            if currentCameraDistance > previousDistance * zoomOutThreshold {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    expandedClusterId = nil
+                                }
+                                print("📍 Auto-collapsed cluster due to zoom out")
+                            }
+                        }
+                        
                         let spec = selectedRegion.spec
                         let clamped = min(max(ctx.camera.distance, spec.minZoom), spec.maxZoom)
                         if abs(clamped - ctx.camera.distance) > 1 {
