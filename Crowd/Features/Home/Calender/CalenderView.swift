@@ -155,13 +155,9 @@ struct EventCardView: View {
     @State private var isAttending = false
     @State private var isExpanded = false
     @State private var showEventURL = false
-    @State private var showEventDetail = false
     
     var body: some View {
-        Button(action: {
-            showEventDetail = true
-        }) {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     if let sourceURL = event.sourceURL {
@@ -186,10 +182,30 @@ struct EventCardView: View {
                         .lineLimit(2)
                     
                     if let description = event.description {
-                        Text(description)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(isExpanded ? nil : 2)
+                        // Meta line (location • org) always
+                        let lines = description.components(separatedBy: "\n")
+                        if let first = lines.first {
+                            Text(first)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        // Always show time (from event starts/ends) directly below meta
+                        if let startsAt = event.startsAt {
+                            var timeText = formatEventTime(startsAt)
+                            if let endsAt = event.endsAt {
+                                timeText += " – " + formatEventTime(endsAt)
+                            }
+                            Text(timeText)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
+                        // Only when expanded, reveal the remaining description lines
+                        if isExpanded && lines.count > 1 {
+                            Text(lines.dropFirst().joined(separator: "\n"))
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 
@@ -214,6 +230,7 @@ struct EventCardView: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
             }
             
@@ -337,13 +354,15 @@ struct EventCardView: View {
             )
             .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         }
-        .buttonStyle(PlainButtonStyle())
-        .sheet(isPresented: $showEventDetail) {
-            EventDetailView(event: event)
-        }
         .onAppear {
             // Check if user is already attending this event
             isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isExpanded.toggle()
+            }
         }
     }
     

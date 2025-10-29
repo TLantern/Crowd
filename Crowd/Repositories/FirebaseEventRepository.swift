@@ -81,7 +81,7 @@ final class FirebaseEventRepository: EventRepository {
             "startsAt": event.startsAt?.timeIntervalSince1970 ?? Date().timeIntervalSince1970,
             "endsAt": event.endsAt?.timeIntervalSince1970,
             "tags": event.tags,
-            "category": event.category ?? "hangout",
+            "category": event.category ?? EventCategory.other.rawValue,
             "geohash": geohash,
             "hostId": event.hostId,
             "hostName": event.hostName,

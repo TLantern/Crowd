@@ -42,7 +42,7 @@ struct EditEventSheet: View {
         _title = State(initialValue: event.title)
         _coord = State(initialValue: CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude))
         _locationName = State(initialValue: "") // Will be geocoded or set from event
-        _category = State(initialValue: EventCategory(rawValue: event.category ?? "hangout") ?? .hangout)
+        _category = State(initialValue: EventCategory(rawValue: event.category ?? EventCategory.other.rawValue) ?? .other)
         _startDate = State(initialValue: event.startsAt ?? Date())
         _endDate = State(initialValue: event.endsAt ?? Date().addingTimeInterval(3600))
         _eventDescription = State(initialValue: event.description ?? "")
@@ -435,7 +435,7 @@ struct EditLocationPickerView: View {
             signalStrength: 5,
             attendeeCount: 10,
             tags: ["test"],
-            category: "hangout",
+            category: EventCategory.other.rawValue,
             description: "Test description"
         )
     ) { _ in
