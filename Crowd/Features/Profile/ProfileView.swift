@@ -156,9 +156,9 @@ struct ProfileView: View {
     // MARK: - Stats Row
     private var statsRow: some View {
         HStack(spacing: 12) {
-            statCard(title: "Hosted", value: "\(viewModel.hostedCount)")
-            statCard(title: "Joined", value: "\(viewModel.joinedCount)")
-            statCard(title: "Upcoming", value: "\(viewModel.upcomingEventsCount)")
+            statCard(title: "Hosted", value: "0")
+            statCard(title: "Joined", value: "0")
+            statCard(title: "Upcoming", value: "0")
         }
         .frame(maxWidth: .infinity)
     }
@@ -198,6 +198,7 @@ struct ProfileView: View {
                 }
             }
         }
+        .padding(.bottom, 12)
     }
     
     // MARK: - Attending Events Section
