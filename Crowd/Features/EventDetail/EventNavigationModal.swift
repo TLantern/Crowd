@@ -486,11 +486,6 @@ struct EventNavigationModal: View {
                     
                     // Close the keyboard
                     isChatFocused = false
-                    
-                    // Reset chat to minimized state (first state)
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-                        isChatMinimized = true
-                    }
                 }
             } catch {
                 print("❌ Failed to send message: \(error.localizedDescription)")
