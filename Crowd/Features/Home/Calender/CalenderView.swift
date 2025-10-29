@@ -135,8 +135,7 @@ struct CalenderView: View {
                 }
             }
             .onAppear {
-                // Use energy-friendly one-time fetch for calendar
-                Task { await campusEventsVM.fetchOnce(limit: 25) }
+                campusEventsVM.start()
                 // Refresh attended events to clean up expired ones
                 AttendedEventsService.shared.refreshAttendedEvents()
             }
