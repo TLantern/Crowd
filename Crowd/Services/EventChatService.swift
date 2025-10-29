@@ -108,6 +108,16 @@ final class EventChatService: ObservableObject {
     func sendMessage(eventId: String, text: String, userId: String, userName: String) async throws {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
+        // Check authentication state before sending
+        guard let currentUser = FirebaseManager.shared.auth.currentUser else {
+            print("❌ EventChatService: No authenticated user found")
+            throw NSError(domain: "EventChatService", code: 401, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])
+        }
+        
+        print("🔍 EventChatService: Sending message with userId: \(userId)")
+        print("🔍 EventChatService: Current auth user: \(currentUser.uid)")
+        print("🔍 EventChatService: Is anonymous: \(currentUser.isAnonymous)")
+        
         let messageData: [String: Any] = [
             "userId": userId,
             "userName": userName,
@@ -124,6 +134,7 @@ final class EventChatService: ObservableObject {
             print("✅ EventChatService: Message sent successfully")
         } catch {
             print("❌ EventChatService: Failed to send message - \(error.localizedDescription)")
+            print("❌ EventChatService: Error details - \(error)")
             throw error
         }
     }
