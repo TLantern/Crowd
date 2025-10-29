@@ -21,6 +21,7 @@ final class CampusEventsViewModel: ObservableObject {
         print("🔄 CampusEventsViewModel: Starting listener for campus_events_live collection")
 
         listener = db.collection("campus_events_live")
+            .limit(to: 10)
             .addSnapshotListener { [weak self] snap, err in
                 guard let self = self else { return }
                 
@@ -63,9 +64,6 @@ final class CampusEventsViewModel: ObservableObject {
                 }
 
                 print("🎯 CampusEventsViewModel: Final mapped events count: \(mapped.count)")
-                for event in mapped {
-                    print("   - \(event.title) (starts: \(event.startsAt?.description ?? "nil"))")
-                }
                 
                 let previousCount = self.crowdEvents.count
                 self.crowdEvents = mapped
