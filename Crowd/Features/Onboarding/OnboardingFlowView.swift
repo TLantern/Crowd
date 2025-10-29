@@ -53,7 +53,11 @@ struct OnboardingFlowView: View {
             
             // Interests Selection Screen
             if currentStep == .interests {
-                InterestsView { interests in
+                InterestsView(onBack: {
+                    withAnimation(.easeInOut(duration: 0.6)) {
+                        currentStep = .profile
+                    }
+                }) { interests in
                     selectedInterests = interests
                     Task {
                         await saveProfileToFirebase()

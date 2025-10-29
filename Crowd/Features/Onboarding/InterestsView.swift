@@ -12,6 +12,7 @@ struct InterestsView: View {
     @State private var currentPage = 0
     
     let onNext: ([String]) -> Void
+    let onBack: (() -> Void)?
     
     let interests: [(emoji: String, title: String)] = [
         ("🎮", "Gaming"),
@@ -130,21 +131,41 @@ struct InterestsView: View {
                                 startAutoRotation()
                             }
                             
-                            Button {
-                                onNext(Array(selectedInterests))
-                            } label: {
-                                Text("Next →")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .padding(.vertical, 14)
-                                    .frame(maxWidth: .infinity)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 24)
-                                            .fill(Color.white)
-                                    )
-                                    .foregroundColor(.black)
+                            HStack(spacing: 12) {
+                                // Back Button
+                                if let onBack = onBack {
+                                    Button {
+                                        onBack()
+                                    } label: {
+                                        Text("← Back")
+                                            .font(.system(size: 18, weight: .medium))
+                                            .padding(.vertical, 14)
+                                            .frame(maxWidth: .infinity)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 24)
+                                                    .fill(Color.white.opacity(0.7))
+                                            )
+                                            .foregroundColor(.black)
+                                    }
+                                }
+                                
+                                // Next Button
+                                Button {
+                                    onNext(Array(selectedInterests))
+                                } label: {
+                                    Text("Next →")
+                                        .font(.system(size: 18, weight: .medium))
+                                        .padding(.vertical, 14)
+                                        .frame(maxWidth: .infinity)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 24)
+                                                .fill(Color.white)
+                                        )
+                                        .foregroundColor(.black)
+                                }
+                                .disabled(selectedInterests.isEmpty)
+                                .opacity(selectedInterests.isEmpty ? 0.5 : 1.0)
                             }
-                            .disabled(selectedInterests.isEmpty)
-                            .opacity(selectedInterests.isEmpty ? 0.5 : 1.0)
                         }
                         .padding(24)
                     )
@@ -158,7 +179,7 @@ struct InterestsView: View {
     
     // MARK: - Auto Rotation
     private func startAutoRotation() {
-        Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
             withAnimation(.easeInOut(duration: 0.5)) {
                 currentPage = (currentPage + 1) % interestPages.count
             }
@@ -200,7 +221,9 @@ struct InterestChip: View {
 }
 
 #Preview {
-    InterestsView { interests in
+    InterestsView(onBack: {
+        print("Back tapped")
+    }) { interests in
         print("Selected interests: \(interests)")
     }
 }
