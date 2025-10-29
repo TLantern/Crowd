@@ -202,6 +202,15 @@ final class UserProfileService {
         
         return profile
     }
+
+    // MARK: - Handle Availability
+    func isHandleAvailable(_ handle: String) async throws -> Bool {
+        let snapshot = try await db.collection("users")
+            .whereField("handle", isEqualTo: handle)
+            .limit(to: 1)
+            .getDocuments()
+        return snapshot.documents.isEmpty
+    }
     
     func fetchProfiles(userIds: [String]) async throws -> [UserProfile] {
         return try await withThrowingTaskGroup(of: UserProfile.self) { group in

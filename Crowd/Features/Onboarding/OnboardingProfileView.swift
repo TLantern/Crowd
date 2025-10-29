@@ -15,6 +15,8 @@ struct OnboardingProfileView: View {
     @State private var showingImagePicker = false
     @State private var showingCropper = false
     @State private var tempImage: UIImage?
+    @State private var isCheckingHandle = false
+    @State private var usernameError: String?
     
     let onNext: () -> Void
     
@@ -135,7 +137,34 @@ struct OnboardingProfileView: View {
                                 )
                             }
 
-                            Button(action: onNext) {
+                            Button(action: {
+                                usernameError = nil
+                                let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !trimmed.isEmpty else {
+                                    usernameError = "Enter a username"
+                                    return
+                                }
+                                isCheckingHandle = true
+                                let handle = "@" + trimmed.lowercased().replacingOccurrences(of: " ", with: "")
+                                Task {
+                                    do {
+                                        let available = try await UserProfileService.shared.isHandleAvailable(handle)
+                                        await MainActor.run {
+                                            isCheckingHandle = false
+                                            if available {
+                                                onNext()
+                                            } else {
+                                                usernameError = "That username is taken. Choose another."
+                                            }
+                                        }
+                                    } catch {
+                                        await MainActor.run {
+                                            isCheckingHandle = false
+                                            usernameError = "Could not verify username right now. Try again."
+                                        }
+                                    }
+                                }
+                            }) {
                                 Text("Next →")
                                     .font(.system(size: 18, weight: .medium))
                                     .padding(.vertical, 14)
@@ -145,6 +174,14 @@ struct OnboardingProfileView: View {
                                             .fill(Color.white)
                                     )
                                     .foregroundColor(.black)
+                            }
+                            .disabled(isCheckingHandle)
+                            .opacity(isCheckingHandle ? 0.6 : 1.0)
+                            
+                            if let usernameError = usernameError {
+                                Text(usernameError)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.red)
                             }
                         }
                         .padding(24)
