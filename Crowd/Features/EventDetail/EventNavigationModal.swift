@@ -24,6 +24,7 @@ struct EventNavigationModal: View {
     @State private var bearingToEvent: Double = 0
     @State private var compassRotation: Double = 0
     @State private var locationUpdateTimer: Timer?
+    @State private var keyboardHeight: CGFloat = 0
     
     @EnvironmentObject private var appState: AppState
     @FocusState private var isChatFocused: Bool
@@ -99,17 +100,17 @@ struct EventNavigationModal: View {
                                 .focused($isChatFocused)
                             
                             Button {
-                                // Posting disabled per requirement
+                                sendMessage()
                             } label: {
                                 Image(systemName: "arrow.up.circle.fill")
                                     .font(.system(size: 32))
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(chatMessage.isEmpty ? .gray : Color(hex: 0x02853E))
                             }
-                            .disabled(true)
+                            .disabled(chatMessage.isEmpty)
                         }
                         .padding(.horizontal)
                         .padding(.vertical, 12)
-                        .padding(.bottom, 12) // move input up from bottom
+                        .padding(.bottom, max(12, keyboardHeight > 0 ? keyboardHeight - 20 : 12))
                         .background(.ultraThinMaterial)
                     }
                     .frame(height: geo.size.height * 0.5)
@@ -146,6 +147,14 @@ struct EventNavigationModal: View {
         }
         .onChange(of: bearingToEvent) { _, newBearing in
             updateCompassRotation()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+            if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                keyboardHeight = keyboardFrame.height
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardHeight = 0
         }
     }
     
