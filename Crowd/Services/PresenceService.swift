@@ -22,7 +22,7 @@ actor PresenceService {
     func heartbeat(userId: String, at coordinate: CLLocationCoordinate2D) async {
         // For now, we'll use the presence collection in Firestore
         // This can be used to show real-time user locations
-        let db = FirebaseManager.shared.db
+        let db = await FirebaseManager.shared.db
         
         let data: [String: Any] = [
             "userId": userId,

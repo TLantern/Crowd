@@ -41,9 +41,8 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     }
     var description = descPieces.joined(separator: " • ")
 
-    // parse start/end
-    let startsAtDate = isoToDate(live.startTimeLocal)
-    let endsAtDate   = isoToDate(live.endTimeLocal)
+    // parse start/end from the time range string
+    let (startsAtDate, endsAtDate) = parseTimeRange(live.startTimeLocal)
 
     if let startsAtDate {
         let fmt = DateFormatter()
@@ -67,7 +66,7 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     // Use clean title without emoji
     let displayTitle = rawTitle
 
-    let ev = CrowdEvent.newDraft(
+    var ev = CrowdEvent.newDraft(
         at: fallbackCoord,
         title: displayTitle,
         hostId: live.sourceOrg,
@@ -79,28 +78,37 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
         tags: tags,
         sourceURL: live.sourceUrl
     )
-
+    // Use source document id when available so the same event keeps a stable id across fetches
+    if let liveId = live.id, !liveId.isEmpty { ev.id = liveId }
     return ev
 }
 
-// ISO8601 -> Date helper
-private func isoToDate(_ iso: String?) -> Date? {
-    guard let iso = iso else { return nil }
-
-    // First with fractional seconds
-    let fmt = ISO8601DateFormatter()
-    fmt.formatOptions = [
-        .withInternetDateTime,
-        .withFractionalSeconds,
-        .withColonSeparatorInTimeZone
-    ]
-    if let d = fmt.date(from: iso) { return d }
-
-    // Fallback without fractional seconds
-    let fmt2 = ISO8601DateFormatter()
-    fmt2.formatOptions = [
-        .withInternetDateTime,
-        .withColonSeparatorInTimeZone
-    ]
-    return fmt2.date(from: iso)
+// Parse time range string like "Tuesday, October 28, 2025 at 10:00 AM to Tuesday, October 28, 2025 at 11:00 AM"
+// or single time like "Tuesday, October 28, 2025 at 12:00 AM"
+private func parseTimeRange(_ timeString: String?) -> (start: Date?, end: Date?) {
+    guard let timeString = timeString else {
+        return (nil, nil)
+    }
+    
+    // Create formatter for the date format
+    let formatter = DateFormatter()
+    formatter.dateFormat = "EEEE, MMMM d, yyyy 'at' h:mm a"
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    
+    // Check if it's a range (contains " to ")
+    if timeString.contains(" to ") {
+        let components = timeString.components(separatedBy: " to ")
+        guard components.count == 2 else {
+            return (nil, nil)
+        }
+        
+        let startDate = formatter.date(from: components[0].trimmingCharacters(in: .whitespaces))
+        let endDate = formatter.date(from: components[1].trimmingCharacters(in: .whitespaces))
+        
+        return (startDate, endDate)
+    } else {
+        // Single time point
+        let date = formatter.date(from: timeString.trimmingCharacters(in: .whitespaces))
+        return (date, nil)
+    }
 }

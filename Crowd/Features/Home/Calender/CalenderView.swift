@@ -154,6 +154,12 @@ struct EventCardView: View {
     @State private var isAttending = false
     @State private var isExpanded = false
     @State private var showEventURL = false
+    private let emoji: String
+    
+    init(event: CrowdEvent) {
+        self.event = event
+        self.emoji = Self.getEventEmoji(for: event.tags)
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -165,11 +171,11 @@ struct EventCardView: View {
                                 UIApplication.shared.open(url)
                             }
                         }) {
-                            Text(getEventEmoji(for: event.tags))
+                            Text(emoji)
                                 .font(.system(size: 24))
                         }
                     } else {
-                        Text(getEventEmoji(for: event.tags))
+                        Text(emoji)
                             .font(.system(size: 24))
                     }
                 }
@@ -227,8 +233,7 @@ struct EventCardView: View {
                         Spacer()
                         
                         Button("Open") {
-                            // Open event URL
-                            if let url = URL(string: "https://example.com/event/\(event.id)") {
+                            if let src = event.sourceURL, let url = URL(string: src) {
                                 UIApplication.shared.open(url)
                             }
                         }
@@ -280,17 +285,27 @@ struct EventCardView: View {
                 Button(action: {
                     Task {
                         if !isAttending {
-                            // Join the event through the proper flow
-                            do {
-                                try await AppEnvironment.current.eventRepo.join(eventId: event.id, userId: FirebaseManager.shared.getCurrentUserId() ?? "")
+                            // If this is an external/live campus event (has sourceURL), record locally without backend join
+                            if event.sourceURL != nil {
                                 await MainActor.run {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         isAttending = true
                                         AttendedEventsService.shared.addAttendedEvent(event)
                                     }
                                 }
-                            } catch {
-                                print("❌ Failed to join event: \(error)")
+                            } else {
+                                // Backend-managed event
+                                do {
+                                    try await AppEnvironment.current.eventRepo.join(eventId: event.id, userId: FirebaseManager.shared.getCurrentUserId() ?? "")
+                                    await MainActor.run {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            isAttending = true
+                                            AttendedEventsService.shared.addAttendedEvent(event)
+                                        }
+                                    }
+                                } catch {
+                                    print("❌ Failed to join event: \(error)")
+                                }
                             }
                         } else {
                             // Remove from attended events
@@ -319,15 +334,15 @@ struct EventCardView: View {
                     )
                 }
             }
-            .padding(16)
-            .background(.ultraThinMaterial)
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(.primary.opacity(0.1), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         }
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(.primary.opacity(0.1), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         .onAppear {
             // Check if user is already attending this event
             isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
@@ -445,23 +460,20 @@ struct EventCardView: View {
         "official": "🏛️", "student": "🎓", "instagram": "📸", "social": "👥"
     ]
     
-    private func getEventEmoji(for tags: [String]) -> String {
+    private static func getEventEmoji(for tags: [String]) -> String {
         // Check for exact matches first
         for tag in tags {
             let lowercaseTag = tag.lowercased()
-            if let emoji = Self.tagEmojis[lowercaseTag] {
+            if let emoji = tagEmojis[lowercaseTag] {
                 return emoji
             }
         }
         
-        // Check for partial matches (only for first few tags to avoid performance issues)
-        let tagsToCheck = Array(tags.prefix(3))
-        for tag in tagsToCheck {
-            let lowercaseTag = tag.lowercased()
-            for (keyword, emoji) in Self.tagEmojis {
-                if lowercaseTag.contains(keyword) {
-                    return emoji
-                }
+        // Check for partial matches (only for first tag to minimize energy impact)
+        if let firstTag = tags.first {
+            let lowercaseTag = firstTag.lowercased()
+            for (keyword, emoji) in tagEmojis where lowercaseTag.contains(keyword) {
+                return emoji
             }
         }
         
