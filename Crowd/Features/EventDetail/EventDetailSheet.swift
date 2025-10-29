@@ -20,7 +20,6 @@ struct EventDetailView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showCancelConfirmation = false
     @State private var showNavigationModal = false
-    @State private var showEditSheet = false
     
     var currentUserName: String {
         appState.sessionUser?.displayName ?? "You"
@@ -43,23 +42,10 @@ struct EventDetailView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Edit and Cancel buttons for hosts
+            // Cancel button for hosts
             if isHost {
                 HStack {
                     Spacer()
-                    
-                    // Edit button
-                    Button {
-                        showEditSheet = true
-                    } label: {
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.blue)
-                            .background(Circle().fill(Color(.systemBackground)))
-                    }
-                    .padding(.trailing, 8)
-                    
-                    // Cancel button
                     Button {
                         showCancelConfirmation = true
                     } label: {
@@ -69,8 +55,8 @@ struct EventDetailView: View {
                             .background(Circle().fill(Color(.systemBackground)))
                     }
                     .padding(.trailing, 16)
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
             }
             
             ScrollView {
@@ -200,13 +186,6 @@ struct EventDetailView: View {
         }
         .fullScreenCover(isPresented: $showNavigationModal) {
             EventNavigationModal(event: event)
-        }
-        .sheet(isPresented: $showEditSheet) {
-            EditEventSheet(event: event) { updatedEvent in
-                // Update the local event state with new data
-                event = updatedEvent
-                print("✅ Event detail view updated with new data")
-            }
         }
     }
     
