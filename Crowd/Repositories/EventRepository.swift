@@ -13,5 +13,6 @@ protocol EventRepository {
     func create(event: CrowdEvent) async throws
     func join(eventId: String, userId: String) async throws
     func deleteEvent(eventId: String) async throws
+    func updateEvent(eventId: String, updates: [String: Any]) async throws
     func boostSignal(eventId: String, delta: Int) async throws
 }

@@ -49,6 +49,37 @@ actor MockEventRepository: EventRepository {
     func deleteEvent(eventId: String) async throws {
         store.removeValue(forKey: eventId)
     }
+    
+    func updateEvent(eventId: String, updates: [String: Any]) async throws {
+        guard var event = store[eventId] else {
+            throw CrowdError.custom("Event not found")
+        }
+        
+        // Update fields based on the updates dictionary
+        if let title = updates["title"] as? String {
+            event.title = title
+        }
+        if let latitude = updates["latitude"] as? Double {
+            event.latitude = latitude
+        }
+        if let longitude = updates["longitude"] as? Double {
+            event.longitude = longitude
+        }
+        if let category = updates["category"] as? String {
+            event.category = category
+        }
+        if let description = updates["description"] as? String {
+            event.description = description
+        }
+        if let startsAt = updates["startsAt"] as? TimeInterval {
+            event.startsAt = Date(timeIntervalSince1970: startsAt)
+        }
+        if let endsAt = updates["endsAt"] as? TimeInterval {
+            event.endsAt = Date(timeIntervalSince1970: endsAt)
+        }
+        
+        store[eventId] = event
+    }
 
     func boostSignal(eventId: String, delta: Int) async throws {
         guard var e = store[eventId] else { return }

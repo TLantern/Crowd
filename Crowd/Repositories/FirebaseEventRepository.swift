@@ -184,6 +184,55 @@ final class FirebaseEventRepository: EventRepository {
         print("✅ Event deleted from userEvents: \(eventId) (and \(signalsSnapshot.documents.count) signals)")
     }
     
+    func updateEvent(eventId: String, updates: [String: Any]) async throws {
+        print("✏️ Updating event in userEvents: \(eventId)")
+        
+        // SECURITY CHECK: Verify user is authenticated
+        guard let currentUserId = FirebaseManager.shared.getCurrentUserId() else {
+            print("❌ No authenticated user - cannot update event")
+            throw CrowdError.custom("User not authenticated")
+        }
+        
+        print("🔍 Current user ID: \(currentUserId)")
+        
+        // SECURITY CHECK: Fetch event and verify ownership
+        let eventDoc = try await db.collection("userEvents").document(eventId).getDocument()
+        
+        guard eventDoc.exists else {
+            print("❌ Event not found: \(eventId)")
+            throw CrowdError.custom("Event not found")
+        }
+        
+        let eventData = eventDoc.data() ?? [:]
+        let eventHostId = eventData["hostId"] as? String ?? ""
+        
+        print("🔍 Event host ID: \(eventHostId)")
+        
+        guard eventHostId == currentUserId else {
+            print("❌ User (\(currentUserId)) is not the host (\(eventHostId)) of event \(eventId)")
+            throw CrowdError.custom("Only the event host can edit this event")
+        }
+        
+        var finalUpdates = updates
+        
+        // Recalculate geohash if location changed
+        if let latitude = updates["latitude"] as? Double,
+           let longitude = updates["longitude"] as? Double {
+            let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            let geohash = coordinate.geohash(precision: 6)
+            finalUpdates["geohash"] = geohash
+            print("🔍 Recalculated geohash for new location: \(geohash)")
+        }
+        
+        // Add last updated timestamp
+        finalUpdates["updatedAt"] = Date().timeIntervalSince1970
+        
+        // Update the document in Firestore
+        try await db.collection("userEvents").document(eventId).updateData(finalUpdates)
+        
+        print("✅ Event updated successfully: \(eventId)")
+    }
+    
     func boostSignal(eventId: String, delta: Int) async throws {
         // Get current user's signal for this event
         let signalsSnapshot = try await db.collection("signals")
