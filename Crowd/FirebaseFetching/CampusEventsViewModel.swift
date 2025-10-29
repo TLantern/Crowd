@@ -21,6 +21,7 @@ final class CampusEventsViewModel: ObservableObject {
         print("🔄 CampusEventsViewModel: Starting listener for campus_events_live collection")
 
         listener = db.collection("campus_events_live")
+            .order(by: "startTimeLocal")
             .limit(to: 10)
             .addSnapshotListener { [weak self] snap, err in
                 guard let self = self else { return }
