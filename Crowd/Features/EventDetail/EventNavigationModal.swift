@@ -42,14 +42,26 @@ struct EventNavigationModal: View {
         NavigationView {
             GeometryReader { geo in
                 VStack(spacing: 0) {
-                    // Top area with green background
-                    Color(hex: 0x02853E)
-                        .frame(height: 40)
-                        .ignoresSafeArea(edges: .top)
+                    // Top area with green background and close button
+                    ZStack {
+                        Color(hex: 0x02853E)
+                            .frame(height: 40)
+
+                        HStack {
+                            Spacer()
+                            Button(action: { dismiss() }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 22, weight: .bold))
+                                    .foregroundColor(.red)
+                            }
+                            .padding(.trailing, 12)
+                        }
+                    }
+                    .padding(.top, 20)
                     
                     // Top map route view (dynamic)
                     RouteMapView(destination: event.coordinates, userCoordinate: userLocation)
-                    .frame(height: isChatMinimized ? geo.size.height * 0.85 - 40 : geo.size.height * 0.5 - 40)
+                    .frame(height: isChatMinimized ? geo.size.height * 0.85 - 60 : geo.size.height * 0.5 - 60)
 
                     // Bottom (chat) - adjustable by splitter
                     VStack(spacing: 0) {
