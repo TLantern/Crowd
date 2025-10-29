@@ -164,6 +164,9 @@ struct EventNavigationModal: View {
             stopMotionUpdates()
             chatService.stopListening()
         }
+        .onReceive(motionManager.$heading) { newHeading in
+            deviceHeading = newHeading
+        }
         .onAppear {
             if let location = userLocation {
                 updateDistanceAndBearing(to: event.coordinates, from: location)

@@ -111,32 +111,56 @@ final class FirebaseEventRepository: EventRepository {
         
         print("📍 FirebaseEventRepository: User location: (\(location.latitude), \(location.longitude))")
         
-        // Create a signal for the event with user's location
-        let data: [String: Any] = [
-            "eventId": eventId,
-            "latitude": location.latitude,
-            "longitude": location.longitude,
-            "signalStrength": 3 // Default signal strength
-        ]
+        // Check if user already has a signal for this event
+        let existingSignalQuery = try await db.collection("signals")
+            .whereField("eventId", isEqualTo: eventId)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
         
-        print("📡 FirebaseEventRepository: Calling createSignal with data: \(data)")
-        
-        do {
-            let callable = functions.httpsCallable("createSignal")
-            let result = try await callable.call(data)
-            print("✅ FirebaseEventRepository: createSignal result: \(result.data)")
-        } catch {
-            print("❌ FirebaseEventRepository: createSignal failed with error: \(error)")
-            print("   Error type: \(type(of: error))")
-            if let nsError = error as NSError? {
-                print("   Error domain: \(nsError.domain)")
-                print("   Error code: \(nsError.code)")
-                print("   Error description: \(nsError.localizedDescription)")
-            }
-            throw error
+        if !existingSignalQuery.documents.isEmpty {
+            print("⚠️ User \(userId) already has a signal for event \(eventId)")
+            return // Already joined, no error
         }
         
-        print("✅ FirebaseEventRepository: Successfully joined event \(eventId) at location (\(location.latitude), \(location.longitude))")
+        // Check if event exists in either collection
+        let eventDoc = try await db.collection("events").document(eventId).getDocument()
+        let userEventDoc = try await db.collection("userEvents").document(eventId).getDocument()
+        
+        guard eventDoc.exists || userEventDoc.exists else {
+            print("❌ Event \(eventId) not found")
+            throw CrowdError.custom("Event not found")
+        }
+        
+        // Create signal document directly in Firestore
+        let signalData: [String: Any] = [
+            "eventId": eventId,
+            "userId": userId,
+            "latitude": location.latitude,
+            "longitude": location.longitude,
+            "signalStrength": 3,
+            "createdAt": FieldValue.serverTimestamp(),
+            "lastSeenAt": FieldValue.serverTimestamp()
+        ]
+        
+        print("📡 FirebaseEventRepository: Creating signal in Firestore")
+        
+        do {
+            // Add signal to signals collection
+            let signalRef = db.collection("signals").document()
+            try await signalRef.setData(signalData)
+            
+            // Update event attendee count
+            let eventRef = eventDoc.exists ? db.collection("events").document(eventId) : db.collection("userEvents").document(eventId)
+            try await eventRef.updateData([
+                "attendeeCount": FieldValue.increment(Int64(1)),
+                "signalStrength": FieldValue.increment(Int64(3))
+            ])
+            
+            print("✅ FirebaseEventRepository: Successfully joined event \(eventId) at location (\(location.latitude), \(location.longitude))")
+        } catch {
+            print("❌ FirebaseEventRepository: Failed to create signal - \(error.localizedDescription)")
+            throw error
+        }
     }
     
     func deleteEvent(eventId: String) async throws {

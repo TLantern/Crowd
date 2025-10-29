@@ -2,10 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Official events collection (read-only for users)
+    // Official events collection
     match /events/{eventId} {
       allow read: if true;
-      allow write: if false; // Only Cloud Functions can write
+      allow create, delete: if false; // Only Cloud Functions can create/delete
+      // Allow authenticated users to update only attendeeCount and signalStrength (for joining)
+      allow update: if request.auth != null
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength']);
     }
     
     // User-created events collection
@@ -21,9 +24,13 @@ service cloud.firestore {
       allow delete: if request.auth != null
                     && resource.data.hostId == request.auth.uid;
       
-      // Users can only update their own events (including anonymous users)
-      allow update: if request.auth != null
-                    && resource.data.hostId == request.auth.uid;
+      // Users can update their own events OR update attendeeCount/signalStrength when joining
+      allow update: if request.auth != null && (
+        // Host can update their own events
+        resource.data.hostId == request.auth.uid
+        // OR anyone can update only attendeeCount and signalStrength (for joining)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength']))
+      );
     }
     
     // Users collection
