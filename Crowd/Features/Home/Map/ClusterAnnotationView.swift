@@ -244,7 +244,7 @@ private struct ExpandedEventView: View {
             .scaleEffect(animationTrigger ? 1.0 : 0.8)
             .opacity(animationTrigger ? 1.0 : 0.0)
             .animation(.easeOut(duration: 0.3), value: animationTrigger)
-            .zIndex(100 + index)
+            .zIndex(Double(100 + index))
     }
 }
 
