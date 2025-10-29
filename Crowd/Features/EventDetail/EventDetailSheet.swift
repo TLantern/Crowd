@@ -14,7 +14,7 @@ extension Notification.Name {
 
 
 struct EventDetailView: View {
-    let event: CrowdEvent
+    @State var event: CrowdEvent
     @Environment(\.dismiss) var dismiss
     @StateObject private var viewModel = EventDetailViewModel()
     @EnvironmentObject private var appState: AppState
@@ -203,8 +203,9 @@ struct EventDetailView: View {
         }
         .sheet(isPresented: $showEditSheet) {
             EditEventSheet(event: event) { updatedEvent in
-                // Refresh the view or update the event
-                dismiss()
+                // Update the local event state with new data
+                event = updatedEvent
+                print("✅ Event detail view updated with new data")
             }
         }
     }
