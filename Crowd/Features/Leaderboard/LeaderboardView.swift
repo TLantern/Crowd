@@ -33,14 +33,14 @@ struct LeaderboardView: View {
     // MARK: - Sections
 
     private var header: some View {
-        VStack(alignment: .center, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4) {
             Text("Leaderboard").font(.title3.bold())
             Text("Earn Aura by hosting and joining crowds.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
         .padding(.top, 4)
-        .padding(.horizontal, 35)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var timeframePicker: some View {
