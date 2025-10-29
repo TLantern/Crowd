@@ -107,12 +107,18 @@ struct EditEventSheet: View {
                     "endsAt": endDate.timeIntervalSince1970
                 ]
                 
-                print("🔍 Updating event with updates: \(updates)")
+                print("🔍 EditEventSheet: Sending updates to Firebase")
+                print("   Event ID: \(event.id)")
+                print("   Title: \(updates["title"] ?? "N/A")")
+                print("   Category: \(updates["category"] ?? "N/A")")
+                print("   Location: lat=\(coord.latitude), lon=\(coord.longitude)")
+                print("   Previous location was: lat=\(event.latitude), lon=\(event.longitude)")
                 
                 // Call repository to update event
                 try await appEnv.eventRepo.updateEvent(eventId: event.id, updates: updates)
                 
-                print("✅ Event updated successfully!")
+                print("✅ EditEventSheet: Firebase update completed successfully!")
+                print("✅ Event should now show at new location on map")
                 
                 // Create updated event object for callback
                 var updatedEvent = event

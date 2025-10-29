@@ -215,13 +215,32 @@ final class FirebaseEventRepository: EventRepository {
         
         var finalUpdates = updates
         
+        // Log what we're updating
+        print("📝 Updates being applied:")
+        if let title = updates["title"] as? String {
+            print("   - Title: \(title)")
+        }
+        if let category = updates["category"] as? String {
+            print("   - Category: \(category)")
+        }
+        if let description = updates["description"] as? String {
+            print("   - Description: \(description)")
+        }
+        if let startsAt = updates["startsAt"] as? TimeInterval {
+            print("   - StartsAt: \(Date(timeIntervalSince1970: startsAt))")
+        }
+        if let endsAt = updates["endsAt"] as? TimeInterval {
+            print("   - EndsAt: \(Date(timeIntervalSince1970: endsAt))")
+        }
+        
         // Recalculate geohash if location changed
         if let latitude = updates["latitude"] as? Double,
            let longitude = updates["longitude"] as? Double {
             let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
             let geohash = coordinate.geohash(precision: 6)
             finalUpdates["geohash"] = geohash
-            print("🔍 Recalculated geohash for new location: \(geohash)")
+            print("   - Location: lat=\(latitude), lon=\(longitude)")
+            print("   - Geohash: \(geohash)")
         }
         
         // Add last updated timestamp
@@ -230,7 +249,8 @@ final class FirebaseEventRepository: EventRepository {
         // Update the document in Firestore
         try await db.collection("userEvents").document(eventId).updateData(finalUpdates)
         
-        print("✅ Event updated successfully: \(eventId)")
+        print("✅ Event updated successfully in Firebase: \(eventId)")
+        print("✅ Pin should now appear at new location with updated details")
     }
     
     func boostSignal(eventId: String, delta: Int) async throws {
