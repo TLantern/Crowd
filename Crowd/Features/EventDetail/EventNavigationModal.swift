@@ -30,9 +30,7 @@ struct EventNavigationModal: View {
     @EnvironmentObject private var appState: AppState
     @FocusState private var isChatFocused: Bool
     
-    var currentUserId: String {
-        FirebaseManager.shared.getCurrentUserId() ?? "unknown"
-    }
+    @State private var currentUserId: String = "unknown"
     
     var currentUserName: String {
         appState.sessionUser?.displayName ?? "You"
@@ -40,31 +38,41 @@ struct EventNavigationModal: View {
     
     var body: some View {
         NavigationView {
-            GeometryReader { geo in
-                VStack(spacing: 0) {
-                    // Top area with green background and close button
-                    ZStack {
-                        Color(hex: 0x02853E)
-                            .frame(height: 40)
+            ZStack {
+                // Full UNT green background
+                Color(hex: 0x02853E)
+                    .ignoresSafeArea()
+                
+                GeometryReader { geo in
+                    VStack(spacing: 0) {
+                        // Top area with green background and close button
+                        ZStack {
+                            Color(hex: 0x02853E)
+                                .frame(height: 40)
 
-                        HStack {
-                            Spacer()
+                            HStack {
+                                Spacer()
                             Button(action: { dismiss() }) {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.system(size: 22, weight: .bold))
                                     .foregroundColor(.red)
+                                    .background(Color.white)
+                                    .clipShape(Circle())
                             }
-                            .padding(.trailing, 12)
+                                .padding(.trailing, 12)
+                            }
                         }
-                    }
-                    .padding(.top, 20)
-                    
-                    // Top map route view (dynamic)
-                    RouteMapView(destination: event.coordinates, userCoordinate: userLocation)
-                    .frame(height: isChatMinimized ? geo.size.height * 0.85 - 60 : geo.size.height * 0.5 - 60)
+                        .padding(.top, 20)
+                        
+                        // White container for map and chat
+                        VStack(spacing: 0) {
+                            // Top map route view (dynamic)
+                            RouteMapView(destination: event.coordinates, userCoordinate: userLocation)
+                            .frame(height: isChatMinimized ? geo.size.height * 0.85 - 100 : geo.size.height * 0.5 - 100)
+                            .background(Color.white)
 
-                    // Bottom (chat) - adjustable by splitter
-                    VStack(spacing: 0) {
+                            // Bottom (chat) - adjustable by splitter
+                            VStack(spacing: 0) {
                         // Chat header
                         HStack {
                             Text("Event Chat")
@@ -144,8 +152,10 @@ struct EventNavigationModal: View {
                             .padding(.bottom, max(12, keyboardHeight > 0 ? keyboardHeight - 20 : 12))
                             .background(.ultraThinMaterial)
                         }
+                        .background(Color.white)
                     }
                     .frame(height: isChatMinimized ? 56 : geo.size.height * 0.5)
+                    .background(Color.white)
                 }
                 .navigationBarHidden(true)
             }
@@ -155,9 +165,33 @@ struct EventNavigationModal: View {
             if let draft = UserDefaults.standard.string(forKey: draftKey()) {
                 chatMessage = draft
             }
+            
+            // Ensure user is authenticated
+            Task {
+                if let userId = FirebaseManager.shared.getCurrentUserId() {
+                    await MainActor.run {
+                        currentUserId = userId
+                    }
+                } else {
+                    do {
+                        let userId = try await FirebaseManager.shared.signInAnonymously()
+                        await MainActor.run {
+                            currentUserId = userId
+                        }
+                        print("✅ EventNavigationModal: User signed in anonymously: \(userId)")
+                    } catch {
+                        print("❌ EventNavigationModal: Failed to sign in anonymously: \(error)")
+                    }
+                }
+            }
+            
             startLocationUpdates()
             startMotionUpdates()
-            chatService.startListening(eventId: event.id, currentUserId: currentUserId)
+            
+            // Start listening after a short delay to ensure currentUserId is set
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                chatService.startListening(eventId: event.id, currentUserId: currentUserId)
+            }
         }
         .onDisappear {
             // Persist draft on close
