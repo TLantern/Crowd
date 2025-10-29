@@ -25,6 +25,7 @@ struct EventNavigationModal: View {
     @State private var compassRotation: Double = 0
     @State private var locationUpdateTimer: Timer?
     @State private var keyboardHeight: CGFloat = 0
+    @State private var isChatMinimized: Bool = false
     
     @EnvironmentObject private var appState: AppState
     @FocusState private var isChatFocused: Bool
@@ -41,9 +42,9 @@ struct EventNavigationModal: View {
         NavigationView {
             GeometryReader { geo in
                 VStack(spacing: 0) {
-                    // Top map route view (50%)
+                    // Top map route view (dynamic)
                     RouteMapView(destination: event.coordinates, userCoordinate: userLocation)
-                    .frame(height: geo.size.height * 0.5)
+                    .frame(height: isChatMinimized ? geo.size.height * 0.85 : geo.size.height * 0.5)
                     .padding(.top, 40)
 
                     // Bottom (chat) - adjustable by splitter
@@ -56,7 +57,10 @@ struct EventNavigationModal: View {
                             Spacer()
                             
                             Button("Close") {
-                                dismiss()
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                                    isChatMinimized = true
+                                    isChatFocused = false
+                                }
                             }
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(Color(hex: 0x02853E))
@@ -64,56 +68,68 @@ struct EventNavigationModal: View {
                         .padding(.horizontal)
                         .padding(.vertical, 12)
                         .background(.ultraThinMaterial)
-                        
-                        // Chat messages
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                LazyVStack(spacing: 12) {
-                                    ForEach(chatService.messages) { message in
-                                        ChatMessageBubble(
-                                            message: message.text,
-                                            author: message.userName,
-                                            isCurrentUser: message.isCurrentUser
-                                        )
-                                        .id(message.id)
-                                    }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if isChatMinimized {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+                                    isChatMinimized = false
                                 }
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
                             }
-                            .onChange(of: chatService.messages.count) { _, _ in
-                                if let lastMessage = chatService.messages.last {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        }
+                        
+                        if !isChatMinimized {
+                            // Chat messages
+                            ScrollViewReader { proxy in
+                                ScrollView {
+                                    LazyVStack(spacing: 12) {
+                                        ForEach(chatService.messages) { message in
+                                            ChatMessageBubble(
+                                                message: message.text,
+                                                author: message.userName,
+                                                isCurrentUser: message.isCurrentUser
+                                            )
+                                            .id(message.id)
+                                        }
+                                    }
+                                    .padding(.horizontal)
+                                    .padding(.vertical, 8)
+                                }
+                                .onChange(of: chatService.messages.count) { _, _ in
+                                    if let lastMessage = chatService.messages.last {
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                        }
                                     }
                                 }
                             }
                         }
                         
-                        // Chat input
-                        HStack(spacing: 12) {
-                            TextField("Type a message...", text: $chatMessage)
-                                .textFieldStyle(.plain)
-                                .padding(12)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(20)
-                                .focused($isChatFocused)
-                            
-                            Button {
-                                sendMessage()
-                            } label: {
-                                Image(systemName: "arrow.up.circle.fill")
-                                    .font(.system(size: 32))
-                                    .foregroundColor(chatMessage.isEmpty ? .gray : Color(hex: 0x02853E))
+                        if !isChatMinimized {
+                            // Chat input
+                            HStack(spacing: 12) {
+                                TextField("Type a message...", text: $chatMessage)
+                                    .textFieldStyle(.plain)
+                                    .padding(12)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(20)
+                                    .focused($isChatFocused)
+                                
+                                Button {
+                                    sendMessage()
+                                } label: {
+                                    Image(systemName: "arrow.up.circle.fill")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(chatMessage.isEmpty ? .gray : Color(hex: 0x02853E))
+                                }
+                                .disabled(chatMessage.isEmpty)
                             }
-                            .disabled(chatMessage.isEmpty)
+                            .padding(.horizontal)
+                            .padding(.vertical, 12)
+                            .padding(.bottom, max(12, keyboardHeight > 0 ? keyboardHeight - 20 : 12))
+                            .background(.ultraThinMaterial)
                         }
-                        .padding(.horizontal)
-                        .padding(.vertical, 12)
-                        .padding(.bottom, max(12, keyboardHeight > 0 ? keyboardHeight - 20 : 12))
-                        .background(.ultraThinMaterial)
                     }
-                    .frame(height: geo.size.height * 0.5)
+                    .frame(height: isChatMinimized ? 56 : geo.size.height * 0.5)
                 }
                 .navigationBarHidden(true)
             }
