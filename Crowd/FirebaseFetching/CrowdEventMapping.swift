@@ -66,6 +66,16 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     // Use clean title without emoji
     let displayTitle = rawTitle
 
+    // Only keep a valid http(s) source URL
+    let cleanedSource = live.sourceUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+    let validSource: String? = {
+        guard !cleanedSource.isEmpty else { return nil }
+        if cleanedSource.lowercased().hasPrefix("http://") || cleanedSource.lowercased().hasPrefix("https://") {
+            return cleanedSource
+        }
+        return nil
+    }()
+
     var ev = CrowdEvent.newDraft(
         at: fallbackCoord,
         title: displayTitle,
@@ -76,7 +86,7 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
         startsAt: startsAtDate,
         endsAt: endsAtDate,
         tags: tags,
-        sourceURL: live.sourceUrl
+        sourceURL: validSource
     )
     // Use source document id when available so the same event keeps a stable id across fetches
     if let liveId = live.id, !liveId.isEmpty { ev.id = liveId }
