@@ -15,6 +15,40 @@ final class CampusEventsViewModel: ObservableObject {
 
     private var listener: ListenerRegistration?
 
+    // Energy-friendly single fetch used by calendar view
+    func fetchOnce(limit: Int = 25) async {
+        let db = Firestore.firestore()
+        print("🔄 CampusEventsViewModel: One-time fetch from campus_events_live (limit: \(limit))")
+        do {
+            let snap = try await db.collection("campus_events_live")
+                .order(by: "startTimeLocal")
+                .limit(to: limit)
+                .getDocuments()
+
+            let docs = snap.documents
+            let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) {
+                var tmp: [CrowdEvent] = []
+                for d in docs {
+                    if let live = try? d.data(as: CampusEventLive.self),
+                       let ce = mapCampusEventLiveToCrowdEvent(live) {
+                        tmp.append(ce)
+                    }
+                }
+                tmp.sort { a, b in
+                    let aStart = a.startsAt ?? .distantFuture
+                    let bStart = b.startsAt ?? .distantFuture
+                    return aStart < bStart
+                }
+                return tmp
+            }.value
+
+            await MainActor.run { self.crowdEvents = mapped }
+            print("🎯 CampusEventsViewModel: Final mapped events count: \(mapped.count) (one-time)")
+        } catch {
+            print("❌ CampusEventsViewModel: One-time fetch failed: \(error)")
+        }
+    }
+
     func start() {
         let db = Firestore.firestore()
         

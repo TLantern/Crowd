@@ -135,13 +135,12 @@ struct CalenderView: View {
                 }
             }
             .onAppear {
-                campusEventsVM.start()
+                // Low-energy: single fetch instead of realtime listener
+                Task { await campusEventsVM.fetchOnce(limit: 25) }
                 // Refresh attended events to clean up expired ones
                 AttendedEventsService.shared.refreshAttendedEvents()
             }
-            .onDisappear {
-                campusEventsVM.stop()
-            }
+            .onDisappear { campusEventsVM.stop() }
             .onChange(of: selectedCategories) { _, _ in
                 // Reset pagination when filter changes
                 displayedEventCount = eventsPerPage
