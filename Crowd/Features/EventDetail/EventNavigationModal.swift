@@ -24,8 +24,6 @@ struct EventNavigationModal: View {
     @State private var bearingToEvent: Double = 0
     @State private var compassRotation: Double = 0
     @State private var locationUpdateTimer: Timer?
-    @State private var chatHeightRatio: CGFloat = 0.4 // 40% chat by default
-    @State private var dragStartRatio: CGFloat = 0.4
     
     @EnvironmentObject private var appState: AppState
     @FocusState private var isChatFocused: Bool
@@ -42,154 +40,95 @@ struct EventNavigationModal: View {
         NavigationView {
             GeometryReader { geo in
                 VStack(spacing: 0) {
-                    // Top (compass/direction) - adjustable by splitter
-                    VStack(spacing: 20) {
-                    // Compass
-                    ZStack {
-                        // Compass background circle
-                        Circle()
-                            .stroke(Color.primary.opacity(0.2), lineWidth: 2)
-                            .frame(width: 200, height: 200)
-                        
-                        // Compass markings
-                        ForEach(0..<8) { index in
-                            Rectangle()
-                                .fill(Color.primary.opacity(0.3))
-                                .frame(width: 2, height: 20)
-                                .offset(y: -90)
-                                .rotationEffect(.degrees(Double(index) * 45))
-                        }
-                        
-                        // North indicator
-                        Text("N")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.red)
-                            .offset(y: -100)
-                        
-                        // Event direction marker (emoji) on perimeter
-                        Text(eventEmoji)
-                            .font(.system(size: 18))
-                            .rotationEffect(.degrees(compassRotation))
-                            .offset(y: -110)
-                        
-                        // Direction arrow
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 40, weight: .bold))
-                            .foregroundColor(Color(hex: 0x02853E))
-                            .rotationEffect(.degrees(compassRotation))
-                    }
-                    
-                    // Distance and direction info
-                    VStack(spacing: 8) {
-                        Text("\(Int(distanceToEvent))m")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.primary)
-                        
-                        Text(directionText)
-                            .font(.system(size: 16))
-                            .foregroundColor(.secondary)
-                    }
-                    }
-                    .frame(height: max(0, geo.size.height * (1 - chatHeightRatio)))
+                    // Top map route view (50%)
+                    RouteMapView(destination: event.coordinates, userCoordinate: userLocation)
+                    .frame(height: geo.size.height * 0.5)
                     .padding(.top, 40)
-
-                    // Splitter handle
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 8)
-                        .overlay(
-                            Capsule()
-                                .fill(Color.secondary.opacity(0.5))
-                                .frame(width: 64, height: 4)
-                        )
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    let delta = value.translation.height / geo.size.height
-                                    let computed = dragStartRatio + delta
-                                    chatHeightRatio = min(max(computed, 0.2), 0.85)
-                                }
-                                .onEnded { _ in
-                                    dragStartRatio = chatHeightRatio
-                                }
-                        )
 
                     // Bottom (chat) - adjustable by splitter
                     VStack(spacing: 0) {
-                    // Chat header
-                    HStack {
-                        Text("Event Chat")
-                            .font(.system(size: 18, weight: .semibold))
-                        
-                        Spacer()
-                        
-                        Button("Close") {
-                            dismiss()
+                        // Chat header
+                        HStack {
+                            Text("Event Chat")
+                                .font(.system(size: 18, weight: .semibold))
+                            
+                            Spacer()
+                            
+                            Button("Close") {
+                                dismiss()
+                            }
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(Color(hex: 0x02853E))
                         }
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(Color(hex: 0x02853E))
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
-                    
-                    // Chat messages
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 12) {
-                                ForEach(chatService.messages) { message in
-                                    ChatMessageBubble(
-                                        message: message.text,
-                                        author: message.userName,
-                                        isCurrentUser: message.isCurrentUser
-                                    )
-                                    .id(message.id)
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial)
+                        
+                        // Chat messages
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(spacing: 12) {
+                                    ForEach(chatService.messages) { message in
+                                        ChatMessageBubble(
+                                            message: message.text,
+                                            author: message.userName,
+                                            isCurrentUser: message.isCurrentUser
+                                        )
+                                        .id(message.id)
+                                    }
+                                }
+                                .padding(.horizontal)
+                                .padding(.vertical, 8)
+                            }
+                            .onChange(of: chatService.messages.count) { _, _ in
+                                if let lastMessage = chatService.messages.last {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                    }
                                 }
                             }
-                            .padding(.horizontal)
-                            .padding(.vertical, 8)
                         }
-                        .onChange(of: chatService.messages.count) { _, _ in
-                            if let lastMessage = chatService.messages.last {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Chat input
-                    HStack(spacing: 12) {
-                        TextField("Type a message...", text: $chatMessage)
-                            .textFieldStyle(.plain)
-                            .padding(12)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(20)
-                            .focused($isChatFocused)
                         
-                        Button {
-                            sendMessage()
-                        } label: {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 32))
-                                .foregroundColor(chatMessage.isEmpty ? .gray : Color(hex: 0x02853E))
+                        // Chat input
+                        HStack(spacing: 12) {
+                            TextField("Type a message...", text: $chatMessage)
+                                .textFieldStyle(.plain)
+                                .padding(12)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(20)
+                                .focused($isChatFocused)
+                            
+                            Button {
+                                // Posting disabled per requirement
+                            } label: {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.gray)
+                            }
+                            .disabled(true)
                         }
-                        .disabled(chatMessage.isEmpty)
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                        .padding(.bottom, 12) // move input up from bottom
+                        .background(.ultraThinMaterial)
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
-                    .background(.ultraThinMaterial)
-                    .frame(height: max(0, geo.size.height * chatHeightRatio))
+                    .frame(height: geo.size.height * 0.5)
                 }
                 .navigationBarHidden(true)
             }
         }
         .onAppear {
+            // Load draft message for this event
+            if let draft = UserDefaults.standard.string(forKey: draftKey()) {
+                chatMessage = draft
+            }
             startLocationUpdates()
             startMotionUpdates()
             chatService.startListening(eventId: event.id, currentUserId: currentUserId)
         }
         .onDisappear {
+            // Persist draft on close
+            UserDefaults.standard.set(chatMessage, forKey: draftKey())
             stopLocationUpdates()
             stopMotionUpdates()
             chatService.stopListening()
@@ -316,6 +255,8 @@ struct EventNavigationModal: View {
             }
         }
     }
+
+    private func draftKey() -> String { "chat_draft_\(event.id)" }
 }
 
 // Motion Manager for device heading
