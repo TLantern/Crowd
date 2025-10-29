@@ -80,6 +80,7 @@ struct OnboardingFlowView: View {
         } message: {
             Text(errorMessage)
         }
+        .preferredColorScheme(.light)
     }
     
     // MARK: - Save Profile to Firebase

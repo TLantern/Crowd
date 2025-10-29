@@ -30,6 +30,7 @@ struct CrowdApp: App {
                     .environmentObject(appState)
                     .environment(\.appEnvironment, env)
                     .task { await appState.bootstrap() }
+                    .preferredColorScheme(.dark)
             } else {
                 OnboardingFlowView {
                     hasSeenOnboarding = true
