@@ -40,6 +40,7 @@ struct LeaderboardView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.top, 4)
+        .padding(.horizontal, 25)
     }
 
     private var timeframePicker: some View {
