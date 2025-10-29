@@ -23,11 +23,10 @@ struct CalenderView: View {
         }
         
         return campusEventsVM.crowdEvents.filter { event in
-            // Use the event's category if available, otherwise try to classify it
-            let eventCategory = event.category.flatMap { EventCategory(rawValue: $0) } 
-                ?? EventCategory.guess(from: event.title, sourceType: "user", locationName: nil)
-            
-            return selectedCategories.contains(eventCategory)
+            // Check if event tags match any of the selected categories
+            return selectedCategories.contains { category in
+                category.matchesTags(event.tags)
+            }
         }
     }
     
@@ -156,9 +155,13 @@ struct EventCardView: View {
     @State private var isAttending = false
     @State private var isExpanded = false
     @State private var showEventURL = false
+    @State private var showEventDetail = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        Button(action: {
+            showEventDetail = true
+        }) {
+            VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     if let sourceURL = event.sourceURL {
@@ -192,18 +195,25 @@ struct EventCardView: View {
                 
                 Spacer()
                 
-                VStack(alignment: .trailing, spacing: 4) {
-                    if let startsAt = event.startsAt {
-                        Text(formatEventTime(startsAt))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.black)
+                HStack(spacing: 8) {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        if let startsAt = event.startsAt {
+                            Text(formatEventTime(startsAt))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.black)
+                        }
+                        
+                        if let endsAt = event.endsAt {
+                            Text(formatEventTime(endsAt))
+                                .font(.system(size: 10, weight: .regular))
+                                .foregroundColor(.secondary)
+                        }
                     }
                     
-                    if let endsAt = event.endsAt {
-                        Text(formatEventTime(endsAt))
-                            .font(.system(size: 10, weight: .regular))
-                            .foregroundColor(.secondary)
-                    }
+                    // Grey arrow indicating clickable
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
                 }
             }
             
@@ -317,15 +327,20 @@ struct EventCardView: View {
                     )
                 }
             }
+            }
+            .padding(16)
+            .background(.ultraThinMaterial)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(.primary.opacity(0.1), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         }
-        .padding(16)
-        .background(.ultraThinMaterial)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(.primary.opacity(0.1), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .buttonStyle(PlainButtonStyle())
+        .sheet(isPresented: $showEventDetail) {
+            EventDetailView(event: event)
+        }
         .onAppear {
             // Check if user is already attending this event
             isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)

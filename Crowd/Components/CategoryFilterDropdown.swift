@@ -39,29 +39,27 @@ struct CategoryFilterDropdown: View {
                 }
             }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: "tag")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
                 
                 if selectedCategories.isEmpty {
                     Text("All Events")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
                 } else {
                     Text("\(selectedCategories.count) categories")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.primary)
                 }
                 
-                Spacer()
-                
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(.ultraThinMaterial)
             .cornerRadius(6)
         }

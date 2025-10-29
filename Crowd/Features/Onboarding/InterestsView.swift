@@ -220,10 +220,3 @@ struct InterestChip: View {
     }
 }
 
-#Preview {
-    InterestsView(onBack: {
-        print("Back tapped")
-    }) { interests in
-        print("Selected interests: \(interests)")
-    }
-}

@@ -36,7 +36,7 @@ struct EventDetailView: View {
     var emoji: String {
         guard let categoryString = event.category,
               let eventCategory = EventCategory(rawValue: categoryString) else {
-            return "📍" // Default fallback matching EventCategory.unknown
+            return "📅" // Default fallback matching EventCategory.other
         }
         return eventCategory.emoji
     }

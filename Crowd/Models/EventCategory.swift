@@ -10,117 +10,91 @@
 import Foundation
 
 enum EventCategory: String, CaseIterable, Identifiable {
-    case party = "Party"
-    case studySession = "Study Session"
-    case sports = "Sports/Fitness"
-    case food = "Food/Dining"
-    case gaming = "Gaming"
-    case music = "Music/Concert"
-    case hangout = "Coffee/Hangout"
-    case coffeeHangout = "Coffee Meetup"
-    case outdoors = "Outdoors"
-    case pickupGame = "Pickup Game"
-    case movie = "Movie/Watch Party"
-    case networking = "Networking"
-    case official = "Official/University"
-    case unknown = "Other"
+    case musicEntertainment = "Music & Entertainment"
+    case foodDining = "Food & Dining"
+    case sportsFitness = "Sports & Fitness"
+    case academicEducation = "Academic & Education"
+    case artsCulture = "Arts & Culture"
+    case socialNetworking = "Social & Networking"
+    case healthWellness = "Health & Wellness"
+    case outdoorNature = "Outdoor & Nature"
+    case gamingEntertainment = "Gaming & Entertainment"
+    case lifestyleHobbies = "Lifestyle & Hobbies"
+    case politicsActivism = "Politics & Activism"
+    case specialEvents = "Special Events"
+    case other = "Other"
 
     var id: String { rawValue }
 
     var emoji: String {
         switch self {
-        case .party: return "🎉"
-        case .studySession: return "📚"
-        case .sports: return "⚽"
-        case .food: return "🍕"
-        case .gaming: return "🎮"
-        case .music: return "🎵"
-        case .hangout: return "☕"
-        case .coffeeHangout: return "☕"
-        case .outdoors: return "🌲"
-        case .pickupGame: return "🏀"
-        case .movie: return "🎬"
-        case .networking: return "💼"
-        case .official: return "🏫"
-        case .unknown: return "📍"
+        case .musicEntertainment: return "🎵"
+        case .foodDining: return "🍕"
+        case .sportsFitness: return "⚽"
+        case .academicEducation: return "📚"
+        case .artsCulture: return "🎨"
+        case .socialNetworking: return "🤝"
+        case .healthWellness: return "🏥"
+        case .outdoorNature: return "🏔️"
+        case .gamingEntertainment: return "🎮"
+        case .lifestyleHobbies: return "👗"
+        case .politicsActivism: return "🏛️"
+        case .specialEvents: return "🎉"
+        case .other: return "📅"
         }
     }
 
     var displayName: String {
         "\(emoji) \(rawValue)"
     }
+    
+    // Tag mapping for each category
+    private var tagKeywords: [String] {
+        switch self {
+        case .musicEntertainment:
+            return ["music", "concert", "party", "festival", "dance", "dancing", "live", "performance"]
+        case .foodDining:
+            return ["food", "dining", "restaurant", "cafe", "coffee", "lunch", "dinner", "breakfast", "snack"]
+        case .sportsFitness:
+            return ["sports", "basketball", "football", "soccer", "tennis", "volleyball", "baseball", "fitness", "gym", "workout", "yoga", "running", "cycling"]
+        case .academicEducation:
+            return ["study", "academic", "lecture", "workshop", "seminar", "conference", "education", "learning", "research", "science", "tech", "technology", "coding", "programming"]
+        case .artsCulture:
+            return ["art", "creative", "culture", "cultural", "international", "language", "film", "movie", "theater", "drama", "comedy", "standup", "photography", "gallery"]
+        case .socialNetworking:
+            return ["networking", "meetup", "community", "volunteer", "charity", "fundraising", "career", "job", "business", "entrepreneur", "startup"]
+        case .healthWellness:
+            return ["health", "wellness", "mental", "spiritual", "religious", "faith", "meditation", "mindfulness"]
+        case .outdoorNature:
+            return ["outdoor", "hiking", "camping", "nature", "environment", "sustainability", "travel", "adventure"]
+        case .gamingEntertainment:
+            return ["gaming", "esports", "board", "trivia", "puzzle", "card"]
+        case .lifestyleHobbies:
+            return ["fashion", "beauty", "cooking", "baking", "wine", "beer", "tea", "book", "reading", "writing", "poetry", "blog"]
+        case .politicsActivism:
+            return ["politics", "debate", "activism", "protest", "voting", "election"]
+        case .specialEvents:
+            return ["graduation", "celebration", "anniversary", "birthday", "holiday", "christmas", "halloween", "valentine", "newyear"]
+        case .other:
+            return ["official", "student", "instagram", "social"]
+        }
+    }
+    
+    // Check if event tags match this category
+    func matchesTags(_ tags: [String]) -> Bool {
+        for tag in tags {
+            let lowercaseTag = tag.lowercased()
+            for keyword in tagKeywords {
+                if lowercaseTag.contains(keyword.lowercased()) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
 
-    // crude text-based classifier
+    // Simple classifier that defaults to "other" since we now use tag-based matching
     static func guess(from title: String, sourceType: String, locationName: String?) -> EventCategory {
-        let lower = title.lowercased()
-        let locLower = (locationName ?? "").lowercased()
-        let combined = lower + " " + locLower
-
-        if sourceType == "official" {
-            return .official
-        }
-        if combined.contains("party")
-            || combined.contains("bash")
-            || combined.contains("kickback")
-            || combined.contains("mixer")
-            || combined.contains("fest") {
-            return .party
-        }
-        if combined.contains("study")
-            || combined.contains("tutoring")
-            || combined.contains("exam prep") {
-            return .studySession
-        }
-        if combined.contains("basketball")
-            || combined.contains("soccer")
-            || combined.contains("pickup")
-            || combined.contains("open gym")
-            || combined.contains("workout")
-            || combined.contains("intramural") {
-            return .pickupGame
-        }
-        if combined.contains("game night")
-            || combined.contains("smash")
-            || combined.contains("tourney")
-            || combined.contains("2k")
-            || combined.contains("lan party")
-            || combined.contains("gaming") {
-            return .gaming
-        }
-        if combined.contains("live music")
-            || combined.contains("concert")
-            || combined.contains("open mic")
-            || combined.contains("dj")
-            || combined.contains("showcase") {
-            return .music
-        }
-        if combined.contains("movie")
-            || combined.contains("watch party")
-            || combined.contains("screening") {
-            return .movie
-        }
-        if combined.contains("meet and greet")
-            || combined.contains("info session")
-            || combined.contains("interest meeting")
-            || combined.contains("network")
-            || combined.contains("career") {
-            return .networking
-        }
-        if combined.contains("pizza")
-            || combined.contains("wings")
-            || combined.contains("food")
-            || combined.contains("bbq")
-            || combined.contains("cookout")
-            || combined.contains("taco") {
-            return .food
-        }
-        if combined.contains("coffee")
-            || combined.contains("hangout")
-            || combined.contains("chill")
-            || combined.contains("link up") {
-            return .hangout
-        }
-
-        return .unknown
+        return .other
     }
 }

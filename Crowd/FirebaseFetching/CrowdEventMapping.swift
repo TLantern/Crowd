@@ -30,21 +30,29 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     let emoji = cat.emoji
 
     // build a human-readable short description
-    // Example: "Union rm 241 • Posted by @bsu_unt"
+    // Line 1: "Union rm 241 • Posted by @bsu_unt"
+    // Line 2: "Oct 31, 7:00 PM – 11:00 PM" (if available)
     var descPieces: [String] = []
-    if let loc = live.locationName, !loc.isEmpty {
-        descPieces.append(loc)
-    }
+    if let loc = live.locationName, !loc.isEmpty { descPieces.append(loc) }
     if live.sourceType == "instagram" {
         descPieces.append("Posted by @\(live.sourceOrg)")
     } else {
         descPieces.append("Hosted by \(live.sourceOrg)")
     }
-    let description = descPieces.joined(separator: " • ")
+    var description = descPieces.joined(separator: " • ")
 
     // parse start/end
     let startsAtDate = isoToDate(live.startTimeLocal)
     let endsAtDate   = isoToDate(live.endTimeLocal)
+
+    if let startsAtDate {
+        let fmt = DateFormatter()
+        fmt.dateStyle = .medium
+        fmt.timeStyle = .short
+        var timeLine = fmt.string(from: startsAtDate)
+        if let endsAtDate { timeLine += " – " + fmt.string(from: endsAtDate) }
+        description = [description, timeLine].joined(separator: "\n")
+    }
 
     // Use tags from Firebase, fallback to generated tags if none provided
     var tags: [String] = live.tags ?? []
