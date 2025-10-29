@@ -17,23 +17,16 @@ struct ClusterAnnotationView: View {
     
     @State private var animationTrigger = false
     
-    // Convert meters to screen points based on map zoom and cluster size
+    // Fixed screen point radius - ensures pins are always clickable at any zoom level
     private var expansionRadius: CGFloat {
-        // Approximate conversion: at 1000m altitude, ~1 meter = 0.3 points
-        let metersToPoints = 1000.0 / cameraDistance * 0.3
-        
-        // Scale radius based on event count to prevent overlap
-        // More events = larger circle for better spacing and clickability
-        let baseRadius: Double = {
-            switch cluster.eventCount {
-            case 1...3: return 20.0
-            case 4...6: return 30.0
-            case 7...9: return 40.0
-            default: return 50.0  // 10+ events
-            }
-        }()
-        
-        return CGFloat(baseRadius * metersToPoints)
+        // Use fixed screen points instead of meters
+        // This ensures consistent spacing regardless of zoom level
+        switch cluster.eventCount {
+        case 1...3: return 60.0   // Small cluster: 60 points radius
+        case 4...6: return 95.0   // Medium cluster: 95 points radius  
+        case 7...9: return 130.0  // Large cluster: 130 points radius
+        default: return 165.0     // Extra large: 165 points radius (10+ events)
+        }
     }
     
     // Badge text showing count or "9+" for 10+
