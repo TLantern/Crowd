@@ -34,13 +34,11 @@ struct ClusterAnnotationView: View {
                     let xOffset = expansionRadius * cos(angle)
                     let yOffset = expansionRadius * sin(angle)
                     
-                    Button {
-                        print("📍 Event tapped in expanded cluster: \(event.title)")
-                        onEventTap(event)
-                    } label: {
-                        EventAnnotationView(event: event, isInExpandedCluster: true)
-                    }
-                    .buttonStyle(.plain)
+                    EventAnnotationView(event: event, isInExpandedCluster: true)
+                        .onTapGesture {
+                            print("📍 Event tapped in expanded cluster: \(event.title)")
+                            onEventTap(event)
+                        }
                     .offset(
                         x: animationTrigger ? xOffset : 0,
                         y: animationTrigger ? yOffset : 0
@@ -52,44 +50,42 @@ struct ClusterAnnotationView: View {
                 }
             } else {
                 // Collapsed: Show single cluster pin
-                Button {
-                    print("📍 Cluster tapped: \(cluster.eventCount) events")
-                    onTap()
-                } label: {
-                    ZStack {
-                        // Use the first event's emoji for the cluster pin
-                        if let firstEvent = cluster.events.first {
-                            EventAnnotationView(event: firstEvent, isInExpandedCluster: false)
-                        }
-                        
-                        // Badge showing event count (only if > 1)
-                        if cluster.eventCount > 1 {
-                            VStack {
-                                HStack {
-                                    Spacer()
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color.white)
-                                            .frame(width: 24, height: 24)
-                                        
-                                        Circle()
-                                            .stroke(Color.red, lineWidth: 2)
-                                            .frame(width: 24, height: 24)
-                                        
-                                        Text("\(cluster.eventCount)")
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundColor(.black)
-                                    }
-                                    .offset(x: 10, y: -10)
-                                }
+                ZStack {
+                    // Use the first event's emoji for the cluster pin
+                    if let firstEvent = cluster.events.first {
+                        EventAnnotationView(event: firstEvent, isInExpandedCluster: false)
+                    }
+                    
+                    // Badge showing event count (only if > 1)
+                    if cluster.eventCount > 1 {
+                        VStack {
+                            HStack {
                                 Spacer()
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.white)
+                                        .frame(width: 24, height: 24)
+                                    
+                                    Circle()
+                                        .stroke(Color.red, lineWidth: 2)
+                                        .frame(width: 24, height: 24)
+                                    
+                                    Text("\(cluster.eventCount)")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(.black)
+                                }
+                                .offset(x: 10, y: -10)
                             }
-                            .frame(width: 90, height: 90)
-                            .scaleEffect(0.75) // Match EventAnnotationView scale
+                            Spacer()
                         }
+                        .frame(width: 90, height: 90)
+                        .scaleEffect(0.75) // Match EventAnnotationView scale
                     }
                 }
-                .buttonStyle(.plain)
+                .onTapGesture {
+                    print("📍 Cluster tapped: \(cluster.eventCount) events")
+                    onTap()
+                }
             }
         }
         .onChange(of: isExpanded) { _, newValue in

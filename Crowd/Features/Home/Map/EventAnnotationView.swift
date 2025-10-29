@@ -10,7 +10,6 @@ import SwiftUI
 struct EventAnnotationView: View {
     let event: CrowdEvent
     var isInExpandedCluster: Bool = false
-    var onTap: (() -> Void)? = nil
     
     var emoji: String {
         // Map category to emoji using EventCategory enum
@@ -68,9 +67,6 @@ struct EventAnnotationView: View {
                 )
         }
         .scaleEffect(scaleMultiplier)
-        .onTapGesture {
-            onTap?()
-        }
     }
 }
 
