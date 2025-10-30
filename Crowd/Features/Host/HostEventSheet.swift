@@ -34,13 +34,13 @@ let untLocations: [PredefinedLocation] = [
     PredefinedLocation(name: "Kerr Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20771, longitude: -97.14754), searchOverride: nil),
     PredefinedLocation(name: "Joe Greene Hall", coordinate: CLLocationCoordinate2D(latitude: 33.2069554, longitude: -97.1462809), searchOverride: nil),
     PredefinedLocation(name: "Denton Square", coordinate: CLLocationCoordinate2D(latitude: 33.2150434, longitude: -97.1330684), searchOverride: nil),
-    PredefinedLocation(name: "Clark Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20779, longitude: -97.15143), searchOverride: "Clark Hall"),
+    // PredefinedLocation(name: "Clark Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20779, longitude: -97.15143), searchOverride: "Clark Hall"),
     PredefinedLocation(name: "Pohl Recreation Center", coordinate: CLLocationCoordinate2D(latitude: 33.21207, longitude: -97.15404), searchOverride: nil),
     PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.2106644, longitude: -97.1501177), searchOverride: nil),
     PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.2131446, longitude: -97.1454504), searchOverride: nil),
     PredefinedLocation(name: "Chestnut Hall", coordinate: CLLocationCoordinate2D(latitude: 33.21222, longitude: -97.15255), searchOverride: nil),
     PredefinedLocation(name: "Super PIT (UNT Coliseum)", coordinate: CLLocationCoordinate2D(latitude: 33.208611, longitude: -97.154167), searchOverride: nil),
-    PredefinedLocation(name: "Fry Street", coordinate: CLLocationCoordinate2D(latitude: 33.21455, longitude: -97.13347), searchOverride: "Avenue A")
+    // PredefinedLocation(name: "Fry Street", coordinate: CLLocationCoordinate2D(latitude: 33.21455, longitude: -97.13347), searchOverride: "Avenue A")
 ]
 
 struct HostEventSheet: View {
