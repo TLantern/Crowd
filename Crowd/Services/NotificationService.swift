@@ -74,9 +74,7 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         // Save token to user's Firestore profile
         Task {
             await saveFCMTokenToProfile(token: token)
-            #if DEBUG
             await sendDebugTestNotification()
-            #endif
         }
     }
     
@@ -189,7 +187,6 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         completionHandler()
     }
 
-    #if DEBUG
     private func sendDebugTestNotification() async {
         guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
         do {
@@ -200,5 +197,4 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
             print("❌ Debug: test notification error - \(error.localizedDescription)")
         }
     }
-    #endif
 }
