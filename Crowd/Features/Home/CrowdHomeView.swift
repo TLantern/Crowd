@@ -46,6 +46,10 @@ struct CrowdHomeView: View {
     @State private var expandedClusterId: String?
     @State private var currentCameraDistance: Double = 1200
     
+    // MARK: - Dropdown List State
+    @State private var selectedCluster: EventCluster?
+    @State private var showClusterDropdown: Bool = false
+    
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
         firebaseEvents + hostedEvents + upcomingEvents
@@ -192,8 +196,10 @@ struct CrowdHomeView: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    // Collapse any expanded cluster when tapping map background
-                    if expandedClusterId != nil {
+                    // Dismiss dropdown or collapse expanded cluster when tapping map background
+                    if showClusterDropdown {
+                        dismissClusterDropdown()
+                    } else if expandedClusterId != nil {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                             expandedClusterId = nil
                         }
@@ -230,8 +236,47 @@ struct CrowdHomeView: View {
                                     pitch: ctx.camera.pitch
                                 )
                             )
-                        }
                     }
+                }
+                
+                // === DROPDOWN LIST OVERLAY ===
+                if let cluster = selectedCluster, showClusterDropdown {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            dismissClusterDropdown()
+                        }
+                        .zIndex(998)
+                    
+                    VStack(spacing: 0) {
+                        Spacer()
+                            .frame(height: 120)
+                        
+                        ClusterEventFloatingCard(
+                            cluster: cluster,
+                            onSelect: { event in
+                                Haptics.light()
+                                handleEventTap(event)
+                                dismissClusterDropdown()
+                            },
+                            onDismiss: {
+                                dismissClusterDropdown()
+                            }
+                        )
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .move(edge: .top).combined(with: .opacity)
+                            )
+                        )
+                        
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .zIndex(999)
+                    .allowsHitTesting(true)
+                }
 
                 // === OVERLAYS & CONTROLS ===
                 GeometryReader { geo in
@@ -543,26 +588,23 @@ struct CrowdHomeView: View {
                 showEventDetail = true
             }
         } else {
-            // Multi-event cluster - toggle expansion
-            print("🔄 Toggling cluster expansion - current: \(expandedClusterId ?? "none"), new: \(cluster.id)")
-            withAnimation(.easeOut(duration: 0.3)) {
-                if expandedClusterId == cluster.id {
-                    expandedClusterId = nil
-                } else {
-                    expandedClusterId = cluster.id
-                    
-                    // Zoom in to cluster when expanding
-                    cameraPosition = .camera(
-                        MapCamera(
-                            centerCoordinate: cluster.centerCoordinate,
-                            distance: 15,
-                            heading: currentCamera.heading,
-                            pitch: currentCamera.pitch
-                        )
-                    )
-                    print("📍 Zoomed to cluster at distance 15")
-                }
+            // Multi-event cluster - show dropdown list (NO ZOOM)
+            print("📋 Showing dropdown for \(cluster.eventCount) events")
+            Haptics.light()
+            
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                selectedCluster = cluster
+                showClusterDropdown = true
+                // Clear any expanded state
+                expandedClusterId = nil
             }
+        }
+    }
+    
+    private func dismissClusterDropdown() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            showClusterDropdown = false
+            selectedCluster = nil
         }
     }
     
