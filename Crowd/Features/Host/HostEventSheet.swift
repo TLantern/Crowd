@@ -406,7 +406,7 @@ struct HostEventSheet: View {
     }
     
     private var locationSection: some View {
-        Section("Location 📍") {
+        Section("Choose a location 📍") {
             NavigationLink {
                 LocationPickerView(
                     locationName: $locationName,
@@ -443,7 +443,7 @@ struct HostEventSheet: View {
                 
                 // Right: Category
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Type")
+                    Text("Event Type")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Picker("", selection: $category) {
