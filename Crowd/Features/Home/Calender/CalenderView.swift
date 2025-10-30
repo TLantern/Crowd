@@ -59,7 +59,7 @@ struct CalenderView: View {
                         
                         VStack(alignment: .center, spacing: 4) {
                             Text("Upcoming Events")
-                                .font(.system(size: 24, weight: .bold))
+                                .font(.system(size: 48, weight: .bold))
                                 .foregroundStyle(.primary)
                             
                             Text("\(displayedEvents.count) of \(filteredEvents.count) events")

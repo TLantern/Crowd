@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreLocation
+import MapKit
 import CoreMotion
 import Combine
 
@@ -61,6 +62,7 @@ struct EventNavigationModal: View {
     @State private var locationUpdateTimer: Timer?
     
     @State private var currentUserId: String = "unknown"
+    @State private var transport: MKDirectionsTransportType = .automobile
     
     // MARK: - Body
     var body: some View {
@@ -96,7 +98,7 @@ struct EventNavigationModal: View {
                         }
                         .padding(.top, 20)
                         
-                        // White container for map
+                        // White container for map and transport picker
                         VStack(spacing: 0) {
                             // MAP AREA
                             RouteMapView(
@@ -105,7 +107,17 @@ struct EventNavigationModal: View {
                             )
                             .frame(height: geo.size.height * 0.85 - 100)
                             .background(Color.white)
+
+                            // Transport mode picker below the map
+                            Picker("", selection: $transport) {
+                                Text("Car").tag(MKDirectionsTransportType.automobile)
+                                Text("Walk").tag(MKDirectionsTransportType.walking)
+                                Text("Transit").tag(MKDirectionsTransportType.transit)
+                            }
+                            .pickerStyle(.segmented)
+                            .padding()
                         }
+                        .ignoresSafeArea(edges: .top)
                     }
                 }
                 .navigationBarHidden(true)
