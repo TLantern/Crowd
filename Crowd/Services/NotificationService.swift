@@ -98,9 +98,10 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
                 .getDocument()
             
             // If document doesn't exist, create a minimal user document
-            let data: [String: Any] = if !userDoc.exists {
+            let data: [String: Any]
+            if !userDoc.exists {
                 print("📝 Creating new user document for anonymous user")
-                [
+                data = [
                     "displayName": "Guest",
                     "handle": "",
                     "bio": "",
@@ -119,7 +120,7 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
                 ]
             } else {
                 // Just update FCM token on existing document
-                [
+                data = [
                     "fcmToken": token,
                     "lastTokenUpdate": Timestamp(date: Date())
                 ]
