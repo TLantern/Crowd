@@ -7,7 +7,7 @@
 
 import SwiftUI
 import CoreLocation
-import MapKit
+// import MapKit
 import CoreMotion
 import Combine
 
