@@ -1286,3 +1286,115 @@ exports.sendSocialLinkReminder = functions.pubsub
     }
   });
 
+// Auto-delete expired events from both collections
+// Runs every hour and deletes events that have ended (with 1 hour grace period)
+exports.cleanupExpiredEvents = functions.pubsub
+  .schedule('every 60 minutes')
+  .timeZone('Etc/UTC')
+  .onRun(async (context) => {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    // Grace period: delete events that ended more than 1 hour ago
+    const gracePeriodSeconds = 60 * 60; // 1 hour
+    const cutoffTime = nowSeconds - gracePeriodSeconds;
+    
+    console.log('🧹 Starting expired events cleanup...');
+    
+    function normalizeEndsAt(endsAt) {
+      if (!endsAt) return null;
+      if (typeof endsAt === 'number') return endsAt;
+      if (endsAt._seconds) return endsAt._seconds; // Firestore Timestamp object
+      if (endsAt.seconds) return endsAt.seconds; // Firestore Timestamp (alternative format)
+      return null;
+    }
+    
+    async function deleteExpiredFromCollection(collectionName) {
+      const snapshot = await db.collection(collectionName).get();
+      const expiredEventIds = [];
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const endsAt = normalizeEndsAt(data.endsAt);
+        // If no endsAt, check createdAt + reasonable default (24 hours for events without end time)
+        if (!endsAt) {
+          const createdAt = normalizeEndsAt(data.createdAt);
+          if (createdAt && createdAt < cutoffTime - (23 * 60 * 60)) { // 23 hours ago (24h default - 1h grace)
+            expiredEventIds.push({ id: doc.id, type: collectionName });
+          }
+        } else if (endsAt < cutoffTime) {
+          expiredEventIds.push({ id: doc.id, type: collectionName });
+        }
+      });
+      
+      if (expiredEventIds.length === 0) {
+        return { deleted: 0, collectionName };
+      }
+      
+      console.log(`🗑️ Found ${expiredEventIds.length} expired event(s) in ${collectionName}`);
+      
+      // Delete related data first (signals, attendances, chats)
+      for (const event of expiredEventIds) {
+        const eventId = event.id;
+        
+        // Delete signals for this event
+        const signalsSnapshot = await db.collection('signals')
+          .where('eventId', '==', eventId)
+          .get();
+        if (!signalsSnapshot.empty) {
+          const batch = db.batch();
+          signalsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          console.log(`   🗑️ Deleted ${signalsSnapshot.size} signal(s) for event ${eventId}`);
+        }
+        
+        // Delete attendances for this event
+        const attendancesSnapshot = await db.collection('userAttendances')
+          .where('eventId', '==', eventId)
+          .get();
+        if (!attendancesSnapshot.empty) {
+          const batch = db.batch();
+          attendancesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          console.log(`   🗑️ Deleted ${attendancesSnapshot.size} attendance(s) for event ${eventId}`);
+        }
+        
+        // Delete chat messages for this event (subcollection)
+        const messagesRef = db.collection('eventChats').doc(eventId).collection('messages');
+        let deletedMessages = 0;
+        while (true) {
+          const messagesSnap = await messagesRef.limit(500).get();
+          if (messagesSnap.empty) break;
+          const batch = db.batch();
+          messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          deletedMessages += messagesSnap.size;
+          if (messagesSnap.size < 500) break;
+        }
+        
+        // Delete parent chat doc if exists
+        await db.collection('eventChats').doc(eventId).delete().catch(() => {});
+        if (deletedMessages > 0) {
+          console.log(`   🗑️ Deleted ${deletedMessages} message(s) and chat doc for event ${eventId}`);
+        }
+        
+        // Finally, delete the event itself
+        await db.collection(collectionName).doc(eventId).delete();
+        console.log(`   ✅ Deleted event ${eventId} from ${collectionName}`);
+      }
+      
+      return { deleted: expiredEventIds.length, collectionName };
+    }
+    
+    // Clean up both collections in parallel
+    const results = await Promise.all([
+      deleteExpiredFromCollection('events'),
+      deleteExpiredFromCollection('userEvents'),
+    ]);
+    
+    const totalDeleted = results.reduce((sum, r) => sum + r.deleted, 0);
+    console.log(`✅ Expired events cleanup complete: ${totalDeleted} event(s) deleted`);
+    console.log(`   - ${results[0].deleted} from events collection`);
+    console.log(`   - ${results[1].deleted} from userEvents collection`);
+    
+    return null;
+  });
+
