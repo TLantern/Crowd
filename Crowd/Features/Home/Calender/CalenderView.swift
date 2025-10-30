@@ -316,26 +316,11 @@ struct EventCardView: View {
                 Button(action: {
                     Task {
                         if !isAttending {
-                            // If this is an external/live campus event (has sourceURL), record locally without backend join
-                            if event.sourceURL != nil {
-                                await MainActor.run {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        isAttending = true
-                                        AttendedEventsService.shared.addAttendedEvent(event)
-                                    }
-                                }
-                            } else {
-                                // Backend-managed event
-                                do {
-                                    try await AppEnvironment.current.eventRepo.join(eventId: event.id, userId: FirebaseManager.shared.getCurrentUserId() ?? "")
-                                    await MainActor.run {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            isAttending = true
-                                            AttendedEventsService.shared.addAttendedEvent(event)
-                                        }
-                                    }
-                                } catch {
-                                    print("❌ Failed to join event: \(error)")
+                            // Calendar events: always update locally so the button transitions instantly
+                            await MainActor.run {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isAttending = true
+                                    AttendedEventsService.shared.addAttendedEvent(event)
                                 }
                             }
                         } else {
