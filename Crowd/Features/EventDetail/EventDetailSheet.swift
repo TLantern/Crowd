@@ -118,6 +118,11 @@ struct EventDetailView: View {
                             Text("Within \(Int(event.radiusMeters))m")
                                 .font(.system(size: 16))
                                 .foregroundColor(.primary)
+                            if let raw = event.rawLocationName, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text(raw)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                     

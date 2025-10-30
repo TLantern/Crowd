@@ -134,7 +134,8 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
         startsAt: startsAtDate,
         endsAt: endsAtDate,
         tags: tags,
-        sourceURL: validSource
+        sourceURL: validSource,
+        rawLocationName: (live.locationName?.isEmpty == false ? live.locationName : live.location)
     )
     // Use source document id when available so the same event keeps a stable id across fetches
     if let liveId = live.id, !liveId.isEmpty { ev.id = liveId }
