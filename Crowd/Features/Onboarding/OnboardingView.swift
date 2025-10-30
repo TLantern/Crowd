@@ -26,13 +26,14 @@ struct OnboardingView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 190, height: 120)
+                    .padding(.bottom, 12)
 
                 // People + fire graphic
                 Image("Logo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 200, height: 170)
-                    .padding(.bottom, 40)
+                    .frame(width: 300, height: 255)
+                    .padding(.bottom, 48)
 
                 Spacer()
 
@@ -66,7 +67,7 @@ struct OnboardingView: View {
                 .padding(24)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
                 .padding(.horizontal, 20)
-                .padding(.bottom, 40)
+                .padding(.bottom, 64)
             }
         }
     }
