@@ -17,9 +17,10 @@ struct CrowdMapView: View {
     @State private var expandedClusterId: String?
     @State private var currentCameraDistance: Double = 1200
     
-    // MARK: - Floating Card State
+    // MARK: - Dropdown List State
     @State private var selectedCluster: EventCluster?
     @State private var showClusterCard: Bool = false
+    @State private var clusterScreenPosition: CGPoint = .zero
     
     init(events: [CrowdEvent], camera: MKCoordinateRegion, selectedEvent: Binding<CrowdEvent?>, showEventDetail: Binding<Bool>) {
         self.events = events
@@ -34,26 +35,32 @@ struct CrowdMapView: View {
     }
 
     var body: some View {
-        ZStack {
-            // MARK: - Map Layer
-            Map(position: $cameraPosition) {
-                ForEach(clusters) { cluster in
-                    Annotation("", coordinate: cluster.centerCoordinate) {
-                        ClusterAnnotationView(
-                            cluster: cluster,
-                            isExpanded: expandedClusterId == cluster.id,
-                            cameraDistance: currentCameraDistance,
-                            onTap: {
-                                handleClusterTap(cluster)
-                            },
-                            onEventTap: { event in
-                                handleEventTap(event)
-                            }
-                        )
+        GeometryReader { fullGeometry in
+            ZStack {
+                // MARK: - Map Layer
+                Map(position: $cameraPosition) {
+                    ForEach(clusters) { cluster in
+                        Annotation("", coordinate: cluster.centerCoordinate) {
+                            ClusterAnnotationView(
+                                cluster: cluster,
+                                isExpanded: expandedClusterId == cluster.id,
+                                cameraDistance: currentCameraDistance,
+                                onTap: {
+                                    // Calculate screen position of the tapped cluster
+                                    calculateClusterScreenPosition(
+                                        cluster: cluster,
+                                        in: fullGeometry
+                                    )
+                                    handleClusterTap(cluster)
+                                },
+                                onEventTap: { event in
+                                    handleEventTap(event)
+                                }
+                            )
+                        }
                     }
+                    // Optional: CrowdHeatmapOverlay(dots: ...)
                 }
-                // Optional: CrowdHeatmapOverlay(dots: ...)
-            }
             .onMapCameraChange { context in
                 cameraPosition = .camera(context.camera)
                 currentCameraDistance = context.camera.distance
@@ -69,9 +76,19 @@ struct CrowdMapView: View {
                 }
             }
             
-            // MARK: - Floating Card Overlay
+            // MARK: - Dropdown List Overlay (Anchored to Pin)
             if let cluster = selectedCluster, showClusterCard {
-                GeometryReader { geometry in
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        dismissClusterCard()
+                    }
+                    .zIndex(999)
+                
+                VStack(spacing: 0) {
+                    Spacer()
+                        .frame(height: clusterScreenPosition.y + 60) // Position below pin
+                    
                     ClusterEventFloatingCard(
                         cluster: cluster,
                         onSelect: { event in
@@ -87,16 +104,31 @@ struct CrowdMapView: View {
                             dismissClusterCard()
                         }
                     )
-                    .position(
-                        x: geometry.size.width / 2,
-                        y: geometry.size.height / 2 - 150
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .move(edge: .top).combined(with: .opacity)
+                        )
                     )
-                    .transition(.scale(scale: 0.95).combined(with: .opacity))
-                    .zIndex(1000)
+                    
+                    Spacer()
                 }
+                .frame(maxWidth: .infinity)
+                .zIndex(1000)
                 .allowsHitTesting(true)
             }
+            }
         }
+    }
+    
+    private func calculateClusterScreenPosition(cluster: EventCluster, in geometry: GeometryProxy) {
+        // Estimate the screen position based on screen center
+        // Since we can't directly get map coordinate conversion in SwiftUI MapKit,
+        // we'll position it in the center horizontally and offset vertically
+        clusterScreenPosition = CGPoint(
+            x: geometry.size.width / 2,
+            y: geometry.size.height / 2 - 100
+        )
     }
     
     private func handleClusterTap(_ cluster: EventCluster) {
@@ -138,3 +170,4 @@ struct CrowdMapView: View {
         showEventDetail = true
     }
 }
+

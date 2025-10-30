@@ -14,17 +14,26 @@ struct ClusterEventFloatingCard: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            Text("Events at this location")
-                .font(.headline)
-                .foregroundColor(.primary)
-                .padding(.top, 16)
-                .padding(.bottom, 12)
+            // Header with count
+            HStack {
+                Text("\(cluster.eventCount) Events Here")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                Spacer()
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(uiColor: .secondarySystemBackground))
             
             Divider()
             
-            // Event list with scroll
-            ScrollView {
+            // Scrollable event list
+            ScrollView(showsIndicators: true) {
                 VStack(spacing: 0) {
                     ForEach(cluster.events) { event in
                         Button(action: { 
@@ -33,69 +42,68 @@ struct ClusterEventFloatingCard: View {
                             HStack(alignment: .top, spacing: 12) {
                                 // Event emoji
                                 Text(event.categoryEmoji)
-                                    .font(.system(size: 28))
-                                    .frame(width: 40, height: 40)
+                                    .font(.system(size: 32))
+                                    .frame(width: 44, height: 44)
                                 
                                 // Event details
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 6) {
                                     Text(event.title)
-                                        .font(.headline)
+                                        .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.primary)
                                         .multilineTextAlignment(.leading)
+                                        .lineLimit(2)
                                     
                                     if let timeText = event.dateFormatted {
-                                        Text(timeText)
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "clock")
+                                                .font(.caption)
+                                            Text(timeText)
+                                                .font(.subheadline)
+                                        }
+                                        .foregroundColor(.secondary)
                                     }
                                     
                                     // Attendee count
                                     HStack(spacing: 4) {
                                         Image(systemName: "person.2.fill")
                                             .font(.caption)
-                                        Text("\(event.attendeeCount)")
+                                        Text("\(event.attendeeCount) attending")
                                             .font(.caption)
                                     }
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.blue)
                                 }
                                 
                                 Spacer()
                                 
                                 // Chevron
                                 Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.tertiary)
                             }
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 14)
                             .padding(.horizontal, 16)
+                            .background(Color(uiColor: .systemBackground))
                         }
                         .buttonStyle(.plain)
                         
                         if event.id != cluster.events.last?.id {
                             Divider()
-                                .padding(.leading, 68)
+                                .padding(.leading, 72)
                         }
                     }
                 }
             }
-            .frame(maxHeight: 280)
-            
-            // Arrow pointer at bottom
-            ArrowPointer()
-                .fill(Color(uiColor: .systemBackground))
-                .frame(width: 20, height: 10)
-                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 2)
-                .offset(y: 5)
+            .frame(maxHeight: min(CGFloat(cluster.eventCount) * 90, 320))
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(uiColor: .systemBackground))
+                .shadow(color: .black.opacity(0.2), radius: 16, x: 0, y: 8)
         )
-        .frame(width: 320)
+        .frame(width: 340)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
         )
     }
 }
