@@ -1,6 +1,15 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helpers
+    function isAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isExpired(ts) {
+      return ts is timestamp && ts < request.time - duration.value(1, 'h');
+    }
     
     // Official events collection
     match /events/{eventId} {
@@ -20,9 +29,15 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && request.resource.data.hostId == request.auth.uid;
       
-      // Users can only delete their own events (including anonymous users)
-      allow delete: if request.auth != null
-                    && resource.data.hostId == request.auth.uid;
+      // Delete allowed for:
+      // - the host
+      // - an admin (document exists at admins/{uid})
+      // - any authenticated user if the event has expired (endsAt < request.time - 1h)
+      allow delete: if request.auth != null && (
+                      resource.data.hostId == request.auth.uid ||
+                      isAdmin() ||
+                      isExpired(resource.data.endsAt)
+                    );
       
       // Users can update their own events OR update attendeeCount/signalStrength when joining
       allow update: if request.auth != null && (
@@ -74,6 +89,8 @@ service cloud.firestore {
     // Campus events live collection (read-only for users)
     match /campus_events_live/{eventId} {
       allow read: if true;
+      // Allow delete of expired campus events for admins only
+      allow delete: if isAdmin() && isExpired(resource.data.endsAt);
       allow write: if false; // Only Cloud Functions can write
     }
     

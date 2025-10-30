@@ -48,6 +48,13 @@ function parseStartDateFromString(startTimeLocal) {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// Convert ISO-like string to millis, or null if invalid
+function toMillis(s) {
+  if (!s || typeof s !== 'string') return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
 // Determine a location string from event doc
 function deriveLocationString(doc) {
   // Prefer explicit 'location' from Firebase source as provided by user
@@ -449,6 +456,23 @@ exports.createEvent = functions.https.onCall(async (data, context) => {
   try {
     console.log('📝 Creating event:', data.title);
     
+    function normalizeEndsAtMillis(endsAt) {
+      if (!endsAt) return null;
+      if (typeof endsAt === 'number') {
+        // assume seconds if it's reasonably small, otherwise millis
+        return endsAt < 10_000_000_000 ? endsAt * 1000 : endsAt;
+      }
+      if (endsAt._seconds) return endsAt._seconds * 1000;
+      if (endsAt.seconds) return endsAt.seconds * 1000;
+      return null;
+    }
+
+    const nowMs = Date.now();
+    const endsAtMs = normalizeEndsAtMillis(data.endsAt);
+    const expiresAtMs = endsAtMs != null
+      ? endsAtMs + 60 * 60 * 1000 // endsAt + 1h grace
+      : nowMs + 24 * 60 * 60 * 1000; // default 24h if no endsAt provided
+
     const eventData = {
       id: data.id,
       title: data.title,
@@ -464,6 +488,7 @@ exports.createEvent = functions.https.onCall(async (data, context) => {
       hostName: data.hostName,
       description: data.description || '',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt: admin.firestore.Timestamp.fromMillis(expiresAtMs),
       attendeeCount: 0,
       signalStrength: 1
     };
@@ -763,8 +788,12 @@ exports.addSampleCampusEvents = functions.https.onCall(async (data, context) => 
     const batch = db.batch();
     
     sampleEvents.forEach((event, index) => {
+      const endMs = toMillis(event.endTimeLocal);
+      const expiresAt = endMs != null
+        ? admin.firestore.Timestamp.fromMillis(endMs + 60 * 60 * 1000)
+        : admin.firestore.Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000);
       const docRef = db.collection('campus_events_live').doc(`sample_event_${index + 1}`);
-      batch.set(docRef, event);
+      batch.set(docRef, { ...event, expiresAt });
     });
     
     await batch.commit();
@@ -859,7 +888,12 @@ exports.getTodaysEvents = functions.https.onCall(async (data, context) => {
             longitude = geo.longitude;
             geohash = geohashEncode(latitude, longitude, 6);
             // Persist back to the source doc for future efficiency
-            await db.collection('campus_events_live').doc(ev.id).set({ latitude, longitude, geohash }, { merge: true });
+            // Also add expiresAt if missing to enable Firestore TTL cleanup
+            const endMs = toMillis && ev.endTimeLocal ? toMillis(ev.endTimeLocal) : null;
+            const expiresAt = (endMs != null)
+              ? admin.firestore.Timestamp.fromMillis(endMs + 60 * 60 * 1000)
+              : (ev.expiresAt ? ev.expiresAt : admin.firestore.Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000));
+            await db.collection('campus_events_live').doc(ev.id).set({ latitude, longitude, geohash, expiresAt }, { merge: true });
           } catch (e) {
             console.warn(`Geocode failed for "${locStr}":`, e.message);
           }
