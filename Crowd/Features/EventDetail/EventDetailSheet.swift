@@ -32,13 +32,7 @@ struct EventDetailView: View {
         return event.hostId == currentUserId
     }
     
-    var emoji: String {
-        guard let categoryString = event.category,
-              let eventCategory = EventCategory(rawValue: categoryString) else {
-            return "📅" // Default fallback matching EventCategory.other
-        }
-        return eventCategory.emoji
-    }
+    var emoji: String { TagEmoji.emoji(for: event.tags, fallbackCategory: event.category) }
     
     var body: some View {
         VStack(spacing: 0) {

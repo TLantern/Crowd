@@ -149,9 +149,30 @@ final class CampusEventsViewModel: ObservableObject {
 
 // MARK: - Apple Maps Geocoding (reuse HostedEventSheet logic)
 
+// Shared rate limiter to prevent GEO throttling (max ~50/min). Queues calls globally.
+private actor AppleMapsSearchRateLimiter {
+    static let shared = AppleMapsSearchRateLimiter()
+    private var nextAllowed: Date = .distantPast
+    private let minInterval: TimeInterval = 1.3 // ~46/min
+
+    func acquire() async {
+        let now = Date()
+        let delay = max(0, nextAllowed.timeIntervalSince(now))
+        if delay > 0 {
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        }
+        nextAllowed = Date().addingTimeInterval(minInterval)
+    }
+
+    func backoff(seconds: TimeInterval) {
+        nextAllowed = Date().addingTimeInterval(seconds)
+    }
+}
+
 fileprivate func searchLocationOnAppleMapsCampus(_ locationName: String) async -> CLLocationCoordinate2D? {
     let trimmed = locationName.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return nil }
+    await AppleMapsSearchRateLimiter.shared.acquire()
     let req = MKLocalSearch.Request()
     let query: String = (
         trimmed.contains("DATCU") || trimmed.contains("Stadium") || trimmed.contains("Square")
@@ -167,6 +188,10 @@ fileprivate func searchLocationOnAppleMapsCampus(_ locationName: String) async -
         guard let item = resp.mapItems.first else { return nil }
         return item.placemark.coordinate
     } catch {
+        let ns = error as NSError
+        if ns.domain == "GEOErrorDomain" && ns.code == -3 { // throttled
+            await AppleMapsSearchRateLimiter.shared.backoff(seconds: 60)
+        }
         return nil
     }
 }

@@ -11,14 +11,7 @@ struct EventAnnotationView: View {
     let event: CrowdEvent
     var isInExpandedCluster: Bool = false
     
-    var emoji: String {
-        // Map category to emoji using EventCategory enum
-        guard let categoryString = event.category,
-              let eventCategory = EventCategory(rawValue: categoryString) else {
-            return "📅" // Default matches calendar card
-        }
-        return eventCategory.emoji
-    }
+    var emoji: String { TagEmoji.emoji(for: event.tags, fallbackCategory: event.category) }
     
     var isOnFire: Bool {
         event.attendeeCount > 5
