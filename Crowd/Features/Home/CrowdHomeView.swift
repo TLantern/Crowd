@@ -40,7 +40,6 @@ struct CrowdHomeView: View {
     
     // MARK: - Event detail
     @State private var selectedEvent: CrowdEvent?
-    @State private var showEventDetail = false
     
     // MARK: - Clustering
     @State private var expandedClusterId: String?
@@ -495,15 +494,11 @@ struct CrowdHomeView: View {
                 .presentationDetents([.fraction(0.75), .large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showEventDetail, onDismiss: {
-            selectedEvent = nil
-        }) {
-            if let event = selectedEvent {
-                EventDetailView(event: event)
-                    .environmentObject(appState)
-                    .presentationDetents([.fraction(0.75)])
-                    .presentationDragIndicator(.visible)
-            }
+        .sheet(item: $selectedEvent) { event in
+            EventDetailView(event: event)
+                .environmentObject(appState)
+                .presentationDetents([.fraction(0.75)])
+                .presentationDragIndicator(.visible)
         }
         .task {
             await loadFirebaseEvents()
@@ -615,7 +610,6 @@ struct CrowdHomeView: View {
             if let event = cluster.events.first {
                 print("✅ Showing detail for single event: \(event.title)")
                 selectedEvent = event
-                showEventDetail = true
             }
         } else {
             // Multi-event cluster - show dropdown list (NO ZOOM)
@@ -641,7 +635,6 @@ struct CrowdHomeView: View {
     private func handleEventTap(_ event: CrowdEvent) {
         print("✅ handleEventTap called for: \(event.title)")
         selectedEvent = event
-        showEventDetail = true
     }
 }
 

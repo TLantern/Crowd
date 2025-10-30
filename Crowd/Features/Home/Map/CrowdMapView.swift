@@ -11,7 +11,6 @@ import MapKit
 struct CrowdMapView: View {
     var events: [CrowdEvent]
     @Binding var selectedEvent: CrowdEvent?
-    @Binding var showEventDetail: Bool
     
     @State private var cameraPosition: MapCameraPosition
     @State private var expandedClusterId: String?
@@ -22,10 +21,9 @@ struct CrowdMapView: View {
     @State private var showClusterCard: Bool = false
     @State private var clusterScreenPosition: CGPoint = .zero
     
-    init(events: [CrowdEvent], camera: MKCoordinateRegion, selectedEvent: Binding<CrowdEvent?>, showEventDetail: Binding<Bool>) {
+    init(events: [CrowdEvent], camera: MKCoordinateRegion, selectedEvent: Binding<CrowdEvent?>) {
         self.events = events
         self._selectedEvent = selectedEvent
-        self._showEventDetail = showEventDetail
         self._cameraPosition = State(initialValue: .region(camera))
     }
     
@@ -139,7 +137,6 @@ struct CrowdMapView: View {
             if let event = cluster.events.first {
                 print("   → Opening single event detail: \(event.title)")
                 selectedEvent = event
-                showEventDetail = true
             }
         } else {
             // Multi-event cluster - show floating card
@@ -167,7 +164,6 @@ struct CrowdMapView: View {
     
     private func handleEventTap(_ event: CrowdEvent) {
         selectedEvent = event
-        showEventDetail = true
     }
 }
 
