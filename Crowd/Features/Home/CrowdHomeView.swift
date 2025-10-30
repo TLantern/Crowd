@@ -25,7 +25,8 @@ struct CrowdHomeView: View {
     // MARK: - UI state
     @State private var showHostSheet = false
     @State private var hostedEvents: [CrowdEvent] = []
-    @State private var firebaseEvents: [CrowdEvent] = []
+    @State private var officialEvents: [CrowdEvent] = []
+    @State private var userEventsFromFirebase: [CrowdEvent] = []
     @State private var upcomingEvents: [CrowdEvent] = []
     @State private var isLoadingEvents = false
 
@@ -55,7 +56,17 @@ struct CrowdHomeView: View {
     
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
-        firebaseEvents + hostedEvents + upcomingEvents
+        // Combine all events with deduplication
+        // Priority: hostedEvents > userEventsFromFirebase (avoid showing duplicate user events)
+        let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
+        return officialEvents + allUserEvents + upcomingEvents
+    }
+    
+    /// Merge local and firebase user events, removing duplicates (prefer local version)
+    private func mergeUserEvents(local: [CrowdEvent], firebase: [CrowdEvent]) -> [CrowdEvent] {
+        let localIds = Set(local.map { $0.id })
+        let firebaseUnique = firebase.filter { !localIds.contains($0.id) }
+        return local + firebaseUnique
     }
     
     var upcomingEventsInNext2Days: [CrowdEvent] {
@@ -75,14 +86,19 @@ struct CrowdHomeView: View {
             guard let s = ev.startsAt else { return false }
             return calendar.isDateInToday(s) || calendar.isDateInTomorrow(s)
         }
+        
         let inputEvents: [CrowdEvent]
         switch sourceFilter {
         case .user:
-            inputEvents = hostedEvents
+            // Only user-created events (local + firebase, deduplicated)
+            inputEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
         case .school:
-            inputEvents = firebaseEvents + filteredUpcoming
+            // Only official school events + upcoming school events
+            inputEvents = officialEvents + filteredUpcoming
         case .none:
-            inputEvents = firebaseEvents + hostedEvents + filteredUpcoming
+            // All events (deduplicated user events)
+            let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
+            inputEvents = officialEvents + allUserEvents + filteredUpcoming
         }
         return EventClusteringService.clusterEvents(inputEvents)
     }
@@ -517,12 +533,14 @@ struct CrowdHomeView: View {
             // Remove deleted event from ALL event arrays
             if let eventId = notification.object as? String {
                 hostedEvents.removeAll { $0.id == eventId }
-                firebaseEvents.removeAll { $0.id == eventId }
+                officialEvents.removeAll { $0.id == eventId }
+                userEventsFromFirebase.removeAll { $0.id == eventId }
                 upcomingEvents.removeAll { $0.id == eventId }
                 
                 print("🗑️ Removed deleted event from all arrays: \(eventId)")
                 print("   - Current hosted events: \(hostedEvents.count)")
-                print("   - Current firebase events: \(firebaseEvents.count)")
+                print("   - Current official events: \(officialEvents.count)")
+                print("   - Current user events from Firebase: \(userEventsFromFirebase.count)")
                 print("   - Clusters will auto-update with new counts")
                 
                 // Collapse any expanded cluster that might have contained this event
@@ -543,15 +561,29 @@ struct CrowdHomeView: View {
         isLoadingEvents = true
         
         do {
-            let events = try await env.eventRepo.fetchEvents(in: targetRegion)
-            await MainActor.run {
-                firebaseEvents = events
-                isLoadingEvents = false
-                print("✅ Loaded \(events.count) events from Firebase for region: \(targetRegion.rawValue)")
+            // Use Firebase repository's separate fetch method
+            if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
+                let (official, userCreated) = try await firebaseRepo.fetchEventsSeparately(in: targetRegion)
+                await MainActor.run {
+                    officialEvents = official
+                    userEventsFromFirebase = userCreated
+                    isLoadingEvents = false
+                    print("✅ Loaded \(official.count) official events and \(userCreated.count) user-created events from Firebase")
+                }
+            } else {
+                // Fallback for mock repository or other implementations
+                let events = try await env.eventRepo.fetchEvents(in: targetRegion)
+                await MainActor.run {
+                    officialEvents = events
+                    userEventsFromFirebase = []
+                    isLoadingEvents = false
+                    print("✅ Loaded \(events.count) events from repository (using fallback)")
+                }
             }
         } catch {
             await MainActor.run {
-                firebaseEvents = []
+                officialEvents = []
+                userEventsFromFirebase = []
                 isLoadingEvents = false
                 print("❌ Failed to load Firebase events: \(error.localizedDescription)")
             }
@@ -584,7 +616,12 @@ struct CrowdHomeView: View {
             return endsAt < fourHoursAgo
         }
         
-        firebaseEvents.removeAll { event in
+        officialEvents.removeAll { event in
+            guard let endsAt = event.endsAt else { return false }
+            return endsAt < fourHoursAgo
+        }
+        
+        userEventsFromFirebase.removeAll { event in
             guard let endsAt = event.endsAt else { return false }
             return endsAt < fourHoursAgo
         }

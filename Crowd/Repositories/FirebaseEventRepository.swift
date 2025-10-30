@@ -57,6 +57,43 @@ final class FirebaseEventRepository: EventRepository {
         return allEvents
     }
     
+    /// Fetch events separated by source (official vs user-created)
+    func fetchEventsSeparately(in region: CampusRegion) async throws -> (official: [CrowdEvent], userCreated: [CrowdEvent]) {
+        let center = region.spec.center
+        let radiusKm = region.spec.distance / 1000.0
+        
+        print("📍 Fetching events separately from 'events' and 'userEvents' collections")
+        
+        var officialEvents: [CrowdEvent] = []
+        var userCreatedEvents: [CrowdEvent] = []
+        
+        // Fetch from official 'events' collection (Firebase-generated/scraped events)
+        let eventsSnapshot = try await db.collection("events").getDocuments()
+        for document in eventsSnapshot.documents {
+            if let event = try? parseEvent(from: document.data()) {
+                let distance = calculateDistance(from: center, to: event.coordinates)
+                if distance <= radiusKm {
+                    officialEvents.append(event)
+                }
+            }
+        }
+        
+        // Fetch from 'userEvents' collection (user-created events)
+        let userEventsSnapshot = try await db.collection("userEvents").getDocuments()
+        for document in userEventsSnapshot.documents {
+            if let event = try? parseEvent(from: document.data()) {
+                let distance = calculateDistance(from: center, to: event.coordinates)
+                if distance <= radiusKm {
+                    userCreatedEvents.append(event)
+                }
+            }
+        }
+        
+        print("✅ Fetched \(officialEvents.count) official events and \(userCreatedEvents.count) user-created events")
+        
+        return (official: officialEvents, userCreated: userCreatedEvents)
+    }
+    
     func create(event: CrowdEvent) async throws {
         // Check authentication status before attempting creation
         guard let currentUserId = FirebaseManager.shared.getCurrentUserId() else {
