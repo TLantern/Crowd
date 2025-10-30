@@ -552,6 +552,33 @@ struct CrowdHomeView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToEventFromNotification)) { notification in
+            // Handle navigation to event from push notification tap
+            if let eventId = notification.userInfo?["eventId"] as? String {
+                print("📲 Navigating to event from notification: \(eventId)")
+                
+                // Find the event in all event arrays
+                let allEvents = hostedEvents + firebaseEvents + upcomingEvents
+                if let event = allEvents.first(where: { $0.id == eventId }) {
+                    selectedEvent = event
+                } else {
+                    // If event not found locally, reload events to ensure we have it
+                    Task {
+                        await loadFirebaseEvents()
+                        await loadUpcomingEvents()
+                        let reloadedEvents = hostedEvents + firebaseEvents + upcomingEvents
+                        if let event = reloadedEvents.first(where: { $0.id == eventId }) {
+                            selectedEvent = event
+                        }
+                    }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showHostSheetFromNotification)) { _ in
+            // Handle promotional notification - show host sheet to encourage event creation
+            print("📲 Showing host sheet from promotional notification")
+            showHostSheet = true
+        }
     }
     
     // MARK: - Firebase Event Loading

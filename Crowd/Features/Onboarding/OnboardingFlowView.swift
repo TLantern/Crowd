@@ -16,6 +16,7 @@ struct OnboardingFlowView: View {
     @State private var isSaving = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var isAppearing = false
     
     let onComplete: () -> Void
     
@@ -35,6 +36,7 @@ struct OnboardingFlowView: View {
                     }
                 }
                 .transition(.opacity)
+                .opacity(isAppearing ? 1 : 0)
             }
             
             // Profile Setup Screen
@@ -81,6 +83,11 @@ struct OnboardingFlowView: View {
             Text(errorMessage)
         }
         .preferredColorScheme(.light)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.6)) {
+                isAppearing = true
+            }
+        }
     }
     
     // MARK: - Save Profile to Firebase

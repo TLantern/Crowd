@@ -35,6 +35,10 @@ struct UserProfile: Codable, Equatable, Identifiable {
     var geohash: String?
     var lastLocationUpdate: Date?
     
+    // Notification cooldown tracking
+    var notificationCooldowns: [String: Timestamp]?
+    var lastNotificationSent: Timestamp?
+    
     // Computed property (not encoded/decoded)
     var avatarColor: Color {
         Color(hexString: avatarColorHex)
@@ -61,6 +65,8 @@ struct UserProfile: Codable, Equatable, Identifiable {
         case longitude
         case geohash
         case lastLocationUpdate
+        case notificationCooldowns
+        case lastNotificationSent
     }
 
     static let anonymous = UserProfile(
@@ -83,6 +89,8 @@ struct UserProfile: Codable, Equatable, Identifiable {
         latitude: nil,
         longitude: nil,
         geohash: nil,
-        lastLocationUpdate: nil
+        lastLocationUpdate: nil,
+        notificationCooldowns: nil,
+        lastNotificationSent: nil
     )
 }

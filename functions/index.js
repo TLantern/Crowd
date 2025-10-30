@@ -106,6 +106,39 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c; // Distance in meters
 }
 
+// Helper: Get emoji for interest/category name
+function getInterestEmoji(categoryName) {
+  const emojiMap = {
+    'music': '🎵',
+    'party': '🎉',
+    'food': '🍕',
+    'coffee': '☕',
+    'sports': '⚽',
+    'study': '📚',
+    'academic': '📚',
+    'art': '🎨',
+    'culture': '🎭',
+    'social': '🤝',
+    'networking': '🤝',
+    'wellness': '🧘',
+    'health': '🏥',
+    'outdoor': '🏔️',
+    'gaming': '🎮',
+    'lifestyle': '👗',
+    'politics': '🏛️',
+    'hangout': '🫂',
+    'default': '🎉'
+  };
+  
+  const lowerCategory = categoryName.toLowerCase();
+  for (const [key, emoji] of Object.entries(emojiMap)) {
+    if (lowerCategory.includes(key)) {
+      return emoji;
+    }
+  }
+  return emojiMap.default;
+}
+
 // Main Function: Send notifications when events are created
 // Follows Apple's Remote Notification Server guidelines
 // Reference: https://developer.apple.com/documentation/usernotifications/setting-up-a-remote-notification-server
@@ -132,6 +165,10 @@ exports.notifyNearbyUsers = functions.firestore
       console.log('⚠️ Event missing required location data, skipping notifications');
       return null;
     }
+
+    // Get current timestamp for cooldown checks
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const cooldownSeconds = 3 * 60 * 60; // 3 hours in seconds
 
     // Query users with similar geohash (within ~600m radius)
     const geohashPrefix = eventGeohash.substring(0, 5);
@@ -186,19 +223,42 @@ exports.notifyNearbyUsers = functions.firestore
           return;
         }
 
-        // Filter 2: Interest matching (onboarding interests)
+        // Filter 2: Interest matching (onboarding interests + event tags)
         const userInterests = user.interests || [];
+        const eventTags = event.tags || [];
         const categoryMatches = userInterests.includes(eventCategory);
+        
+        // Check if user has matching tags
+        let tagMatches = false;
+        for (const tag of eventTags) {
+          if (userInterests.some(interest => interest.toLowerCase().includes(tag.toLowerCase()) || tag.toLowerCase().includes(interest.toLowerCase()))) {
+            tagMatches = true;
+            break;
+          }
+        }
 
-        if (!categoryMatches) {
-          console.log(`⏭️ ${user.displayName}: No interest in "${eventCategory}"`);
+        if (!categoryMatches && !tagMatches) {
+          console.log(`⏭️ ${user.displayName}: No interest in "${eventCategory}" or matching tags`);
           console.log(`   User interests: ${userInterests.join(', ')}`);
           return;
+        }
+
+        // Filter 3: Cooldown check (3 hours)
+        const notificationCooldowns = user.notificationCooldowns || {};
+        const lastNotification = notificationCooldowns.nearby_event;
+        if (lastNotification && typeof lastNotification._seconds === 'number') {
+          const secondsSinceLastNotification = nowSeconds - lastNotification._seconds;
+          if (secondsSinceLastNotification < cooldownSeconds) {
+            const remainingMinutes = Math.ceil((cooldownSeconds - secondsSinceLastNotification) / 60);
+            console.log(`⏭️ ${user.displayName}: Still in cooldown (${remainingMinutes} min remaining)`);
+            return;
+          }
         }
 
         // User qualifies for notification!
         notificationTargets.push({
           token: user.fcmToken,
+          userId: userId,
           name: user.displayName,
           distance: Math.round(distance),
           interests: userInterests
@@ -220,13 +280,16 @@ exports.notifyNearbyUsers = functions.firestore
 
       // Extract just the tokens for sending
       const tokens = notificationTargets.map(t => t.token);
+      
+      // Get emoji for category/interest
+      const interestEmoji = getInterestEmoji(eventCategory);
 
       // Build APNs-compliant message following Apple's guidelines
       // Reference: https://developer.apple.com/documentation/usernotifications/setting-up-a-remote-notification-server
       const message = {
         tokens: tokens,
         notification: {
-          title: `🔥 New ${eventCategory} near you!`,
+          title: `${interestEmoji} ${eventCategory} Crowd has spawned nearby 📍🎉`,
           body: `${eventTitle} at ${eventLocationName}`,
         },
         data: {
@@ -245,7 +308,7 @@ exports.notifyNearbyUsers = functions.firestore
           payload: {
             aps: {
               alert: {
-                title: `🔥 New ${eventCategory} near you!`,
+                title: `${interestEmoji} ${eventCategory} Crowd has spawned nearby 📍🎉`,
                 body: `${eventTitle} at ${eventLocationName}`,
                 'launch-image': 'Logo', // Your app icon
               },
@@ -278,39 +341,54 @@ exports.notifyNearbyUsers = functions.firestore
       console.log(`✅ Successfully sent: ${response.successCount} notification(s)`);
       console.log(`❌ Failed to send: ${response.failureCount} notification(s)`);
       
-      // Handle failures (per Apple's recommendations)
-      if (response.failureCount > 0) {
-        const failedTokens = [];
-        response.responses.forEach((resp, idx) => {
-          if (!resp.success) {
-            console.error(`❌ Failed token ${idx}:`, resp.error.code);
-            
-            // Mark invalid tokens for removal (Apple recommends this)
-            if (resp.error.code === 'messaging/invalid-registration-token' ||
-                resp.error.code === 'messaging/registration-token-not-registered') {
-              failedTokens.push(tokens[idx]);
-            }
+      // Update cooldown for successfully sent notifications
+      const successfulTargets = [];
+      const failedTokens = [];
+      response.responses.forEach((resp, idx) => {
+        if (resp.success) {
+          successfulTargets.push(notificationTargets[idx]);
+        } else {
+          console.error(`❌ Failed token ${idx}:`, resp.error.code);
+          
+          // Mark invalid tokens for removal (Apple recommends this)
+          if (resp.error.code === 'messaging/invalid-registration-token' ||
+              resp.error.code === 'messaging/registration-token-not-registered') {
+            failedTokens.push(tokens[idx]);
           }
-        });
-        
-        // Clean up invalid tokens from Firestore
-        if (failedTokens.length > 0) {
-          console.log(`🧹 Cleaning up ${failedTokens.length} invalid token(s)`);
-          const cleanupPromises = notificationTargets
-            .filter(target => failedTokens.includes(target.token))
-            .map(target => {
-              return db.collection('users')
-                .where('fcmToken', '==', target.token)
-                .get()
-                .then(snapshot => {
-                  snapshot.forEach(doc => {
-                    doc.ref.update({ fcmToken: admin.firestore.FieldValue.delete() });
-                  });
-                });
-            });
-          await Promise.all(cleanupPromises);
-          console.log('✅ Invalid tokens removed');
         }
+      });
+      
+      // Update cooldown timestamps for successful sends
+      if (successfulTargets.length > 0) {
+        console.log(`⏰ Updating cooldown for ${successfulTargets.length} user(s)`);
+        const cooldownUpdates = successfulTargets.map(target => {
+          const cooldownTimestamp = admin.firestore.Timestamp.fromMillis(Date.now());
+          return db.collection('users').doc(target.userId).update({
+            'notificationCooldowns.nearby_event': cooldownTimestamp,
+            'lastNotificationSent': cooldownTimestamp
+          });
+        });
+        await Promise.all(cooldownUpdates);
+        console.log('✅ Cooldowns updated');
+      }
+      
+      // Clean up invalid tokens from Firestore
+      if (failedTokens.length > 0) {
+        console.log(`🧹 Cleaning up ${failedTokens.length} invalid token(s)`);
+        const cleanupPromises = notificationTargets
+          .filter(target => failedTokens.includes(target.token))
+          .map(target => {
+            return db.collection('users')
+              .where('fcmToken', '==', target.token)
+              .get()
+              .then(snapshot => {
+                snapshot.forEach(doc => {
+                  doc.ref.update({ fcmToken: admin.firestore.FieldValue.delete() });
+                });
+              });
+          });
+        await Promise.all(cleanupPromises);
+        console.log('✅ Invalid tokens removed');
       }
       
       return response;
@@ -877,4 +955,334 @@ exports.geocodeEventIfNeeded = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', error.message);
   }
 });
+
+// Engagement Notification: Notify users when event reaches 5 attendees
+exports.notifyPopularEvent = functions.firestore
+  .document('signals/{signalId}')
+  .onCreate(async (snap, context) => {
+    const signal = snap.data();
+    const eventId = signal.eventId;
+    
+    console.log('📡 Signal created for event:', eventId);
+    
+    // Count total signals for this event
+    const signalsSnapshot = await db.collection('signals')
+      .where('eventId', '==', eventId)
+      .get();
+    
+    const attendeeCount = signalsSnapshot.size;
+    console.log(`👥 Event now has ${attendeeCount} attendees`);
+    
+    // Only trigger at exactly 5 attendees
+    if (attendeeCount !== 5) {
+      console.log(`⏭️ Attendee count is ${attendeeCount}, not 5. Skipping.`);
+      return null;
+    }
+    
+    // Get event details (check both events and userEvents collections)
+    let eventDoc = await db.collection('events').doc(eventId).get();
+    if (!eventDoc.exists) {
+      eventDoc = await db.collection('userEvents').doc(eventId).get();
+    }
+    
+    if (!eventDoc.exists) {
+      console.log('⚠️ Event not found in events or userEvents');
+      return null;
+    }
+    
+    const event = eventDoc.data();
+    const eventLat = event.latitude;
+    const eventLon = event.longitude;
+    const eventGeohash = event.geohash;
+    const eventTitle = event.title || 'Event';
+    const eventLocationName = event.locationName || 'a nearby location';
+    const eventCategory = event.category || 'hangout';
+    
+    // Validate location data
+    if (!eventGeohash || !eventLat || !eventLon) {
+      console.log('⚠️ Event missing location data');
+      return null;
+    }
+    
+    // Get all attendee user IDs
+    const attendeeUserIds = new Set();
+    signalsSnapshot.forEach(doc => {
+      const signalData = doc.data();
+      if (signalData.userId) {
+        attendeeUserIds.add(signalData.userId);
+      }
+    });
+    
+    console.log(`👥 Attendee user IDs: ${Array.from(attendeeUserIds).join(', ')}`);
+    
+    // Query nearby users who haven't joined
+    const geohashPrefix = eventGeohash.substring(0, 5);
+    
+    try {
+      const usersSnapshot = await db.collection('users')
+        .where('geohash', '>=', geohashPrefix)
+        .where('geohash', '<=', geohashPrefix + '\uf8ff')
+        .get();
+      
+      console.log(`📍 Found ${usersSnapshot.size} users with similar geohash`);
+      
+      const notificationTargets = [];
+      
+      usersSnapshot.forEach(doc => {
+        const userId = doc.id;
+        const user = doc.data();
+        
+        // Skip if no FCM token
+        if (!user.fcmToken) {
+          return;
+        }
+        
+        // Skip if user is already attending
+        if (attendeeUserIds.has(userId)) {
+          console.log(`⏭️ Skipping attendee: ${user.displayName}`);
+          return;
+        }
+        
+        // Check location data exists
+        if (!user.location || !user.location.latitude || !user.location.longitude) {
+          return;
+        }
+        
+        // Calculate distance
+        const distance = calculateDistance(
+          eventLat,
+          eventLon,
+          user.location.latitude,
+          user.location.longitude
+        );
+        
+        // Filter by 400m radius
+        if (distance > 400) {
+          return;
+        }
+        
+        // User qualifies for notification
+        notificationTargets.push({
+          token: user.fcmToken,
+          userId: userId,
+          name: user.displayName,
+          distance: Math.round(distance)
+        });
+        
+        console.log(`✅ ${user.displayName} qualifies (${Math.round(distance)}m)`);
+      });
+      
+      if (notificationTargets.length === 0) {
+        console.log('📭 No users to notify about popular event');
+        return null;
+      }
+      
+      console.log(`📬 Sending to ${notificationTargets.length} user(s):`);
+      notificationTargets.forEach(target => {
+        console.log(`   - ${target.name} (${target.distance}m away)`);
+      });
+      
+      const tokens = notificationTargets.map(t => t.token);
+      
+      const message = {
+        tokens: tokens,
+        notification: {
+          title: 'This Crowd is poppin off! Drop everything and pull up 🔥',
+          body: `${eventTitle} > 5 ppl`,
+        },
+        data: {
+          eventId: eventId,
+          type: 'popular_event',
+          category: eventCategory,
+          locationName: eventLocationName,
+        },
+        apns: {
+          headers: {
+            'apns-priority': '10',
+            'apns-push-type': 'alert',
+          },
+          payload: {
+            aps: {
+              alert: {
+                title: 'This Crowd is poppin off! Drop everything and pull up 🔥',
+                body: `${eventTitle} > 5 ppl`,
+              },
+              sound: 'default',
+              badge: 1,
+              category: 'EVENT_INVITE',
+              'thread-id': `event-${eventId}`,
+              'content-available': 1,
+              'mutable-content': 1,
+            },
+            eventId: eventId,
+            eventCategory: eventCategory,
+            eventLocationName: eventLocationName,
+          },
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            sound: 'default',
+            channelId: 'event_notifications',
+          },
+        },
+      };
+      
+      const response = await admin.messaging().sendMulticast(message);
+      
+      console.log(`✅ Successfully sent: ${response.successCount} notification(s)`);
+      console.log(`❌ Failed to send: ${response.failureCount} notification(s)`);
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error in notifyPopularEvent:', error);
+      return null;
+    }
+  });
+
+// Scheduled: Study Session Reminder (12pm and 3pm daily)
+exports.sendStudySessionReminder = functions.pubsub
+  .schedule('0 12,15 * * *')  // Cron: 12pm and 3pm daily in UTC-6 (America/Chicago)
+  .timeZone('America/Chicago')
+  .onRun(async (context) => {
+    console.log('📚 Study session reminder triggered');
+    
+    try {
+      const usersSnapshot = await db.collection('users')
+        .where('fcmToken', '!=', null)
+        .get();
+      
+      if (usersSnapshot.empty) {
+        console.log('📭 No users with FCM tokens found');
+        return null;
+      }
+      
+      const tokens = [];
+      usersSnapshot.forEach(doc => {
+        const user = doc.data();
+        if (user.fcmToken) {
+          tokens.push(user.fcmToken);
+        }
+      });
+      
+      console.log(`📬 Sending study session reminder to ${tokens.length} user(s)`);
+      
+      const message = {
+        tokens: tokens,
+        notification: {
+          title: 'Turn your study session into a vibe 📚',
+          body: 'Start a crowd. Someone\'s always down to link.',
+        },
+        data: {
+          type: 'promotional',
+          category: 'study',
+        },
+        apns: {
+          headers: {
+            'apns-priority': '5',
+            'apns-push-type': 'alert',
+          },
+          payload: {
+            aps: {
+              alert: {
+                title: 'Turn your study session into a vibe 📚',
+                body: 'Start a crowd. Someone\'s always down to link.',
+              },
+              sound: 'default',
+            },
+          },
+        },
+        android: {
+          priority: 'normal',
+          notification: {
+            sound: 'default',
+            channelId: 'promotional_notifications',
+          },
+        },
+      };
+      
+      const response = await admin.messaging().sendMulticast(message);
+      
+      console.log(`✅ Successfully sent: ${response.successCount} notification(s)`);
+      console.log(`❌ Failed to send: ${response.failureCount} notification(s)`);
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error in sendStudySessionReminder:', error);
+      return null;
+    }
+  });
+
+// Scheduled: Social Link Reminder (7:30pm and 10pm daily)
+exports.sendSocialLinkReminder = functions.pubsub
+  .schedule('30 19,22 * * *')  // Cron: 7:30pm and 10pm daily in UTC-6 (America/Chicago)
+  .timeZone('America/Chicago')
+  .onRun(async (context) => {
+    console.log('👩‍❤️‍💋‍👨 Social link reminder triggered');
+    
+    try {
+      const usersSnapshot = await db.collection('users')
+        .where('fcmToken', '!=', null)
+        .get();
+      
+      if (usersSnapshot.empty) {
+        console.log('📭 No users with FCM tokens found');
+        return null;
+      }
+      
+      const tokens = [];
+      usersSnapshot.forEach(doc => {
+        const user = doc.data();
+        if (user.fcmToken) {
+          tokens.push(user.fcmToken);
+        }
+      });
+      
+      console.log(`📬 Sending social link reminder to ${tokens.length} user(s)`);
+      
+      const message = {
+        tokens: tokens,
+        notification: {
+          title: 'Start a crowd 👩‍❤️‍💋‍👨💋',
+          body: 'Someone\'s always down to link.',
+        },
+        data: {
+          type: 'promotional',
+          category: 'social',
+        },
+        apns: {
+          headers: {
+            'apns-priority': '5',
+            'apns-push-type': 'alert',
+          },
+          payload: {
+            aps: {
+              alert: {
+                title: 'Start a crowd 👩‍❤️‍💋‍👨💋',
+                body: 'Someone\'s always down to link.',
+              },
+              sound: 'default',
+            },
+          },
+        },
+        android: {
+          priority: 'normal',
+          notification: {
+            sound: 'default',
+            channelId: 'promotional_notifications',
+          },
+        },
+      };
+      
+      const response = await admin.messaging().sendMulticast(message);
+      
+      console.log(`✅ Successfully sent: ${response.successCount} notification(s)`);
+      console.log(`❌ Failed to send: ${response.failureCount} notification(s)`);
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Error in sendSocialLinkReminder:', error);
+      return null;
+    }
+  });
 

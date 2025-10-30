@@ -44,6 +44,8 @@ struct ProfileView: View {
     @State private var showInterestPicker = false
     @State private var showImagePicker = false
     @State private var isLoading = true
+    @State private var showToast = false
+    @State private var toastMessage = ""
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -56,6 +58,7 @@ struct ProfileView: View {
                         tagsSection
                         statsRow
                         attendedEventsSection
+                        testNotificationButton
 
                     }
                     .padding(16)
@@ -92,6 +95,19 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showInterestPicker) {
             InterestPickerView(viewModel: viewModel)
+        }
+        .overlay(alignment: .top) {
+            if showToast {
+                ToastView(message: toastMessage)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation {
+                                showToast = false
+                            }
+                        }
+                    }
+            }
         }
     }
     
@@ -254,6 +270,82 @@ struct ProfileView: View {
             .padding(.horizontal, 12)
             .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.24), lineWidth: 1))
+        }
+    }
+    
+    // MARK: - Test Notification Button
+    private var testNotificationButton: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Testing")
+                .font(.subheadline.bold())
+                .foregroundStyle(.secondary)
+            
+            Button(action: {
+                Task {
+                    await sendTestNotification()
+                }
+            }) {
+                HStack {
+                    Image(systemName: "bell.badge.fill")
+                        .font(.system(size: 16))
+                    Text("Test Notification")
+                        .font(.system(size: 14, weight: .semibold))
+                    Spacer()
+                }
+                .foregroundColor(.white)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 16)
+                .background(
+                    LinearGradient(
+                        colors: [Color(hex: 0xFF6B6B), Color(hex: 0xFF8E53)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(12)
+            }
+        }
+        .padding(.top, 8)
+    }
+    
+    private func sendTestNotification() async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            print("❌ No user ID for test notification")
+            await MainActor.run {
+                toastMessage = "No user ID available"
+                withAnimation { showToast = true }
+            }
+            return
+        }
+        
+        print("🧪 Sending test notification for user: \(userId)")
+        
+        do {
+            let functions = FirebaseManager.shared.functions
+            let callable = functions.httpsCallable("testNotification")
+            
+            let data: [String: Any] = [
+                "userId": userId,
+                "testMessage": "This is a test notification! 🔔"
+            ]
+            
+            let result = try await callable.call(data)
+            print("✅ Test notification sent successfully")
+            
+            await MainActor.run {
+                toastMessage = "Test notification sent! 🔔"
+                withAnimation { showToast = true }
+            }
+            
+            if let resultData = result.data as? [String: Any] {
+                print("Result: \(resultData)")
+            }
+        } catch {
+            print("❌ Failed to send test notification: \(error.localizedDescription)")
+            await MainActor.run {
+                toastMessage = "Failed to send notification"
+                withAnimation { showToast = true }
+            }
         }
     }
 }

@@ -126,7 +126,28 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         print("👆 NotificationService: User tapped notification")
         print("👆 Notification data: \(userInfo)")
         
-        // TODO: Handle notification tap - navigate to specific screen if needed
+        // Parse notification data
+        if let eventId = userInfo["eventId"] as? String {
+            print("📲 Navigate to event: \(eventId)")
+            
+            // Post notification to trigger navigation in app
+            NotificationCenter.default.post(
+                name: .navigateToEventFromNotification,
+                object: nil,
+                userInfo: ["eventId": eventId]
+            )
+        } else if let notificationType = userInfo["type"] as? String {
+            print("📲 Notification type: \(notificationType)")
+            
+            // Handle promotional notifications differently if needed
+            if notificationType == "promotional" {
+                // Could navigate to create event screen or just stay on home
+                NotificationCenter.default.post(
+                    name: .showHostSheetFromNotification,
+                    object: nil
+                )
+            }
+        }
         
         completionHandler()
     }
