@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseFunctions
 
 // MARK: - Entry
 struct RootView: View {
