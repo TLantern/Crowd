@@ -37,6 +37,33 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             longitude = newValue.longitude
         }
     }
+    
+    /// Formatted date string for display (e.g., "Today at 3:00 PM", "Tomorrow at 2:30 PM")
+    var dateFormatted: String? {
+        guard let date = startsAt else { return nil }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        
+        if calendar.isDateInToday(date) {
+            return "Today at \(formatter.string(from: date))"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow at \(formatter.string(from: date))"
+        } else if calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear) {
+            // Within this week - show day name
+            let dayFormatter = DateFormatter()
+            dayFormatter.dateFormat = "EEEE 'at' "
+            return dayFormatter.string(from: date) + formatter.string(from: date)
+        } else {
+            // Future date - show month/day
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "MMM d 'at' "
+            return dateFormatter.string(from: date) + formatter.string(from: date)
+        }
+    }
 
     static func newDraft(
         at coord: CLLocationCoordinate2D,
