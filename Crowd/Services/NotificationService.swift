@@ -74,7 +74,6 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         // Save token to user's Firestore profile
         Task {
             await saveFCMTokenToProfile(token: token)
-            await sendDebugTestNotification()
         }
     }
     
