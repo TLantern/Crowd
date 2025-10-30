@@ -17,6 +17,7 @@ struct LocationSearchField: View {
     @StateObject private var searchCompleter = LocationSearchCompleter()
     @State private var isShowingSuggestions = false
     @FocusState private var isFocused: Bool
+    @State private var activeSearch: MKLocalSearch?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -90,9 +91,12 @@ struct LocationSearchField: View {
     
     private func selectLocation(_ result: MKLocalSearchCompletion) {
         let searchRequest = MKLocalSearch.Request(completion: result)
+        activeSearch?.cancel()
         let search = MKLocalSearch(request: searchRequest)
-        
+        activeSearch = search
+
         search.start { response, error in
+            defer { activeSearch = nil }
             guard let response = response,
                   let item = response.mapItems.first else {
                 return
@@ -109,16 +113,12 @@ struct LocationSearchField: View {
 // MARK: - Location Search Completer
 class LocationSearchCompleter: NSObject, ObservableObject, MKLocalSearchCompleterDelegate {
     @Published var results: [MKLocalSearchCompletion] = []
+    @Published var queryFragment: String = ""
     private let completer = MKLocalSearchCompleter()
+    private var cancellables: Set<AnyCancellable> = []
     
     // UNT Denton coordinates: 33.2098° N, 97.1526° W
     private let dentonCenter = CLLocationCoordinate2D(latitude: 33.2098, longitude: -97.1526)
-    
-    var queryFragment: String = "" {
-        didSet {
-            completer.queryFragment = queryFragment
-        }
-    }
     
     override init() {
         super.init()
@@ -132,6 +132,20 @@ class LocationSearchCompleter: NSObject, ObservableObject, MKLocalSearchComplete
             longitudinalMeters: 20000
         )
         completer.region = dentonRegion
+
+        $queryFragment
+            .removeDuplicates()
+            .debounce(for: .milliseconds(350), scheduler: DispatchQueue.main)
+            .sink { [weak self] text in
+                guard let self = self else { return }
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 {
+                    self.results = []
+                    self.completer.queryFragment = ""
+                } else {
+                    self.completer.queryFragment = text
+                }
+            }
+            .store(in: &cancellables)
     }
     
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {

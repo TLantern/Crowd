@@ -17,6 +17,43 @@ private let fallbackCoord = CLLocationCoordinate2D(
     longitude: -97.1500
 )
 
+// Try to match raw location text to predefined UNT locations (see HostEventSheet.untLocations)
+private func matchUNTLocationCoordinate(for raw: String?) -> CLLocationCoordinate2D? {
+    guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+    let text = raw.lowercased()
+
+    // Simple aliases for common variations
+    let aliasToCanonical: [String: String] = [
+        "union": "university union",
+        "super pit": "super pit (unt coliseum)",
+        "coliseum": "super pit (unt coliseum)",
+        "library": "willis library",
+        "b.l.b": "business leadership building",
+        "blb": "business leadership building",
+        "stadium": "datcu stadium",
+        "rec": "pohl recreation center",
+        "music": "unt music building",
+        "art": "art building",
+        "square": "denton square"
+    ]
+
+    let normalizedTarget: String = {
+        for (alias, canonical) in aliasToCanonical {
+            if text.contains(alias) { return canonical }
+        }
+        return text
+    }()
+
+    // Iterate untLocations defined in HostEventSheet.swift
+    for loc in untLocations {
+        let candidate = loc.name.lowercased()
+        if candidate == normalizedTarget || normalizedTarget.contains(candidate) || candidate.contains(normalizedTarget) {
+            return loc.coordinate
+        }
+    }
+    return nil
+}
+
 func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     let rawTitle = live.title.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !rawTitle.isEmpty else { return nil }
@@ -80,6 +117,9 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     let coord: CLLocationCoordinate2D = {
         if let lat = live.latitude, let lon = live.longitude {
             return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        }
+        if let byLocName = matchUNTLocationCoordinate(for: live.locationName ?? live.location) {
+            return byLocName
         }
         return fallbackCoord
     }()

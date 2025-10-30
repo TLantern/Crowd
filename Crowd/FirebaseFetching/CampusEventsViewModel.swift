@@ -169,6 +169,34 @@ private actor AppleMapsSearchRateLimiter {
     }
 }
 
+// Simple persistent cache to avoid repeated Apple Maps lookups across app sessions
+private actor AppleMapsGeoCache {
+    static let shared = AppleMapsGeoCache()
+    private var memory: [String: [Double]] = [:] // key -> [lat, lon]
+    private let storageKey = "apple_maps_geo_cache_v1"
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: storageKey),
+           let decoded = try? JSONSerialization.jsonObject(with: data) as? [String: [Double]] {
+            memory = decoded
+        }
+    }
+
+    func get(_ key: String) -> CLLocationCoordinate2D? {
+        if let pair = memory[key], pair.count == 2 {
+            return CLLocationCoordinate2D(latitude: pair[0], longitude: pair[1])
+        }
+        return nil
+    }
+
+    func set(_ key: String, coord: CLLocationCoordinate2D) {
+        memory[key] = [coord.latitude, coord.longitude]
+        if let data = try? JSONSerialization.data(withJSONObject: memory) {
+            UserDefaults.standard.set(data, forKey: storageKey)
+        }
+    }
+}
+
 fileprivate func searchLocationOnAppleMapsCampus(_ locationName: String) async -> CLLocationCoordinate2D? {
     let trimmed = locationName.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return nil }
@@ -177,6 +205,9 @@ fileprivate func searchLocationOnAppleMapsCampus(_ locationName: String) async -
     let query: String = (
         trimmed.contains("DATCU") || trimmed.contains("Stadium") || trimmed.contains("Square")
     ) ? "\(trimmed), Denton, TX" : "\(trimmed), UNT, Denton, TX 76203"
+
+    if let cached = await AppleMapsGeoCache.shared.get(query) { return cached }
+
     req.naturalLanguageQuery = query
     req.region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 33.210081, longitude: -97.147700),
@@ -186,7 +217,9 @@ fileprivate func searchLocationOnAppleMapsCampus(_ locationName: String) async -
     do {
         let resp = try await MKLocalSearch(request: req).start()
         guard let item = resp.mapItems.first else { return nil }
-        return item.placemark.coordinate
+        let coord = item.placemark.coordinate
+        await AppleMapsGeoCache.shared.set(query, coord: coord)
+        return coord
     } catch {
         let ns = error as NSError
         if ns.domain == "GEOErrorDomain" && ns.code == -3 { // throttled
@@ -214,12 +247,27 @@ extension CampusEventsViewModel {
             if (live.latitude == nil || live.longitude == nil) {
                 let trimmedName = live.locationName?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let name: String? = (trimmedName?.isEmpty == false) ? live.locationName : live.location
-                if let query = name, !query.isEmpty, let coord = await searchLocationOnAppleMapsCampus(query) {
-                    updates.append((id, coord))
-                    geocodedIds.insert(id)
+                if let query = name, !query.isEmpty {
+                    // First try predefined UNT locations to avoid network geocoding
+                    if let predefined = matchUNTLocationCoordinate(for: query) {
+                        updates.append((id, predefined))
+                        geocodedIds.insert(id)
+                    } else if let coord = await searchLocationOnAppleMapsCampus(query) {
+                        updates.append((id, coord))
+                        geocodedIds.insert(id)
+                    }
                 }
             }
         }
-        if !updates.isEmpty { await MainActor.run { applyCoordinateUpdates(updates) } }
+        if !updates.isEmpty {
+            await MainActor.run { applyCoordinateUpdates(updates) }
+            let db = Firestore.firestore()
+            let batch = db.batch()
+            for (id, coord) in updates {
+                let ref = db.collection("campus_events_live").document(id)
+                batch.setData(["latitude": coord.latitude, "longitude": coord.longitude], forDocument: ref, merge: true)
+            }
+            do { try await batch.commit() } catch { print("⚠️ Failed to persist geocoded coords: \(error)") }
+        }
     }
 }
