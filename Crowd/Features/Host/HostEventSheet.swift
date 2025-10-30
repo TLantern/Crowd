@@ -37,6 +37,7 @@ let untLocations: [PredefinedLocation] = [
     PredefinedLocation(name: "Pohl Recreation Center", coordinate: CLLocationCoordinate2D(latitude: 33.21207, longitude: -97.15404)),
     PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.2106644, longitude: -97.1501177)),
     PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.2131446, longitude: -97.1454504)),
+    PredefinedLocation(name: "Chestnut Hall", coordinate: CLLocationCoordinate2D(latitude: 33.21222, longitude: -97.15255)),
     PredefinedLocation(name: "Super PIT (UNT Coliseum)", coordinate: CLLocationCoordinate2D(latitude: 33.208611, longitude: -97.154167))
 ]
 

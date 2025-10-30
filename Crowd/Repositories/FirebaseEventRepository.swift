@@ -103,13 +103,13 @@ final class FirebaseEventRepository: EventRepository {
     func join(eventId: String, userId: String) async throws {
         print("🔍 FirebaseEventRepository: Attempting to join event \(eventId) for user \(userId)")
         
-        // Get user's current location with fallback handling
-        guard let location = await AppEnvironment.current.location.ensureLocationAvailable() else {
-            print("❌ FirebaseEventRepository: No location available")
-            throw CrowdError.custom("Location not available. Please enable location services.")
+        // Try to get user's current location, but do not fail if unavailable
+        let location = await AppEnvironment.current.location.lastKnown
+        if let loc = location {
+            print("📍 FirebaseEventRepository: User location: (\(loc.latitude), \(loc.longitude))")
+        } else {
+            print("⚠️ FirebaseEventRepository: Proceeding without location — joining should not be blocked")
         }
-        
-        print("📍 FirebaseEventRepository: User location: (\(location.latitude), \(location.longitude))")
         
         // Check if user already has a signal for this event
         let existingSignalQuery = try await db.collection("signals")
@@ -131,16 +131,18 @@ final class FirebaseEventRepository: EventRepository {
             throw CrowdError.custom("Event not found")
         }
         
-        // Create signal document directly in Firestore
-        let signalData: [String: Any] = [
+        // Create signal document directly in Firestore (latitude/longitude optional)
+        var signalData: [String: Any] = [
             "eventId": eventId,
             "userId": userId,
-            "latitude": location.latitude,
-            "longitude": location.longitude,
             "signalStrength": 3,
             "createdAt": FieldValue.serverTimestamp(),
             "lastSeenAt": FieldValue.serverTimestamp()
         ]
+        if let loc = location {
+            signalData["latitude"] = loc.latitude
+            signalData["longitude"] = loc.longitude
+        }
         
         print("📡 FirebaseEventRepository: Creating signal in Firestore")
         
@@ -156,7 +158,11 @@ final class FirebaseEventRepository: EventRepository {
                 "signalStrength": FieldValue.increment(Int64(3))
             ])
             
-            print("✅ FirebaseEventRepository: Successfully joined event \(eventId) at location (\(location.latitude), \(location.longitude))")
+            if let loc = location {
+                print("✅ FirebaseEventRepository: Successfully joined event \(eventId) at location (\(loc.latitude), \(loc.longitude))")
+            } else {
+                print("✅ FirebaseEventRepository: Successfully joined event \(eventId) without location")
+            }
         } catch {
             print("❌ FirebaseEventRepository: Failed to create signal - \(error.localizedDescription)")
             throw error

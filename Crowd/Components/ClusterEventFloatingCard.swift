@@ -16,6 +16,8 @@ struct ClusterEventFloatingCard: View {
         VStack(spacing: 0) {
             // Header with count
             HStack {
+                Text(headerEmoji)
+                    .font(.system(size: 20))
                 Text("\(cluster.eventCount) Events Here")
                     .font(.headline)
                     .foregroundColor(.primary)
@@ -105,6 +107,12 @@ struct ClusterEventFloatingCard: View {
             RoundedRectangle(cornerRadius: 20)
                 .stroke(Color.primary.opacity(0.15), lineWidth: 1)
         )
+    }
+}
+
+private extension ClusterEventFloatingCard {
+    var headerEmoji: String {
+        cluster.events.first?.categoryEmoji ?? "📅"
     }
 }
 

@@ -50,28 +50,17 @@ struct EventNavigationModal: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
     
-    @StateObject private var chatService = EventChatService.shared
     @StateObject private var locationService = AppEnvironment.current.location
     @StateObject private var motionManager = MotionManager()
     
-    @FocusState private var isChatFocused: Bool
-    
-    @State private var chatMessage: String = ""
     @State private var userLocation: CLLocationCoordinate2D?
     @State private var deviceHeading: Double = 0
     @State private var distanceToEvent: Double = 0
     @State private var bearingToEvent: Double = 0
     @State private var compassRotation: Double = 0
     @State private var locationUpdateTimer: Timer?
-    @State private var keyboardHeight: CGFloat = 0
-    @State private var isChatMinimized: Bool = false
     
     @State private var currentUserId: String = "unknown"
-    
-    // current user's display name
-    private var currentUserName: String {
-        appState.sessionUser?.displayName ?? "You"
-    }
     
     // MARK: - Body
     var body: some View {
@@ -88,12 +77,8 @@ struct EventNavigationModal: View {
                             Color(hex: 0x02853E)
                                 .frame(height: 40)
 
-                            // Center title: emoji + event name
-                            Text("\(eventEmoji) \(event.title)")
-                                .font(.custom("Lato-Bold", size: 24))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+                            // Center title: slow-moving marquee when long
+                            MarqueeTitle(text: "\(eventEmoji) \(event.title)")
                                 .padding(.bottom, 4)
 
                             HStack {
@@ -110,128 +95,14 @@ struct EventNavigationModal: View {
                         }
                         .padding(.top, 20)
                         
-                        // White container for map + chat
+                        // White container for map
                         VStack(spacing: 0) {
                             // MAP AREA
                             RouteMapView(
                                 destination: event.coordinates,
                                 userCoordinate: userLocation
                             )
-                            .frame(
-                                height: isChatMinimized
-                                ? geo.size.height * 0.85 - 100
-                                : geo.size.height * 0.5 - 100
-                            )
-                            .background(Color.white)
-                            
-                            // CHAT AREA
-                            VStack(spacing: 0) {
-                                // Chat header
-                                HStack {
-                                    Text("Event Chat")
-                                        .font(.system(size: 18, weight: .semibold))
-                                    
-                                    Spacer()
-                                    
-                                    Button("Close") {
-                                        withAnimation(
-                                            .spring(
-                                                response: 0.28,
-                                                dampingFraction: 0.9
-                                            )
-                                        ) {
-                                            isChatMinimized = true
-                                            isChatFocused = false
-                                        }
-                                    }
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(Color(hex: 0x02853E))
-                                }
-                                .padding(.horizontal)
-                                .padding(.vertical, 12)
-                                .background(.ultraThinMaterial)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if isChatMinimized {
-                                        withAnimation(
-                                            .spring(
-                                                response: 0.28,
-                                                dampingFraction: 0.9
-                                            )
-                                        ) {
-                                            isChatMinimized = false
-                                        }
-                                    }
-                                }
-                                
-                                // Messages list
-                                if !isChatMinimized {
-                                    ScrollViewReader { proxy in
-                                        ScrollView {
-                                            LazyVStack(spacing: 12) {
-                                                ForEach(chatService.messages) { message in
-                                                    ChatMessageBubble(
-                                                        message: message.text,
-                                                        author: message.userName,
-                                                        isCurrentUser: message.isCurrentUser
-                                                    )
-                                                    .id(message.id)
-                                                }
-                                            }
-                                            .padding(.horizontal)
-                                            .padding(.vertical, 8)
-                                        }
-                                        .onChange(of: chatService.messages.count) { _, _ in
-                                            if let last = chatService.messages.last {
-                                                withAnimation(.easeInOut(duration: 0.3)) {
-                                                    proxy.scrollTo(last.id, anchor: .bottom)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                // Input bar
-                                if !isChatMinimized {
-                                    HStack(spacing: 12) {
-                                        TextField("Type a message...", text: $chatMessage)
-                                            .textFieldStyle(.plain)
-                                            .padding(12)
-                                            .background(Color(.systemGray6))
-                                            .cornerRadius(20)
-                                            .focused($isChatFocused)
-                                        
-                                        Button {
-                                            sendMessage()
-                                        } label: {
-                                            Image(systemName: "arrow.up.circle.fill")
-                                                .font(.system(size: 32))
-                                                .foregroundColor(
-                                                    chatMessage.isEmpty
-                                                    ? .gray
-                                                    : Color(hex: 0x02853E)
-                                                )
-                                        }
-                                        .disabled(chatMessage.isEmpty)
-                                    }
-                                    .padding(.horizontal)
-                                    .padding(.vertical, 12)
-                                    .padding(.bottom,
-                                             max(
-                                                12,
-                                                keyboardHeight > 0
-                                                ? keyboardHeight - 20
-                                                : 12
-                                             )
-                                    )
-                                    .background(.ultraThinMaterial)
-                                }
-                            }
-                            .frame(
-                                height: isChatMinimized
-                                ? 56
-                                : geo.size.height * 0.5
-                            )
+                            .frame(height: geo.size.height * 0.85 - 100)
                             .background(Color.white)
                         }
                     }
@@ -241,11 +112,6 @@ struct EventNavigationModal: View {
         }
         // MARK: lifecycle / listeners
         .onAppear {
-            // restore draft
-            if let draft = UserDefaults.standard.string(forKey: draftKey()) {
-                chatMessage = draft
-            }
-            
             // ensure user auth
             Task {
                 if let userId = FirebaseManager.shared.getCurrentUserId() {
@@ -267,22 +133,10 @@ struct EventNavigationModal: View {
             
             startLocationUpdates()
             startMotionUpdates()
-            
-            // start chat listener after short delay so we have currentUserId
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                chatService.startListening(
-                    eventId: event.id,
-                    currentUserId: currentUserId
-                )
-            }
         }
         .onDisappear {
-            // save draft
-            UserDefaults.standard.set(chatMessage, forKey: draftKey())
-            
             stopLocationUpdates()
             stopMotionUpdates()
-            chatService.stopListening()
         }
         .onReceive(motionManager.$heading) { newHeading in
             deviceHeading = newHeading
@@ -300,24 +154,6 @@ struct EventNavigationModal: View {
         }
         .onChange(of: bearingToEvent) { _, _ in
             updateCompassRotation()
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(
-                for: UIResponder.keyboardWillShowNotification
-            )
-        ) { notification in
-            if let frame = notification.userInfo?[
-                UIResponder.keyboardFrameEndUserInfoKey
-            ] as? CGRect {
-                keyboardHeight = frame.height
-            }
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(
-                for: UIResponder.keyboardWillHideNotification
-            )
-        ) { _ in
-            keyboardHeight = 0
         }
     } // ← THIS closes body
     
@@ -456,47 +292,62 @@ struct EventNavigationModal: View {
         compassRotation = bearingToEvent - deviceHeading
     }
     
-    // MARK: - Chat
-    
-    private func sendMessage() {
-        guard !chatMessage
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty
-        else { return }
-        
-        // Ensure user is authenticated before sending
-        guard let authUserId = FirebaseManager.shared.getCurrentUserId() else {
-            print("❌ EventNavigationModal: User not authenticated, cannot send message")
-            return
-        }
-        
-        // Use the authenticated user ID instead of the stored currentUserId
-        Task {
-            do {
-                try await chatService.sendMessage(
-                    eventId: event.id,
-                    text: chatMessage,
-                    userId: authUserId,
-                    userName: currentUserName
-                )
-                
-                await MainActor.run {
-                    // Clear the message input
-                    chatMessage = ""
-                    
-                    // Close the keyboard
-                    isChatFocused = false
+    // Chat removed
+}
+
+// MARK: - Marquee Title
+struct MarqueeTitle: View {
+    let text: String
+    private let speed: Double = 20 // points per second
+    private let spacing: CGFloat = 40
+
+    @State private var contentWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+    @State private var offset: CGFloat = 0
+    @State private var shouldAnimate: Bool = false
+
+    var body: some View {
+        GeometryReader { proxy in
+            let w = proxy.size.width
+            ZStack(alignment: .leading) {
+                if shouldAnimate {
+                    HStack(spacing: spacing) {
+                        title
+                        title
+                    }
+                    .offset(x: offset)
+                    .onAppear { startAnimation(container: w) }
+                } else {
+                    HStack { Spacer(); title; Spacer() }
                 }
-            } catch {
-                print("❌ Failed to send message: \(error.localizedDescription)")
             }
+            .onAppear { containerWidth = w }
         }
+        .frame(height: 28)
     }
-    
-    // MARK: - Draft key
-    
-    private func draftKey() -> String {
-        "chat_draft_\(event.id)"
+
+    private var title: some View {
+        Text(text)
+            .font(.custom("Lato-Bold", size: 24))
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .background(
+                GeometryReader { g in
+                    Color.clear
+                        .onAppear {
+                            contentWidth = g.size.width
+                            shouldAnimate = contentWidth > containerWidth
+                        }
+                }
+            )
+    }
+
+    private func startAnimation(container: CGFloat) {
+        guard contentWidth > container else { return }
+        let cycle = (contentWidth + spacing) / speed
+        withAnimation(.linear(duration: cycle).repeatForever(autoreverses: false)) {
+            offset = -(contentWidth + spacing)
+        }
     }
 }
 

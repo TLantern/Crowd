@@ -86,7 +86,7 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             hostName: hostName,
             latitude: coord.latitude,
             longitude: coord.longitude,
-            radiusMeters: 60,
+            radiusMeters: 0,
             startsAt: startsAt,
             endsAt: endsAt,
             createdAt: Date(),
