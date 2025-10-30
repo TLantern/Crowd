@@ -79,6 +79,7 @@ struct EventNavigationModal: View {
 
                             // Center title: slow-moving marquee when long
                             MarqueeTitle(text: "\(eventEmoji) \(event.title)")
+                                .padding(.horizontal, 5)
                                 .padding(.bottom, 4)
 
                             HStack {
@@ -328,7 +329,7 @@ struct MarqueeTitle: View {
 
     private var title: some View {
         Text(text)
-            .font(.custom("Lato-Bold", size: 24))
+            .font(.custom("Lato-Bold", size: 12))
             .foregroundColor(.white)
             .lineLimit(1)
             .background(
