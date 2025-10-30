@@ -558,7 +558,6 @@ struct CrowdHomeView: View {
                 print("📲 Navigating to event from notification: \(eventId)")
                 
                 // Find the event in all event arrays
-                let allEvents = hostedEvents + firebaseEvents + upcomingEvents
                 if let event = allEvents.first(where: { $0.id == eventId }) {
                     selectedEvent = event
                 } else {
@@ -566,8 +565,7 @@ struct CrowdHomeView: View {
                     Task {
                         await loadFirebaseEvents()
                         await loadUpcomingEvents()
-                        let reloadedEvents = hostedEvents + firebaseEvents + upcomingEvents
-                        if let event = reloadedEvents.first(where: { $0.id == eventId }) {
+                        if let event = allEvents.first(where: { $0.id == eventId }) {
                             selectedEvent = event
                         }
                     }
