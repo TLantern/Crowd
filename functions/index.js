@@ -1320,16 +1320,18 @@ exports.sendSocialLinkReminder = functions.pubsub
     }
   });
 
-// Auto-delete expired events from both collections
+// Auto-delete expired events from all collections
 // Runs every hour and deletes events that have ended (with 1 hour grace period)
 exports.cleanupExpiredEvents = functions.pubsub
   .schedule('every 60 minutes')
   .timeZone('Etc/UTC')
   .onRun(async (context) => {
-    const nowSeconds = Math.floor(Date.now() / 1000);
+    const now = admin.firestore.Timestamp.now();
+    const nowSeconds = now.seconds || Math.floor(Date.now() / 1000);
     // Grace period: delete events that ended more than 1 hour ago
     const gracePeriodSeconds = 60 * 60; // 1 hour
     const cutoffTime = nowSeconds - gracePeriodSeconds;
+    const cutoffTimestamp = admin.firestore.Timestamp.fromSeconds(cutoffTime);
     
     console.log('🧹 Starting expired events cleanup...');
     
@@ -1341,29 +1343,93 @@ exports.cleanupExpiredEvents = functions.pubsub
       return null;
     }
     
+    function normalizeExpiresAt(expiresAt) {
+      if (!expiresAt) return null;
+      if (typeof expiresAt === 'number') return expiresAt;
+      if (expiresAt._seconds) return expiresAt._seconds;
+      if (expiresAt.seconds) return expiresAt.seconds;
+      return null;
+    }
+    
     async function deleteExpiredFromCollection(collectionName) {
-      const snapshot = await db.collection(collectionName).get();
       const expiredEventIds = [];
       
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const endsAt = normalizeEndsAt(data.endsAt);
-        // If no endsAt, check createdAt + reasonable default (24 hours for events without end time)
-        if (!endsAt) {
-          const createdAt = normalizeEndsAt(data.createdAt);
-          if (createdAt && createdAt < cutoffTime - (23 * 60 * 60)) { // 23 hours ago (24h default - 1h grace)
-            expiredEventIds.push({ id: doc.id, type: collectionName });
-          }
-        } else if (endsAt < cutoffTime) {
+      // Try to use Firestore query to find expired events by expiresAt field (if it exists)
+      // This is more efficient than fetching all documents
+      try {
+        const expiresAtQuery = await db.collection(collectionName)
+          .where('expiresAt', '<=', cutoffTimestamp)
+          .limit(500)
+          .get();
+        
+        expiresAtQuery.forEach(doc => {
           expiredEventIds.push({ id: doc.id, type: collectionName });
-        }
-      });
+        });
+        
+        console.log(`📍 Found ${expiresAtQuery.size} expired event(s) via expiresAt query in ${collectionName}`);
+      } catch (error) {
+        console.log(`⚠️ Could not query by expiresAt in ${collectionName}: ${error.message}`);
+      }
+      
+      // Also query by endsAt field for events that have that field
+      try {
+        const endsAtTimestamp = admin.firestore.Timestamp.fromSeconds(cutoffTime);
+        const endsAtQuery = await db.collection(collectionName)
+          .where('endsAt', '<=', endsAtTimestamp)
+          .limit(500)
+          .get();
+        
+        endsAtQuery.forEach(doc => {
+          const docId = doc.id;
+          // Avoid duplicates
+          if (!expiredEventIds.find(e => e.id === docId)) {
+            expiredEventIds.push({ id: docId, type: collectionName });
+          }
+        });
+        
+        console.log(`📍 Found ${endsAtQuery.size} expired event(s) via endsAt query in ${collectionName}`);
+      } catch (error) {
+        console.log(`⚠️ Could not query by endsAt in ${collectionName}: ${error.message}`);
+      }
+      
+      // For events without endsAt or expiresAt, we need to check all documents
+      // This is a fallback for older events that might not have these fields indexed
+      // Limit this check to avoid timeout on large collections
+      try {
+        const allDocsSnapshot = await db.collection(collectionName)
+          .limit(1000)
+          .get();
+        
+        allDocsSnapshot.forEach(doc => {
+          const docId = doc.id;
+          // Skip if already marked for deletion
+          if (expiredEventIds.find(e => e.id === docId)) return;
+          
+          const data = doc.data();
+          const endsAt = normalizeEndsAt(data.endsAt);
+          const expiresAt = normalizeExpiresAt(data.expiresAt);
+          
+          // If no endsAt or expiresAt, check createdAt + reasonable default (24 hours)
+          if (!endsAt && !expiresAt) {
+            const createdAt = normalizeEndsAt(data.createdAt);
+            if (createdAt && createdAt < cutoffTime - (23 * 60 * 60)) { // 23 hours ago (24h default - 1h grace)
+              expiredEventIds.push({ id: docId, type: collectionName });
+            }
+          } else if (expiresAt && expiresAt < cutoffTime) {
+            expiredEventIds.push({ id: docId, type: collectionName });
+          } else if (endsAt && endsAt < cutoffTime) {
+            expiredEventIds.push({ id: docId, type: collectionName });
+          }
+        });
+      } catch (error) {
+        console.log(`⚠️ Error in fallback scan for ${collectionName}: ${error.message}`);
+      }
       
       if (expiredEventIds.length === 0) {
         return { deleted: 0, collectionName };
       }
       
-      console.log(`🗑️ Found ${expiredEventIds.length} expired event(s) in ${collectionName}`);
+      console.log(`🗑️ Found ${expiredEventIds.length} total expired event(s) in ${collectionName}`);
       
       // Delete related data first (signals, attendances, chats)
       for (const event of expiredEventIds) {
@@ -1418,16 +1484,18 @@ exports.cleanupExpiredEvents = functions.pubsub
       return { deleted: expiredEventIds.length, collectionName };
     }
     
-    // Clean up both collections in parallel
+    // Clean up all event collections in parallel
     const results = await Promise.all([
       deleteExpiredFromCollection('events'),
       deleteExpiredFromCollection('userEvents'),
+      deleteExpiredFromCollection('campus_events_live'),
     ]);
     
     const totalDeleted = results.reduce((sum, r) => sum + r.deleted, 0);
     console.log(`✅ Expired events cleanup complete: ${totalDeleted} event(s) deleted`);
     console.log(`   - ${results[0].deleted} from events collection`);
     console.log(`   - ${results[1].deleted} from userEvents collection`);
+    console.log(`   - ${results[2].deleted} from campus_events_live collection`);
     
     return null;
   });
