@@ -62,7 +62,7 @@ struct EventNavigationModal: View {
     @State private var locationUpdateTimer: Timer?
     
     @State private var currentUserId: String = "unknown"
-    @State private var transportMode: TransportMode = .automobile
+    // @State private var transportMode: TransportMode = .automobile
     
     // MARK: - Body
     var body: some View {
@@ -108,14 +108,14 @@ struct EventNavigationModal: View {
                             .frame(height: geo.size.height * 0.85 - 100)
                             .background(Color.white)
 
-                            // Transport mode picker below the map
-                            Picker("", selection: $transportMode) {
-                                Text("Car").tag(TransportMode.automobile)
-                                Text("Walk").tag(TransportMode.walking)
-                                Text("Transit").tag(TransportMode.transit)
-                            }
-                            .pickerStyle(.segmented)
-                            .padding()
+                            // Transport mode picker below the map (temporarily disabled)
+                            // Picker("", selection: $transportMode) {
+                            //     Text("Car").tag(TransportMode.automobile)
+                            //     Text("Walk").tag(TransportMode.walking)
+                            //     Text("Transit").tag(TransportMode.transit)
+                            // }
+                            // .pickerStyle(.segmented)
+                            // .padding()
                         }
                         .ignoresSafeArea(edges: .top)
                     }
@@ -308,20 +308,14 @@ struct EventNavigationModal: View {
     // Chat removed
 }
 
-// MARK: - Transport mode helper (Hashable for Picker)
+// MARK: - Transport mode helper (temporarily disabled)
+/*
 private enum TransportMode: Hashable {
     case automobile
     case walking
     case transit
-    
-    var mkType: MKDirectionsTransportType {
-        switch self {
-        case .automobile: return .automobile
-        case .walking: return .walking
-        case .transit: return .transit
-        }
-    }
 }
+*/
 
 // MARK: - Marquee Title
 struct MarqueeTitle: View {
