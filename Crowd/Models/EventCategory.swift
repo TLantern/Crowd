@@ -22,7 +22,7 @@ enum EventCategory: String, CaseIterable, Identifiable {
     case lifestyleHobbies = "Lifestyle & Hobbies"
     case politicsActivism = "Politics & Activism"
     case specialEvents = "Special Events"
-    case other = "Other"
+    case other = "Just Vibing"
 
     var id: String { rawValue }
 
@@ -40,7 +40,7 @@ enum EventCategory: String, CaseIterable, Identifiable {
         case .lifestyleHobbies: return "👗"
         case .politicsActivism: return "🏛️"
         case .specialEvents: return "🎉"
-        case .other: return "📅"
+        case .other: return "🫂"
         }
     }
 
