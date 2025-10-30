@@ -298,31 +298,9 @@ struct CrowdHomeView: View {
                     let panelHeight: CGFloat = 140
 
                     VStack(spacing: 0) {
-                        // === Top region selector pill + small type filter (moved higher without affecting bottom glass) ===
-                        HStack {
-                            Spacer()
-
-                            // Small type filter (about half the main pill height)
-                            Menu {
-                                Button("User Created Events") { sourceFilter = .user }
-                                Button("School Hosted Events") { sourceFilter = .school }
-                            } label: {
-                                GlassPill(height: 24, horizontalPadding: 14) {
-                                    HStack(spacing: 6) {
-                                        Text(sourceFilter == .user ? "User Created" : (sourceFilter == .school ? "School Hosted" : "Type"))
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundStyle(.primary)
-                                            .lineLimit(1)
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 11, weight: .semibold))
-                                            .foregroundStyle(.primary.opacity(0.8))
-                                    }
-                                    .padding(.horizontal, 8)
-                                }
-                            }
-                            .fixedSize()
-
-                            // Main region picker
+                        // === Centered main navbar (region) with smaller Type filter below ===
+                        VStack(spacing: 8) {
+                            // Main region picker (centered)
                             Menu {
                                 ForEach(CampusRegion.allCases) { region in
                                     Button {
@@ -349,7 +327,25 @@ struct CrowdHomeView: View {
                             .fixedSize()
                             .frame(maxWidth: geo.size.width * 0.9)
 
-                            Spacer()
+                            // Small type filter (half height of main pill) centered below
+                            Menu {
+                                Button("User Created Events") { sourceFilter = .user }
+                                Button("School Hosted Events") { sourceFilter = .school }
+                            } label: {
+                                GlassPill(height: 24, horizontalPadding: 14) {
+                                    HStack(spacing: 6) {
+                                        Text(sourceFilter == .user ? "User Created" : (sourceFilter == .school ? "School Hosted" : "Type"))
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(.primary.opacity(0.8))
+                                    }
+                                    .padding(.horizontal, 8)
+                                }
+                            }
+                            .fixedSize()
                         }
                         .padding(.top, 0)
                         .offset(y: -18) // raise just the navbar; tweak -10…-28 to taste
