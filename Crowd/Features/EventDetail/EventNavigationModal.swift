@@ -356,7 +356,7 @@ struct MarqueeTitle: View {
 
     private var title: some View {
         Text(text)
-            .font(.custom("Lato-Bold", size: 12))
+            .font(.custom("Lato-Bold", size: 22))
             .foregroundColor(.white)
             .lineLimit(1)
             .background(
