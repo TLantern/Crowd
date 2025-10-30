@@ -8,6 +8,7 @@
 import UserNotifications
 import FirebaseMessaging
 import FirebaseFirestore
+import FirebaseFunctions
 import UIKit
 import Combine
 
@@ -73,6 +74,9 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         // Save token to user's Firestore profile
         Task {
             await saveFCMTokenToProfile(token: token)
+            #if DEBUG
+            await sendDebugTestNotification()
+            #endif
         }
     }
     
@@ -151,4 +155,17 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         
         completionHandler()
     }
+
+    #if DEBUG
+    private func sendDebugTestNotification() async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
+        do {
+            let callable = FirebaseManager.shared.functions.httpsCallable("testNotification")
+            _ = try await callable.call(["userId": userId, "testMessage": "Debug test 🔔"])
+            print("✅ Debug: test notification requested for \(userId)")
+        } catch {
+            print("❌ Debug: test notification error - \(error.localizedDescription)")
+        }
+    }
+    #endif
 }
