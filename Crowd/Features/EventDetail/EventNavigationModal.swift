@@ -105,7 +105,7 @@ struct EventNavigationModal: View {
                                 destination: event.coordinates,
                                 userCoordinate: userLocation
                             )
-                            .frame(height: max(220, geo.size.height * 0.85 - 100))
+                            .frame(height: max(0, geo.size.height * 0.85 - 100))
                             .background(Color.white)
 
                             // Transport mode picker below the map (temporarily disabled)
