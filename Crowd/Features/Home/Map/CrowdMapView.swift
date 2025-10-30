@@ -100,14 +100,18 @@ struct CrowdMapView: View {
     }
     
     private func handleClusterTap(_ cluster: EventCluster) {
+        print("🎯 Cluster tapped - Event count: \(cluster.eventCount), IsSingle: \(cluster.isSingleEvent)")
+        
         if cluster.isSingleEvent {
             // Single event - show detail directly
             if let event = cluster.events.first {
+                print("   → Opening single event detail: \(event.title)")
                 selectedEvent = event
                 showEventDetail = true
             }
         } else {
             // Multi-event cluster - show floating card
+            print("   → Showing floating card for \(cluster.eventCount) events")
             // Haptic feedback
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
@@ -118,6 +122,7 @@ struct CrowdMapView: View {
                 // Clear any expanded state
                 expandedClusterId = nil
             }
+            print("   → showClusterCard: \(showClusterCard), selectedCluster events: \(cluster.events.count)")
         }
     }
     
