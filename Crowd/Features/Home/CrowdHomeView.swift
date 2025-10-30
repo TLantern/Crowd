@@ -50,6 +50,10 @@ struct CrowdHomeView: View {
     @State private var selectedCluster: EventCluster?
     @State private var showClusterDropdown: Bool = false
     
+    // MARK: - Source filter (mini navbar)
+    private enum SourceFilter { case user, school }
+    @State private var sourceFilter: SourceFilter? = nil
+    
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
         firebaseEvents + hostedEvents + upcomingEvents
@@ -72,7 +76,16 @@ struct CrowdHomeView: View {
             guard let s = ev.startsAt else { return false }
             return calendar.isDateInToday(s) || calendar.isDateInTomorrow(s)
         }
-        return EventClusteringService.clusterEvents(firebaseEvents + hostedEvents + filteredUpcoming)
+        let inputEvents: [CrowdEvent]
+        switch sourceFilter {
+        case .user:
+            inputEvents = hostedEvents
+        case .school:
+            inputEvents = firebaseEvents + filteredUpcoming
+        case .none:
+            inputEvents = firebaseEvents + hostedEvents + filteredUpcoming
+        }
+        return EventClusteringService.clusterEvents(inputEvents)
     }
     
     // MARK: - Expansion Radius Helper
@@ -285,10 +298,31 @@ struct CrowdHomeView: View {
                     let panelHeight: CGFloat = 140
 
                     VStack(spacing: 0) {
-                        // === Top region selector pill (moved higher without affecting bottom glass) ===
+                        // === Top region selector pill + small type filter (moved higher without affecting bottom glass) ===
                         HStack {
                             Spacer()
 
+                            // Small type filter (about half the main pill height)
+                            Menu {
+                                Button("User Created Events") { sourceFilter = .user }
+                                Button("School Hosted Events") { sourceFilter = .school }
+                            } label: {
+                                GlassPill(height: 24, horizontalPadding: 14) {
+                                    HStack(spacing: 6) {
+                                        Text(sourceFilter == .user ? "User Created" : (sourceFilter == .school ? "School Hosted" : "Type"))
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(.primary.opacity(0.8))
+                                    }
+                                    .padding(.horizontal, 8)
+                                }
+                            }
+                            .fixedSize()
+
+                            // Main region picker
                             Menu {
                                 ForEach(CampusRegion.allCases) { region in
                                     Button {

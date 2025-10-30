@@ -20,26 +20,27 @@ struct PredefinedLocation: Identifiable {
     let id = UUID()
     let name: String
     let coordinate: CLLocationCoordinate2D
+    let searchOverride: String? // Optional Apple Maps search query override
 }
 
 let untLocations: [PredefinedLocation] = [
-    PredefinedLocation(name: "University Union", coordinate: CLLocationCoordinate2D(latitude: 33.2098926, longitude: -97.1514762)),
-    PredefinedLocation(name: "Willis Library", coordinate: CLLocationCoordinate2D(latitude: 33.210113, longitude: -97.1489542)),
-    PredefinedLocation(name: "Business Leadership Building", coordinate: CLLocationCoordinate2D(latitude: 33.2088579, longitude: -97.147729)),
-    PredefinedLocation(name: "Sage Hall", coordinate: CLLocationCoordinate2D(latitude: 33.212014, longitude: -97.1467232)),
-    PredefinedLocation(name: "DATCU Stadium", coordinate: CLLocationCoordinate2D(latitude: 33.2039355, longitude: -97.1592403)),
-    PredefinedLocation(name: "Discovery Park", coordinate: CLLocationCoordinate2D(latitude: 33.25331, longitude: -97.1544)),
-    PredefinedLocation(name: "The Syndicate", coordinate: CLLocationCoordinate2D(latitude: 33.2107832, longitude: -97.1477704)),
-    PredefinedLocation(name: "Kerr Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20771, longitude: -97.14754)),
-    PredefinedLocation(name: "Joe Greene Hall", coordinate: CLLocationCoordinate2D(latitude: 33.2069554, longitude: -97.1462809)),
-    PredefinedLocation(name: "Denton Square", coordinate: CLLocationCoordinate2D(latitude: 33.2150434, longitude: -97.1330684)),
-    PredefinedLocation(name: "Clark Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20779, longitude: -97.15143)),
-    PredefinedLocation(name: "Pohl Recreation Center", coordinate: CLLocationCoordinate2D(latitude: 33.21207, longitude: -97.15404)),
-    PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.2106644, longitude: -97.1501177)),
-    PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.2131446, longitude: -97.1454504)),
-    PredefinedLocation(name: "Chestnut Hall", coordinate: CLLocationCoordinate2D(latitude: 33.21222, longitude: -97.15255)),
-    PredefinedLocation(name: "Super PIT (UNT Coliseum)", coordinate: CLLocationCoordinate2D(latitude: 33.208611, longitude: -97.154167)),
-    PredefinedLocation(name: "Fry Street", coordinate: CLLocationCoordinate2D(latitude: 33.21455, longitude: -97.13347))
+    PredefinedLocation(name: "University Union", coordinate: CLLocationCoordinate2D(latitude: 33.2098926, longitude: -97.1514762), searchOverride: nil),
+    PredefinedLocation(name: "Willis Library", coordinate: CLLocationCoordinate2D(latitude: 33.210113, longitude: -97.1489542), searchOverride: nil),
+    PredefinedLocation(name: "Business Leadership Building", coordinate: CLLocationCoordinate2D(latitude: 33.2088579, longitude: -97.147729), searchOverride: nil),
+    PredefinedLocation(name: "Sage Hall", coordinate: CLLocationCoordinate2D(latitude: 33.212014, longitude: -97.1467232), searchOverride: nil),
+    PredefinedLocation(name: "DATCU Stadium", coordinate: CLLocationCoordinate2D(latitude: 33.2039355, longitude: -97.1592403), searchOverride: nil),
+    PredefinedLocation(name: "Discovery Park", coordinate: CLLocationCoordinate2D(latitude: 33.25331, longitude: -97.1544), searchOverride: nil),
+    PredefinedLocation(name: "The Syndicate", coordinate: CLLocationCoordinate2D(latitude: 33.2107832, longitude: -97.1477704), searchOverride: nil),
+    PredefinedLocation(name: "Kerr Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20771, longitude: -97.14754), searchOverride: nil),
+    PredefinedLocation(name: "Joe Greene Hall", coordinate: CLLocationCoordinate2D(latitude: 33.2069554, longitude: -97.1462809), searchOverride: nil),
+    PredefinedLocation(name: "Denton Square", coordinate: CLLocationCoordinate2D(latitude: 33.2150434, longitude: -97.1330684), searchOverride: nil),
+    PredefinedLocation(name: "Clark Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20779, longitude: -97.15143), searchOverride: "Clark Hall"),
+    PredefinedLocation(name: "Pohl Recreation Center", coordinate: CLLocationCoordinate2D(latitude: 33.21207, longitude: -97.15404), searchOverride: nil),
+    PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.2106644, longitude: -97.1501177), searchOverride: nil),
+    PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.2131446, longitude: -97.1454504), searchOverride: nil),
+    PredefinedLocation(name: "Chestnut Hall", coordinate: CLLocationCoordinate2D(latitude: 33.21222, longitude: -97.15255), searchOverride: nil),
+    PredefinedLocation(name: "Super PIT (UNT Coliseum)", coordinate: CLLocationCoordinate2D(latitude: 33.208611, longitude: -97.154167), searchOverride: nil),
+    PredefinedLocation(name: "Fry Street", coordinate: CLLocationCoordinate2D(latitude: 33.21455, longitude: -97.13347), searchOverride: "Avenue A")
 ]
 
 struct HostEventSheet: View {
@@ -555,8 +556,9 @@ struct LocationPickerView: View {
                         isSearching = true
                         locationName = location.name
                         
-                        // Search Apple Maps for accurate coordinates
-                        if let coord = await searchLocationOnAppleMaps(locationName: location.name) {
+                        // Search Apple Maps for accurate coordinates (with optional override)
+                        let query = location.searchOverride ?? location.name
+                        if let coord = await searchLocationOnAppleMaps(locationName: query) {
                             coordinate = coord
                         } else {
                             // Fallback to hardcoded if search fails
