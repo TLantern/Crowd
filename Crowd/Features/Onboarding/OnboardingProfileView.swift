@@ -105,7 +105,7 @@ struct OnboardingProfileView: View {
                                 .foregroundColor(.black.opacity(0.7))
 
                             Menu {
-                                Button("UNT") { selectedCampus = "UNT" }
+                                Button("University of North Texas") { selectedCampus = "UNT" }
                                 
                                 Divider()
                                 
