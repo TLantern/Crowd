@@ -65,7 +65,11 @@ struct OnboardingView: View {
                         .padding(.horizontal, 24)
                 }
                 .padding(24)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+                .background(
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(.ultraThinMaterial)
+                        .shadow(color: Color.black.opacity(0.2), radius: 24, y: 10)
+                )
                 .padding(.horizontal, 20)
                 .padding(.bottom, 64)
             }
