@@ -62,7 +62,7 @@ struct EventNavigationModal: View {
     @State private var locationUpdateTimer: Timer?
     
     @State private var currentUserId: String = "unknown"
-    @State private var transport: MKDirectionsTransportType = .automobile
+    @State private var transportMode: TransportMode = .automobile
     
     // MARK: - Body
     var body: some View {
@@ -109,10 +109,10 @@ struct EventNavigationModal: View {
                             .background(Color.white)
 
                             // Transport mode picker below the map
-                            Picker("", selection: $transport) {
-                                Text("Car").tag(MKDirectionsTransportType.automobile)
-                                Text("Walk").tag(MKDirectionsTransportType.walking)
-                                Text("Transit").tag(MKDirectionsTransportType.transit)
+                            Picker("", selection: $transportMode) {
+                                Text("Car").tag(TransportMode.automobile)
+                                Text("Walk").tag(TransportMode.walking)
+                                Text("Transit").tag(TransportMode.transit)
                             }
                             .pickerStyle(.segmented)
                             .padding()
@@ -306,6 +306,21 @@ struct EventNavigationModal: View {
     }
     
     // Chat removed
+}
+
+// MARK: - Transport mode helper (Hashable for Picker)
+private enum TransportMode: Hashable {
+    case automobile
+    case walking
+    case transit
+    
+    var mkType: MKDirectionsTransportType {
+        switch self {
+        case .automobile: return .automobile
+        case .walking: return .walking
+        case .transit: return .transit
+        }
+    }
 }
 
 // MARK: - Marquee Title
