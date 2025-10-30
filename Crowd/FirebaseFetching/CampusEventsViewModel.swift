@@ -29,6 +29,23 @@ final class CampusEventsViewModel: ObservableObject {
 
             let docs = snap.documents
             let now = Date()
+            // Fast path: map immediately without geocoding so UI populates instantly
+            var quickMapped: [CrowdEvent] = []
+            for d in docs {
+                if var live = try? d.data(as: CampusEventLive.self) {
+                    live.id = d.documentID
+                    if let ce = mapCampusEventLiveToCrowdEvent(live),
+                       let startDate = ce.startsAt, startDate >= now {
+                        quickMapped.append(ce)
+                    }
+                }
+            }
+            quickMapped.sort { (a, b) in
+                let aStart = a.startsAt ?? .distantFuture
+                let bStart = b.startsAt ?? .distantFuture
+                return aStart < bStart
+            }
+            await MainActor.run { self.crowdEvents = Array(quickMapped.prefix(limit)) }
             
             let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) { () async -> [CrowdEvent] in
                 var tmp: [CrowdEvent] = []
@@ -261,13 +278,7 @@ extension CampusEventsViewModel {
         }
         if !updates.isEmpty {
             await MainActor.run { applyCoordinateUpdates(updates) }
-            let db = Firestore.firestore()
-            let batch = db.batch()
-            for (id, coord) in updates {
-                let ref = db.collection("campus_events_live").document(id)
-                batch.setData(["latitude": coord.latitude, "longitude": coord.longitude], forDocument: ref, merge: true)
-            }
-            do { try await batch.commit() } catch { print("⚠️ Failed to persist geocoded coords: \(error)") }
+            // Do not persist to Firestore from client; writes are disallowed by rules.
         }
     }
 }
