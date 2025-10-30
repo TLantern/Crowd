@@ -91,13 +91,45 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         print("💾 NotificationService: Saving FCM token to Firestore...")
         
         do {
+            // Check if user document exists
+            let userDoc = try await FirebaseManager.shared.db
+                .collection("users")
+                .document(userId)
+                .getDocument()
+            
+            // If document doesn't exist, create a minimal user document
+            let data: [String: Any] = if !userDoc.exists {
+                print("📝 Creating new user document for anonymous user")
+                [
+                    "displayName": "Guest",
+                    "handle": "",
+                    "bio": "",
+                    "campus": "UNT",
+                    "interests": [],
+                    "auraPoints": 0,
+                    "avatarColorHex": "#808080",
+                    "profileImageURL": "",
+                    "hostedCount": 0,
+                    "joinedCount": 0,
+                    "friendsCount": 0,
+                    "lastActive": Timestamp(date: Date()),
+                    "createdAt": Timestamp(date: Date()),
+                    "fcmToken": token,
+                    "lastTokenUpdate": Timestamp(date: Date())
+                ]
+            } else {
+                // Just update FCM token on existing document
+                [
+                    "fcmToken": token,
+                    "lastTokenUpdate": Timestamp(date: Date())
+                ]
+            }
+            
             try await FirebaseManager.shared.db
                 .collection("users")
                 .document(userId)
-                .setData([
-                    "fcmToken": token,
-                    "lastTokenUpdate": Timestamp(date: Date())
-                ], merge: true)
+                .setData(data, merge: true)
+            
             print("✅ NotificationService: FCM token saved to user profile")
         } catch {
             print("❌ NotificationService: Failed to save token - \(error.localizedDescription)")

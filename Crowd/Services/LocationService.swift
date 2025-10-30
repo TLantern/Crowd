@@ -102,11 +102,11 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
             try await FirebaseManager.shared.db
                 .collection("users")
                 .document(userId)
-                .updateData([
+                .setData([
                     "location": geoPoint,
                     "geohash": geohash,
                     "lastLocationUpdate": Timestamp(date: Date())
-                ])
+                ], merge: true)
             print("✅ LocationService: Location saved to Firestore")
             print("   - Lat: \(coordinate.latitude), Lon: \(coordinate.longitude)")
             print("   - Geohash: \(geohash)")
@@ -135,9 +135,11 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         
         switch authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
+            print("✅ Location authorized, starting updates")
             startUpdatingLocation()
         case .denied, .restricted:
-            print("⚠️ Location access denied")
+            print("⚠️ Location access denied, stopping updates")
+            stopUpdatingLocation()
             // Use fallback location when denied
             #if DEBUG
             lastKnown = CLLocationCoordinate2D(latitude: 33.2099, longitude: -97.1515)
