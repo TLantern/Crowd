@@ -90,10 +90,10 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
             try await FirebaseManager.shared.db
                 .collection("users")
                 .document(userId)
-                .updateData([
+                .setData([
                     "fcmToken": token,
                     "lastTokenUpdate": Timestamp(date: Date())
-                ])
+                ], merge: true)
             print("✅ NotificationService: FCM token saved to user profile")
         } catch {
             print("❌ NotificationService: Failed to save token - \(error.localizedDescription)")
