@@ -31,9 +31,18 @@ struct CalenderView: View {
         }
     }
     
+    // Upcoming events sorted by soonest start time
+    var upcomingEvents: [CrowdEvent] {
+        filteredEvents.sorted { (a, b) in
+            let aStart = a.startsAt ?? .distantFuture
+            let bStart = b.startsAt ?? .distantFuture
+            return aStart < bStart
+        }
+    }
+
     // Paginated events for display
     var displayedEvents: [CrowdEvent] {
-        Array(filteredEvents.prefix(displayedEventCount))
+        Array(upcomingEvents.prefix(displayedEventCount))
     }
     
     var hasMoreEvents: Bool {
@@ -136,9 +145,10 @@ struct CalenderView: View {
                 }
             }
             .onAppear {
-                // Low-energy: single fetch from 14-day feed
+                // Initial one-time fetch, then live updates to ensure Upcoming list stays populated
                 Task {
                     await campusEventsVM.fetchOnce(limit: 25)
+                    campusEventsVM.start()
                     await geocodeTodaysEventsIfNeeded()
                 }
                 // Refresh attended events to clean up expired ones

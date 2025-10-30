@@ -38,6 +38,15 @@ final class EventDetailViewModel: ObservableObject {
         joinError = nil
         defer { isJoining = false }
         
+        // Calendar/live campus events (with sourceURL) are not stored in backend events collection.
+        // Join locally to avoid "Event not found" errors when tapping from map or calendar.
+        if event.sourceURL != nil {
+            attendedEventsService.addAttendedEvent(event)
+            AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title)
+            print("✅ Locally joined live campus event: \(event.id)")
+            return true
+        }
+
         do {
             try await eventRepo.join(eventId: event.id, userId: userId)
             
