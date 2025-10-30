@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreLocation
+import FirebaseFunctions
 
 struct CalenderView: View {
     @Environment(\.dismiss) private var dismiss
@@ -135,8 +136,11 @@ struct CalenderView: View {
                 }
             }
             .onAppear {
-                // Low-energy: single fetch instead of realtime listener
-                Task { await campusEventsVM.fetchOnce(limit: 25) }
+                // Low-energy: single fetch from 14-day feed
+                Task {
+                    await campusEventsVM.fetchOnce(limit: 25)
+                    await geocodeTodaysEventsIfNeeded()
+                }
                 // Refresh attended events to clean up expired ones
                 AttendedEventsService.shared.refreshAttendedEvents()
             }
@@ -144,6 +148,23 @@ struct CalenderView: View {
             .onChange(of: selectedCategories) { _, _ in
                 // Reset pagination when filter changes
                 displayedEventCount = eventsPerPage
+            }
+        }
+    }
+
+    // MARK: - Backend geocoding for today's events only
+    private func geocodeTodaysEventsIfNeeded() async {
+        let functions = Functions.functions()
+        let calendar = Calendar.current
+        let todays = campusEventsVM.crowdEvents.filter { ev in
+            guard let s = ev.startsAt else { return false }
+            return calendar.isDateInToday(s)
+        }
+        for ev in todays {
+            do {
+                _ = try await functions.httpsCallable("geocodeEventIfNeeded").call(["id": ev.id])
+            } catch {
+                print("❌ geocodeEventIfNeeded failed for \(ev.id): \(error)")
             }
         }
     }

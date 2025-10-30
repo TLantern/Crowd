@@ -15,7 +15,7 @@ struct EventAnnotationView: View {
         // Map category to emoji using EventCategory enum
         guard let categoryString = event.category,
               let eventCategory = EventCategory(rawValue: categoryString) else {
-            return "🔥" // Default fallback
+            return "📅" // Default matches calendar card
         }
         return eventCategory.emoji
     }

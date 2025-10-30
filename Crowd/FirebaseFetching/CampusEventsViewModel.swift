@@ -9,19 +9,20 @@
 import Foundation
 import FirebaseFirestore
 import Combine
+import MapKit
 
 final class CampusEventsViewModel: ObservableObject {
     @Published var crowdEvents: [CrowdEvent] = []
 
     private var listener: ListenerRegistration?
+    private var geocodedIds: Set<String> = []
 
-    // Energy-friendly single fetch used by calendar view
+    // Energy-friendly single fetch used by calendar view (14-day feed already in Firestore)
     func fetchOnce(limit: Int = 25) async {
         let db = Firestore.firestore()
         print("🔄 CampusEventsViewModel: One-time fetch from campus_events_live (limit: \(limit))")
         
         do {
-            // Fetch more docs since we'll filter in-memory for future events
             let snap = try await db.collection("campus_events_live")
                 .limit(to: limit * 2)
                 .getDocuments()
@@ -29,32 +30,34 @@ final class CampusEventsViewModel: ObservableObject {
             let docs = snap.documents
             let now = Date()
             
-            let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) {
+            let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) { () async -> [CrowdEvent] in
                 var tmp: [CrowdEvent] = []
                 for d in docs {
                     if var live = try? d.data(as: CampusEventLive.self) {
-                        // Use Firestore document ID as stable identifier
                         live.id = d.documentID
-                        if let ce = mapCampusEventLiveToCrowdEvent(live) {
-                            // Filter for future events only
-                            if let startDate = ce.startsAt, startDate >= now {
-                                tmp.append(ce)
-                            }
+                        var geocoded: CLLocationCoordinate2D?
+                        if (live.latitude == nil || live.longitude == nil),
+                           let name = (live.locationName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? live.locationName : live.location),
+                           let query = name, !query.isEmpty {
+                            geocoded = await searchLocationOnAppleMapsCampus(query)
+                        }
+                        if var ce = mapCampusEventLiveToCrowdEvent(live) {
+                            if let coord = geocoded { ce.coordinates = coord }
+                            if let startDate = ce.startsAt, startDate >= now { tmp.append(ce) }
                         }
                     }
                 }
-                // Sort by start time
                 tmp.sort { a, b in
                     let aStart = a.startsAt ?? .distantFuture
                     let bStart = b.startsAt ?? .distantFuture
                     return aStart < bStart
                 }
-                // Return only requested limit of future events
                 return Array(tmp.prefix(limit))
             }.value
 
             await MainActor.run { self.crowdEvents = mapped }
             print("🎯 CampusEventsViewModel: Final mapped events count: \(mapped.count) (one-time)")
+            await resolveMissingCoordinates(docs: docs)
         } catch {
             print("❌ CampusEventsViewModel: One-time fetch failed: \(error)")
         }
@@ -132,11 +135,64 @@ final class CampusEventsViewModel: ObservableObject {
                 if previousCount != mapped.count {
                     print("🔄 CampusEventsViewModel: Event count changed from \(previousCount) to \(mapped.count)")
                 }
+                Task { await self.resolveMissingCoordinates(docs: docs) }
             }
     }
 
     func stop() {
         listener?.remove()
         listener = nil
+    }
+}
+
+// MARK: - Apple Maps Geocoding (reuse HostedEventSheet logic)
+
+fileprivate func searchLocationOnAppleMapsCampus(_ locationName: String) async -> CLLocationCoordinate2D? {
+    let trimmed = locationName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    let req = MKLocalSearch.Request()
+    let query: String = (
+        trimmed.contains("DATCU") || trimmed.contains("Stadium") || trimmed.contains("Square")
+    ) ? "\(trimmed), Denton, TX" : "\(trimmed), UNT, Denton, TX 76203"
+    req.naturalLanguageQuery = query
+    req.region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 33.210081, longitude: -97.147700),
+        latitudinalMeters: 3000,
+        longitudinalMeters: 3000
+    )
+    do {
+        let resp = try await MKLocalSearch(request: req).start()
+        guard let item = resp.mapItems.first else { return nil }
+        return item.placemark.coordinate
+    } catch {
+        return nil
+    }
+}
+
+extension CampusEventsViewModel {
+    @MainActor private func applyCoordinateUpdates(_ updates: [(String, CLLocationCoordinate2D)]) {
+        for (id, coord) in updates {
+            if let idx = crowdEvents.firstIndex(where: { $0.id == id }) {
+                crowdEvents[idx].coordinates = coord
+            }
+        }
+    }
+
+    fileprivate func resolveMissingCoordinates(docs: [QueryDocumentSnapshot]) async {
+        var updates: [(String, CLLocationCoordinate2D)] = []
+        for d in docs {
+            let id = d.documentID
+            if geocodedIds.contains(id) { continue }
+            guard let live = try? d.data(as: CampusEventLive.self) else { continue }
+            if (live.latitude == nil || live.longitude == nil),
+               let name = (live.locationName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? live.locationName : live.location),
+               let query = name, !query.isEmpty {
+                if let coord = await searchLocationOnAppleMapsCampus(query) {
+                    updates.append((id, coord))
+                    geocodedIds.insert(id)
+                }
+            }
+        }
+        if !updates.isEmpty { await MainActor.run { applyCoordinateUpdates(updates) } }
     }
 }

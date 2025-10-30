@@ -12,6 +12,7 @@ struct CampusEventLive: Codable, Identifiable {
 
     let title: String
     let locationName: String?
+    let location: String?
     let startTimeLocal: String?
     let endTimeLocal: String?
 
@@ -23,4 +24,9 @@ struct CampusEventLive: Codable, Identifiable {
     let confidence: Double?
     let createdAt: Timestamp?
     let lastSeenAt: Timestamp?
+
+    // Optional coordinates persisted by backend geocoding
+    let latitude: Double?
+    let longitude: Double?
+    let geohash: String?
 }

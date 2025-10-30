@@ -63,7 +63,12 @@ struct CrowdHomeView: View {
     
     // MARK: - Clustered current events
     var currentEventsClusters: [EventCluster] {
-        EventClusteringService.clusterEvents(firebaseEvents + hostedEvents)
+        let calendar = Calendar.current
+        let filteredUpcoming = upcomingEvents.filter { ev in
+            guard let s = ev.startsAt else { return false }
+            return calendar.isDateInToday(s) || calendar.isDateInTomorrow(s)
+        }
+        return EventClusteringService.clusterEvents(firebaseEvents + hostedEvents + filteredUpcoming)
     }
     
     // MARK: - Expansion Radius Helper
@@ -486,18 +491,14 @@ struct CrowdHomeView: View {
     // MARK: - Upcoming Events Loading
     
     private func loadUpcomingEvents() async {
-        // Load upcoming events from CampusEventsViewModel
+        // Load upcoming events from CampusEventsViewModel (existing 14-day feed)
         let campusEventsVM = CampusEventsViewModel()
         campusEventsVM.start()
-        
-        // Wait a bit for events to load
-        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-        
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
         await MainActor.run {
             upcomingEvents = campusEventsVM.crowdEvents
             print("✅ Loaded \(upcomingEvents.count) upcoming events")
         }
-        
         campusEventsVM.stop()
     }
     

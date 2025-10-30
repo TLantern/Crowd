@@ -76,8 +76,16 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
         return nil
     }()
 
+    // Prefer backend geocoded coordinates if provided on the live doc
+    let coord: CLLocationCoordinate2D = {
+        if let lat = live.latitude, let lon = live.longitude {
+            return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        }
+        return fallbackCoord
+    }()
+
     var ev = CrowdEvent.newDraft(
-        at: fallbackCoord,
+        at: coord,
         title: displayTitle,
         hostId: live.sourceOrg,
         hostName: live.sourceOrg,
