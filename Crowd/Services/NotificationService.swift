@@ -208,7 +208,7 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         
         print("🧪 Debug: Starting test notification for verified user")
         print("   - User ID: \(userId)")
-        print("   - Is anonymous: \(FirebaseManager.shared.auth.currentUser?.isAnonymous ?? false)")
+        print("   - Is verified: \(FirebaseManager.shared.isCurrentUserVerified())")
         
         do {
             print("📞 Debug: Calling testNotification Firebase Function...")
@@ -222,7 +222,7 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
             
             let result = try await callable.call(data)
             print("✅ Debug: test notification requested successfully for \(userId)")
-            print("   - Result: \(result.data ?? "nil")")
+            print("   - Result: \(result.data)")
         } catch {
             print("❌ Debug: test notification error - \(error.localizedDescription)")
             if let nsError = error as NSError? {
