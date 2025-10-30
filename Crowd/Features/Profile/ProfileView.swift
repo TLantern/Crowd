@@ -59,7 +59,7 @@ struct ProfileView: View {
                         tagsSection
                         statsRow
                         attendedEventsSection
-                        testNotificationButton
+//                        testNotificationButton
 
                     }
                     .padding(16)
