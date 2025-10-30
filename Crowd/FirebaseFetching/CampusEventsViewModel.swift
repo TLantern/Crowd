@@ -36,10 +36,12 @@ final class CampusEventsViewModel: ObservableObject {
                     if var live = try? d.data(as: CampusEventLive.self) {
                         live.id = d.documentID
                         var geocoded: CLLocationCoordinate2D?
-                        if (live.latitude == nil || live.longitude == nil),
-                           let name = (live.locationName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? live.locationName : live.location),
-                           let query = name, !query.isEmpty {
+                        if (live.latitude == nil || live.longitude == nil) {
+                            let trimmedName = live.locationName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let name: String? = (trimmedName?.isEmpty == false) ? live.locationName : live.location
+                            if let query = name, !query.isEmpty {
                             geocoded = await searchLocationOnAppleMapsCampus(query)
+                            }
                         }
                         if var ce = mapCampusEventLiveToCrowdEvent(live) {
                             if let coord = geocoded { ce.coordinates = coord }
@@ -184,10 +186,10 @@ extension CampusEventsViewModel {
             let id = d.documentID
             if geocodedIds.contains(id) { continue }
             guard let live = try? d.data(as: CampusEventLive.self) else { continue }
-            if (live.latitude == nil || live.longitude == nil),
-               let name = (live.locationName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? live.locationName : live.location),
-               let query = name, !query.isEmpty {
-                if let coord = await searchLocationOnAppleMapsCampus(query) {
+            if (live.latitude == nil || live.longitude == nil) {
+                let trimmedName = live.locationName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let name: String? = (trimmedName?.isEmpty == false) ? live.locationName : live.location
+                if let query = name, !query.isEmpty, let coord = await searchLocationOnAppleMapsCampus(query) {
                     updates.append((id, coord))
                     geocodedIds.insert(id)
                 }
