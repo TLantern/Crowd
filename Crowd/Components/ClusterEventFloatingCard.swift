@@ -78,7 +78,7 @@ struct ClusterEventFloatingCard: View {
                                 // Chevron
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.tertiary)
+                                    .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 14)
                             .padding(.horizontal, 16)
