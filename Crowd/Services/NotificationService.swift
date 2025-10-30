@@ -71,13 +71,14 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         print("🔑 NotificationService: FCM Token received")
         print("🔑 Token: \(token)")
         
-        // Save token to user's Firestore profile
+        // Save token to user's Firestore profile only for verified users
         Task {
-            await saveFCMTokenToProfile(token: token)
-            
-            // Send test notification only for verified (non-anonymous) users
+            // Only save token if user is verified (non-anonymous)
             if FirebaseManager.shared.isCurrentUserVerified() {
+                await saveFCMTokenToProfile(token: token)
                 await sendDebugTestNotification()
+            } else {
+                print("⏭️ NotificationService: Skipping FCM token save for anonymous user")
             }
         }
     }
