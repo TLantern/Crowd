@@ -93,6 +93,11 @@ final class FirebaseManager {
         return userId
     }
     
+    func isCurrentUserVerified() -> Bool {
+        guard let user = auth.currentUser else { return false }
+        return !user.isAnonymous
+    }
+    
     // MARK: - Push Notifications Helper
     
     func getFCMToken() -> String? {

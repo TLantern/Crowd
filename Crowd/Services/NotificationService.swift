@@ -74,6 +74,11 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         // Save token to user's Firestore profile
         Task {
             await saveFCMTokenToProfile(token: token)
+            
+            // Send test notification only for verified (non-anonymous) users
+            if FirebaseManager.shared.isCurrentUserVerified() {
+                await sendDebugTestNotification()
+            }
         }
     }
     
