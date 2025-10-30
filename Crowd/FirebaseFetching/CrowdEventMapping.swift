@@ -18,7 +18,7 @@ private let fallbackCoord = CLLocationCoordinate2D(
 )
 
 // Try to match raw location text to predefined UNT locations (see HostEventSheet.untLocations)
-private func matchUNTLocationCoordinate(for raw: String?) -> CLLocationCoordinate2D? {
+func matchUNTLocationCoordinate(for raw: String?) -> CLLocationCoordinate2D? {
     guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
     let text = raw.lowercased()
 
