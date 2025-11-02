@@ -11,67 +11,75 @@ struct OnboardingView: View {
     let onContinue: () -> Void
 
     var body: some View {
-        ZStack {
-            // Background
-            Image("Background")
-                .resizable()
-                .scaledToFill()
-                .ignoresSafeArea()
-
-            VStack(spacing: 24) {
-                Spacer(minLength: 60)
-
-                // Logo text
-                Image("CrowdText")
+        GeometryReader { geo in
+            let safeAreaInsets = geo.safeAreaInsets
+            let availableHeight = geo.size.height - safeAreaInsets.top - safeAreaInsets.bottom
+            
+            ZStack {
+                // Background
+                Image("Background")
                     .resizable()
-                    .scaledToFit()
-                    .frame(width: 190, height: 120)
-                    .padding(.bottom, 12)
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .ignoresSafeArea()
 
-                // People + fire graphic
-                Image("Logo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 300, height: 255)
-                    .padding(.bottom, 48)
+                VStack(spacing: 0) {
+                    Spacer(minLength: 60)
 
-                Spacer()
+                    // Logo text
+                    Image("CrowdText")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 190, height: 120)
+                        .padding(.bottom, 12)
 
-                // Main glass card
-                VStack(spacing: 16) {
-                    Text("Welcome to Crowd")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
-                        .foregroundColor(.black)
+                    // People + fire graphic
+                    Image("Logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 300, height: 255)
+                        .padding(.bottom, 48)
 
-                    Button(action: onContinue) {
-                        HStack(spacing: 8) {
-                            Text("Jump In")
-                                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    Spacer(minLength: 0)
+
+                    // Main glass card - pinned to bottom
+                    VStack(spacing: 16) {
+                        Text("Welcome to Crowd")
+                            .font(.system(size: 24, weight: .semibold, design: .rounded))
+                            .foregroundColor(.black)
+
+                        Button(action: onContinue) {
+                            HStack(spacing: 8) {
+                                Text("Jump In")
+                                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color(hex: 0x02853E))
+                            )
+                            .foregroundColor(.white)
+                            .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color(hex: 0x02853E))
-                        )
-                        .foregroundColor(.white)
-                        .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
-                    }
 
-                    Text("By clicking continue, you agree to our Terms of Service and Privacy Policy.")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
+                        Text("By clicking continue, you agree to our Terms of Service and Privacy Policy.")
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
+                    .padding(24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(.ultraThinMaterial)
+                            .shadow(color: Color.black.opacity(0.2), radius: 24, y: 10)
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, max(34, safeAreaInsets.bottom + 34))
                 }
-                .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: 24)
-                        .fill(.ultraThinMaterial)
-                        .shadow(color: Color.black.opacity(0.2), radius: 24, y: 10)
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 64)
+                .frame(height: availableHeight)
+                .padding(.top, safeAreaInsets.top)
             }
         }
     }
