@@ -68,9 +68,6 @@ struct HostEventSheet: View {
     @State private var aiDescription: String = ""
     @State private var displayedDescription: String = ""
     @State private var typewriterTask: Task<Void, Never>?
-    
-    // Confetti celebration
-    @State private var showConfetti = false
 
     init(defaultRegion: CampusRegion, onCreate: @escaping (CrowdEvent) -> Void) {
         self.defaultRegion = defaultRegion
@@ -125,14 +122,6 @@ struct HostEventSheet: View {
                 generateDescription()
             }
         }
-        .overlay(
-            Group {
-                if showConfetti {
-                    ConfettiOverlay()
-                        .allowsHitTesting(false)
-                }
-            }
-        )
     }
     
     // MARK: - Location Initialization
@@ -315,17 +304,11 @@ struct HostEventSheet: View {
         print("🎯 Event coordinates: lat=\(event.latitude), lon=\(event.longitude)")
         print("🎯 Expected (The Syndicate): lat=33.209850, lon=-97.151470")
         
-        // Trigger celebration effects
-        showConfetti = true
-        Haptics.success() // Light vibration
-        
-        // Call onCreate callback
+        // Call onCreate callback (celebration will happen after Firebase save)
         onCreate(event)
         
-        // Dismiss after a short delay to allow confetti to show
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            dismiss()
-        }
+        // Dismiss immediately
+        dismiss()
     }
     
     // MARK: - Form Sections
@@ -648,7 +631,7 @@ struct ConfettiOverlay: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                ForEach(0..<60, id: \.self) { index in
+                ForEach(0..<30, id: \.self) { index in
                     ConfettiPiece()
                         .offset(
                             x: animate ? CGFloat.random(in: -geometry.size.width/2...geometry.size.width/2) : 0,

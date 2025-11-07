@@ -29,6 +29,9 @@ struct CrowdHomeView: View {
     @State private var userEventsFromFirebase: [CrowdEvent] = []
     @State private var upcomingEvents: [CrowdEvent] = []
     @State private var isLoadingEvents = false
+    
+    // MARK: - Confetti celebration
+    @State private var showConfetti = false
 
     // MARK: - Bottom overlay routing
     enum OverlayRoute { case none, profile, leaderboard }
@@ -497,6 +500,15 @@ struct CrowdHomeView: View {
                         // Then add to local array for immediate UI update
                         await MainActor.run {
                             hostedEvents.append(event)
+                            
+                            // Trigger celebration effects after successful save
+                            showConfetti = true
+                            Haptics.light() // Light haptic buzz
+                            
+                            // Hide confetti after animation completes
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+                                showConfetti = false
+                            }
                         }
                     } catch {
                         print("❌ Failed to create event in Firebase: \(error)")
@@ -510,6 +522,14 @@ struct CrowdHomeView: View {
                 .presentationDetents([.fraction(0.75), .large])
                 .presentationDragIndicator(.visible)
         }
+        .overlay(
+            Group {
+                if showConfetti {
+                    ConfettiOverlay()
+                        .allowsHitTesting(false)
+                }
+            }
+        )
         .sheet(item: $selectedEvent) { event in
             EventDetailView(event: event)
                 .environmentObject(appState)
