@@ -87,7 +87,7 @@ struct PulseView: View {
     var body: some View {
         // Single expanding ring for better performance
         Circle()
-            .stroke(color.opacity(0.6), lineWidth: 2.5)
+            .stroke(color.opacity(0.6), lineWidth: 6.0)
             .frame(width: 90, height: 90)
             .scaleEffect(isAnimating ? 2.0 : 1.0)
             .opacity(isAnimating ? 0.0 : 0.8)

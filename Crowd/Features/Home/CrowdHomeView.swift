@@ -516,7 +516,7 @@ struct CrowdHomeView: View {
                             Haptics.light() // Light haptic buzz
                             
                             // Hide confetti after animation completes
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                                 showConfetti = false
                             }
                         }

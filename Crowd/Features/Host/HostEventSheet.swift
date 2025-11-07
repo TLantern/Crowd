@@ -68,6 +68,9 @@ struct HostEventSheet: View {
     @State private var aiDescription: String = ""
     @State private var displayedDescription: String = ""
     @State private var typewriterTask: Task<Void, Never>?
+    
+    // Confetti celebration
+    @State private var showConfetti = false
 
     init(defaultRegion: CampusRegion, onCreate: @escaping (CrowdEvent) -> Void) {
         self.defaultRegion = defaultRegion
@@ -122,6 +125,14 @@ struct HostEventSheet: View {
                 generateDescription()
             }
         }
+        .overlay(
+            Group {
+                if showConfetti {
+                    ConfettiOverlay()
+                        .allowsHitTesting(false)
+                }
+            }
+        )
     }
     
     // MARK: - Location Initialization
@@ -304,11 +315,22 @@ struct HostEventSheet: View {
         print("🎯 Event coordinates: lat=\(event.latitude), lon=\(event.longitude)")
         print("🎯 Expected (The Syndicate): lat=33.209850, lon=-97.151470")
         
-        // Call onCreate callback (celebration will happen after Firebase save)
+        // Trigger celebration effects immediately
+        showConfetti = true
+        Haptics.light() // Light haptic buzz
+        
+        // Hide confetti after short duration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            showConfetti = false
+        }
+        
+        // Call onCreate callback
         onCreate(event)
         
-        // Dismiss immediately
-        dismiss()
+        // Dismiss after a short delay to allow confetti to show
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            dismiss()
+        }
     }
     
     // MARK: - Form Sections
