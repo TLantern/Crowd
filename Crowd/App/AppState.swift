@@ -16,6 +16,7 @@ final class AppState: ObservableObject {
     @Published var selectedRegion: CampusRegion = .mainCampus
     @Published var camera: MapCameraPosition = .automatic
     @Published var unreadRewardNotice: Bool = false
+    @Published var showTutorial: Bool = false
     
     private var locationUpdateCancellable: AnyCancellable?
     private var lastLocationSaveTime: Date?
@@ -34,6 +35,17 @@ final class AppState: ObservableObject {
             
             // Start monitoring location updates
             startLocationMonitoring(userId: userId)
+            
+            // Check if tutorial should be shown
+            await MainActor.run {
+                if TutorialManager.shared.shouldShowTutorial() {
+                    // Delay tutorial slightly to let map load
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        self.showTutorial = true
+                        print("📚 Showing tutorial for first-time user")
+                    }
+                }
+            }
         } catch {
             print("⚠️ Firebase auth failed: \(error.localizedDescription)")
         }

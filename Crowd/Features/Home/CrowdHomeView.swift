@@ -45,6 +45,9 @@ struct CrowdHomeView: View {
     // MARK: - Event detail
     @State private var selectedEvent: CrowdEvent?
     
+    // MARK: - Tutorial
+    @State private var showTutorialOverlay = false
+    
     // MARK: - Clustering
     @State private var expandedClusterId: String?
     @State private var currentCameraDistance: Double = 1200
@@ -545,6 +548,28 @@ struct CrowdHomeView: View {
                 .environmentObject(appState)
                 .presentationDetents([.fraction(0.75)])
                 .presentationDragIndicator(.visible)
+        }
+        .overlay(
+            Group {
+                if showTutorialOverlay {
+                    TutorialOverlayView(
+                        steps: TutorialStep.allSteps,
+                        targetPositions: [:],
+                        onComplete: {
+                            TutorialManager.shared.markTutorialComplete()
+                            showTutorialOverlay = false
+                            appState.showTutorial = false
+                        }
+                    )
+                    .transition(.opacity)
+                    .zIndex(1000)
+                }
+            }
+        )
+        .onChange(of: appState.showTutorial) { _, shouldShow in
+            if shouldShow {
+                showTutorialOverlay = true
+            }
         }
         .task {
             await loadFirebaseEvents()
