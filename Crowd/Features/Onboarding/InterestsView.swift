@@ -98,7 +98,7 @@ struct InterestsView: View {
                             
                             // Vertical carousel of interest chips
                             ScrollViewReader { proxy in
-                                ScrollView(.vertical, showsIndicators: false) {
+                                ScrollView(.vertical, showsIndicators: true) {
                                     LazyVGrid(columns: [
                                         GridItem(.flexible()),
                                         GridItem(.flexible()),
