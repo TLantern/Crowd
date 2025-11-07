@@ -277,39 +277,105 @@ struct ProfileView: View {
     // MARK: - Test Notification Button
     private var testNotificationButton: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Testing")
+            Text("Test Notifications")
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)
             
-            Button(action: {
-                Task {
-                    await sendTestNotification()
-                }
-            }) {
-                HStack {
-                    Image(systemName: "bell.badge.fill")
-                        .font(.system(size: 16))
-                    Text("Test Notification")
-                        .font(.system(size: 14, weight: .semibold))
-                    Spacer()
-                }
-                .foregroundColor(.white)
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
-                .background(
-                    LinearGradient(
-                        colors: [Color(hex: 0xFF6B6B), Color(hex: 0xFF8E53)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+            VStack(spacing: 8) {
+                testNotificationRow(
+                    title: "Basic Test",
+                    description: "Simple test notification",
+                    type: "basic",
+                    icon: "bell.badge.fill",
+                    colors: [Color(hex: 0xFF6B6B), Color(hex: 0xFF8E53)]
                 )
-                .cornerRadius(12)
+                
+                testNotificationRow(
+                    title: "Nearby Event",
+                    description: "🎉 Party Crowd has spawned nearby",
+                    type: "nearby_event",
+                    icon: "location.fill",
+                    colors: [Color(hex: 0x4ECDC4), Color(hex: 0x44A08D)]
+                )
+                
+                testNotificationRow(
+                    title: "Engagement",
+                    description: "This Crowd is poppin off! 🔥",
+                    type: "engagement",
+                    icon: "flame.fill",
+                    colors: [Color(hex: 0xFF6B6B), Color(hex: 0xFF8E53)]
+                )
+                
+                testNotificationRow(
+                    title: "Study Reminder",
+                    description: "Turn your study session into a vibe 📚",
+                    type: "study_reminder",
+                    icon: "book.fill",
+                    colors: [Color(hex: 0x667EEA), Color(hex: 0x764BA2)]
+                )
+                
+                testNotificationRow(
+                    title: "Social Reminder",
+                    description: "Start a crowd 👩‍❤️‍💋‍👨💋",
+                    type: "social_reminder",
+                    icon: "heart.fill",
+                    colors: [Color(hex: 0xF093FB), Color(hex: 0xF5576C)]
+                )
             }
         }
         .padding(.top, 8)
     }
     
-    private func sendTestNotification() async {
+    private func testNotificationRow(
+        title: String,
+        description: String,
+        type: String,
+        icon: String,
+        colors: [Color]
+    ) -> some View {
+        Button(action: {
+            Task {
+                await sendTestNotification(type: type)
+            }
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        LinearGradient(
+                            colors: colors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .cornerRadius(8)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text(description)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.24), lineWidth: 1))
+        }
+    }
+    
+    private func sendTestNotification(type: String = "basic") async {
         guard let userId = FirebaseManager.shared.getCurrentUserId() else {
             print("❌ No user ID for test notification")
             await MainActor.run {
@@ -335,6 +401,7 @@ struct ProfileView: View {
             
             let data: [String: Any] = [
                 "userId": userId,
+                "notificationType": type,
                 "testMessage": "This is a test notification! 🔔"
             ]
             
@@ -344,7 +411,8 @@ struct ProfileView: View {
             print("✅ Test notification sent successfully")
             
             await MainActor.run {
-                toastMessage = "Test notification sent! 🔔"
+                let typeName = type == "basic" ? "Basic" : type == "nearby_event" ? "Nearby Event" : type == "engagement" ? "Engagement" : type == "study_reminder" ? "Study Reminder" : "Social Reminder"
+                toastMessage = "\(typeName) notification sent! 🔔"
                 withAnimation { showToast = true }
             }
             
@@ -377,6 +445,9 @@ struct ProfileView: View {
                 errorMessage = "FCM token missing. Try again in a moment."
             } else if error.localizedDescription.contains("unavailable") || error.localizedDescription.contains("UNAVAILABLE") {
                 errorMessage = "Cloud Function unavailable. Check deployment."
+            } else if error.localizedDescription.contains("INTERNAL") {
+                // Check if it's an APNs configuration issue
+                errorMessage = "APNs not configured. Upload APNs key in Firebase Console → Project Settings → Cloud Messaging"
             }
             
             await MainActor.run {

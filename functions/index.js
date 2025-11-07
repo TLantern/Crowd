@@ -414,9 +414,10 @@ exports.testNotification = onCall({
   enforceAppCheck: false
 }, async (request) => {
   const { data, auth } = request;
-  const { userId, testMessage } = data;
+  const { userId, notificationType = 'basic', testMessage } = data;
   
   console.log('🧪 Test notification called for userId:', userId);
+  console.log('   - Notification type:', notificationType);
   console.log('   - Test message:', testMessage || 'default');
   
   if (!userId) {
@@ -443,26 +444,153 @@ exports.testNotification = onCall({
     
     console.log('🔑 FCM token found, preparing notification...');
     
-    const message = {
-      token: user.fcmToken,
-      notification: {
-        title: '🧪 Test Notification',
-        body: testMessage || 'This is a test notification from Crowd!',
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
+    // Build notification based on type
+    let message;
+    
+    switch (notificationType) {
+      case 'nearby_event':
+        message = {
+          token: user.fcmToken,
+          notification: {
+            title: '🎉 Party Crowd has spawned nearby 📍🎉',
+            body: 'Test Event at Test Location',
           },
-        },
-      },
-    };
+          data: {
+            eventId: 'test-event-id',
+            type: 'nearby_event',
+            category: 'Party',
+            distance: '200',
+            locationName: 'Test Location',
+          },
+          apns: {
+            headers: {
+              'apns-priority': '10',
+              'apns-push-type': 'alert',
+            },
+            payload: {
+              aps: {
+                alert: {
+                  title: '🎉 Party Crowd has spawned nearby 📍🎉',
+                  body: 'Test Event at Test Location',
+                },
+                sound: 'default',
+                badge: 1,
+                category: 'EVENT_INVITE',
+                'thread-id': 'event-test-event-id',
+                'content-available': 1,
+                'mutable-content': 1,
+              },
+              eventId: 'test-event-id',
+              eventCategory: 'Party',
+              eventLocationName: 'Test Location',
+            },
+          },
+        };
+        break;
+        
+      case 'engagement':
+        message = {
+          token: user.fcmToken,
+          notification: {
+            title: 'This Crowd is poppin off! Drop everything and pull up 🔥',
+            body: '5 people are already there - join the vibe!',
+          },
+          data: {
+            eventId: 'test-event-id',
+            type: 'engagement',
+            attendeeCount: '5',
+          },
+          apns: {
+            payload: {
+              aps: {
+                alert: {
+                  title: 'This Crowd is poppin off! Drop everything and pull up 🔥',
+                  body: '5 people are already there - join the vibe!',
+                },
+                sound: 'default',
+                badge: 1,
+                category: 'EVENT_INVITE',
+              },
+              eventId: 'test-event-id',
+            },
+          },
+        };
+        break;
+        
+      case 'study_reminder':
+        message = {
+          token: user.fcmToken,
+          notification: {
+            title: 'Turn your study session into a vibe 📚',
+            body: 'Start a crowd. Someone\'s always down to link.',
+          },
+          data: {
+            type: 'promotional',
+            action: 'showHostSheet',
+          },
+          apns: {
+            payload: {
+              aps: {
+                alert: {
+                  title: 'Turn your study session into a vibe 📚',
+                  body: 'Start a crowd. Someone\'s always down to link.',
+                },
+                sound: 'default',
+                badge: 1,
+              },
+            },
+          },
+        };
+        break;
+        
+      case 'social_reminder':
+        message = {
+          token: user.fcmToken,
+          notification: {
+            title: 'Start a crowd 👩‍❤️‍💋‍👨💋',
+            body: 'Someone\'s always down to link.',
+          },
+          data: {
+            type: 'promotional',
+            action: 'showHostSheet',
+          },
+          apns: {
+            payload: {
+              aps: {
+                alert: {
+                  title: 'Start a crowd 👩‍❤️‍💋‍👨💋',
+                  body: 'Someone\'s always down to link.',
+                },
+                sound: 'default',
+                badge: 1,
+              },
+            },
+          },
+        };
+        break;
+        
+      default: // 'basic'
+        message = {
+          token: user.fcmToken,
+          notification: {
+            title: '🧪 Test Notification',
+            body: testMessage || 'This is a test notification from Crowd!',
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1,
+              },
+            },
+          },
+        };
+    }
     
     const response = await admin.messaging().send(message);
     console.log('✅ Test notification sent:', response);
     
-    return { success: true, messageId: response };
+    return { success: true, messageId: response, type: notificationType };
   } catch (error) {
     console.error('❌ Test notification failed:', error);
     if (error instanceof HttpsError) {
