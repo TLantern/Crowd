@@ -14,6 +14,7 @@ struct ClusterAnnotationView: View {
     let cameraDistance: Double
     let onTap: () -> Void
     let onEventTap: (CrowdEvent) -> Void
+    var currentUserId: String? = nil
     
     @State private var isPulsing = false
     
@@ -27,7 +28,11 @@ struct ClusterAnnotationView: View {
         ZStack {
             // Use the first event's emoji for the cluster pin
             if let firstEvent = cluster.events.first {
-                EventAnnotationView(event: firstEvent, isInExpandedCluster: false)
+                EventAnnotationView(
+                    event: firstEvent,
+                    isInExpandedCluster: false,
+                    currentUserId: currentUserId
+                )
             }
             
             // Badge showing event count (only if > 1)

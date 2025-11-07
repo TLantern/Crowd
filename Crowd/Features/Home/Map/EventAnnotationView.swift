@@ -10,11 +10,18 @@ import SwiftUI
 struct EventAnnotationView: View {
     let event: CrowdEvent
     var isInExpandedCluster: Bool = false
+    var currentUserId: String? = nil
     
     var emoji: String { TagEmoji.emoji(for: event.tags, fallbackCategory: event.category) }
     
     var isOnFire: Bool {
         event.attendeeCount > 5
+    }
+    
+    /// Check if this event belongs to the current user
+    var isUserOwned: Bool {
+        guard let userId = currentUserId else { return false }
+        return event.hostId == userId
     }
     
     var scaleMultiplier: CGFloat {
@@ -29,9 +36,11 @@ struct EventAnnotationView: View {
                     .offset(y: -10)
             }
             
-            // Pulsing animation at the base
-            PulseView()
-                .offset(y: 65)
+            // Pulsing animation for user-owned events (glowing ring around the pin)
+            if isUserOwned {
+                PulseView(color: .orange)
+                    .offset(y: 0) // Center on the pin circle
+            }
             
             // Pointer at the bottom (rendered first, behind circle)
             Triangle()
@@ -69,45 +78,28 @@ struct EventAnnotationView: View {
 }
 
 // MARK: - Pulse Animation View
+/// A reusable pulse animation component that displays a glowing ring expanding and fading out.
+/// Used to highlight user-owned event pins on the map.
 struct PulseView: View {
     @State private var isAnimating = false
+    var color: Color = .blue
     
     var body: some View {
-        ZStack {
-            // First pulse ring
-            Circle()
-                .stroke(Color.blue.opacity(0.5), lineWidth: 3)
-                .frame(width: 30, height: 30)
-                .scaleEffect(isAnimating ? 2.5 : 1.0)
-                .opacity(isAnimating ? 0.0 : 0.8)
-            
-            // Second pulse ring (delayed)
-            Circle()
-                .stroke(Color.blue.opacity(0.5), lineWidth: 3)
-                .frame(width: 30, height: 30)
-                .scaleEffect(isAnimating ? 2.5 : 1.0)
-                .opacity(isAnimating ? 0.0 : 0.8)
-                .animation(
-                    Animation.easeOut(duration: 3.0)
+        // Single expanding ring for better performance
+        Circle()
+            .stroke(color.opacity(0.6), lineWidth: 2.5)
+            .frame(width: 90, height: 90)
+            .scaleEffect(isAnimating ? 2.0 : 1.0)
+            .opacity(isAnimating ? 0.0 : 0.8)
+            .allowsHitTesting(false) // Ensure taps pass through to the pin
+            .onAppear {
+                withAnimation(
+                    Animation.easeInOut(duration: 1.5)
                         .repeatForever(autoreverses: false)
-                        .delay(1.0),
-                    value: isAnimating
-                )
-            
-            // Center dot
-            Circle()
-                .fill(Color.blue)
-                .frame(width: 10, height: 10)
-                .opacity(0.8)
-        }
-        .onAppear {
-            withAnimation(
-                Animation.easeOut(duration: 3.0)
-                    .repeatForever(autoreverses: false)
-            ) {
-                isAnimating = true
+                ) {
+                    isAnimating = true
+                }
             }
-        }
     }
 }
 

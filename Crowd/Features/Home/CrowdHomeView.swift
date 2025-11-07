@@ -160,7 +160,11 @@ struct CrowdHomeView: View {
                                 let staggerDelay = Double(index) * 0.025 // 25ms per pin
                                 
                                 Annotation("", coordinate: expandedCoord) {
-                                    EventAnnotationView(event: event, isInExpandedCluster: true)
+                                    EventAnnotationView(
+                                        event: event,
+                                        isInExpandedCluster: true,
+                                        currentUserId: FirebaseManager.shared.getCurrentUserId()
+                                    )
                                         .scaleEffect(expandedClusterId == cluster.id ? 1.0 : 0.001)
                                         .opacity(expandedClusterId == cluster.id ? 1.0 : 0.0)
                                         .animation(
@@ -187,7 +191,8 @@ struct CrowdHomeView: View {
                                     },
                                     onEventTap: { event in
                                         handleEventTap(event)
-                                    }
+                                    },
+                                    currentUserId: FirebaseManager.shared.getCurrentUserId()
                                 )
                             }
                             .annotationTitles(.hidden)
