@@ -139,141 +139,154 @@ struct CrowdHomeView: View {
         )
     }
 
+    // MARK: - Map Content
+    @ViewBuilder
+    private var mapContent: some MapContent {
+        ForEach(currentEventsClusters) { cluster in
+            if expandedClusterId == cluster.id && cluster.eventCount > 1 {
+                expandedClusterContent(cluster: cluster)
+            } else {
+                collapsedClusterContent(cluster: cluster)
+            }
+        }
+        
+        if let userLocation = locationService.lastKnown {
+            userLocationAnnotation(coordinate: userLocation)
+        }
+    }
+    
+    @ViewBuilder
+    private func expandedClusterContent(cluster: EventCluster) -> some MapContent {
+        ForEach(Array(cluster.events.enumerated()), id: \.element.id) { index, event in
+            let angle = (2.0 * .pi * Double(index)) / Double(cluster.eventCount)
+            let radius = expansionRadius(for: cluster)
+            let expandedCoord = calculateExpandedCoordinate(
+                center: cluster.centerCoordinate,
+                angle: angle,
+                radiusPoints: radius
+            )
+            let staggerDelay = Double(index) * 0.025
+            
+            Annotation("", coordinate: expandedCoord) {
+                EventAnnotationView(
+                    event: event,
+                    isInExpandedCluster: true,
+                    currentUserId: FirebaseManager.shared.getCurrentUserId()
+                )
+                .scaleEffect(expandedClusterId == cluster.id ? 1.0 : 0.001)
+                .opacity(expandedClusterId == cluster.id ? 1.0 : 0.0)
+                .animation(
+                    .spring(response: 0.35, dampingFraction: 0.8)
+                    .delay(staggerDelay),
+                    value: expandedClusterId
+                )
+                .onTapGesture {
+                    print("📍 Expanded event tapped: \(event.title)")
+                    handleEventTap(event)
+                }
+            }
+            .annotationTitles(.hidden)
+        }
+    }
+    
+    @ViewBuilder
+    private func collapsedClusterContent(cluster: EventCluster) -> some MapContent {
+        Annotation("", coordinate: cluster.centerCoordinate) {
+            ClusterAnnotationView(
+                cluster: cluster,
+                isExpanded: false,
+                cameraDistance: currentCameraDistance,
+                onTap: {
+                    handleClusterTap(cluster)
+                },
+                onEventTap: { event in
+                    handleEventTap(event)
+                },
+                currentUserId: FirebaseManager.shared.getCurrentUserId()
+            )
+        }
+        .annotationTitles(.hidden)
+    }
+    
+    @ViewBuilder
+    private func userLocationAnnotation(coordinate: CLLocationCoordinate2D) -> some MapContent {
+        Annotation("", coordinate: coordinate) {
+            ZStack {
+                Circle()
+                    .fill(.primary.opacity(0.4))
+                    .frame(width: 16, height: 16)
+                    .blur(radius: 2)
+                    .offset(x: -30, y: 20)
+                
+                Circle()
+                    .fill(.primary.opacity(0.6))
+                    .frame(width: 10, height: 10)
+                    .offset(x: -30, y: 20)
+                
+                Image("UserLocationItem")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 50, height: 50)
+                    .offset(x: -30, y: -2)
+            }
+        }
+        .annotationTitles(.hidden)
+    }
+    
+    // MARK: - Map View
+    private var mapView: some View {
+        Map(position: $cameraPosition) {
+            mapContent
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if showClusterDropdown {
+                dismissClusterDropdown()
+            } else if expandedClusterId != nil {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    expandedClusterId = nil
+                }
+                print("📍 Collapsed cluster via background tap")
+            }
+        }
+        .mapControls { MapCompass() }
+        .ignoresSafeArea()
+        .onAppear { snapTo(selectedRegion) }
+        .onChange(of: selectedRegion) { _, new in snapTo(new) }
+        .onMapCameraChange { ctx in
+            handleCameraChange(ctx)
+        }
+    }
+    
+    private func handleCameraChange(_ ctx: MapCameraUpdateContext) {
+        currentCamera = ctx.camera
+        currentCameraDistance = ctx.camera.distance
+        
+        if expandedClusterId != nil && currentCameraDistance >= 3000 {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                expandedClusterId = nil
+            }
+            print("📍 Auto-collapsed cluster at distance 3000")
+        }
+        
+        let spec = selectedRegion.spec
+        let clamped = min(max(ctx.camera.distance, spec.minZoom), spec.maxZoom)
+        if abs(clamped - ctx.camera.distance) > 1 {
+            cameraPosition = .camera(
+                MapCamera(
+                    centerCoordinate: ctx.camera.centerCoordinate,
+                    distance: clamped,
+                    heading: ctx.camera.heading,
+                    pitch: ctx.camera.pitch
+                )
+            )
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
-                // === MAP ===
-                Map(position: $cameraPosition) {
-                    // Clustered event annotations (Firebase + user-created)
-                    ForEach(currentEventsClusters) { cluster in
-                        if expandedClusterId == cluster.id && cluster.eventCount > 1 {
-                            // EXPANDED: Show individual annotations at calculated positions
-                            ForEach(Array(cluster.events.enumerated()), id: \.element.id) { index, event in
-                                let angle = (2.0 * .pi * Double(index)) / Double(cluster.eventCount)
-                                let radius = expansionRadius(for: cluster)
-                                let expandedCoord = calculateExpandedCoordinate(
-                                    center: cluster.centerCoordinate,
-                                    angle: angle,
-                                    radiusPoints: radius
-                                )
-                                // Add stagger delay per pin
-                                let staggerDelay = Double(index) * 0.025 // 25ms per pin
-                                
-                                Annotation("", coordinate: expandedCoord) {
-                                    EventAnnotationView(
-                                        event: event,
-                                        isInExpandedCluster: true,
-                                        currentUserId: FirebaseManager.shared.getCurrentUserId()
-                                    )
-                                        .scaleEffect(expandedClusterId == cluster.id ? 1.0 : 0.001)
-                                        .opacity(expandedClusterId == cluster.id ? 1.0 : 0.0)
-                                        .animation(
-                                            .spring(response: 0.35, dampingFraction: 0.8)
-                                            .delay(staggerDelay),
-                                            value: expandedClusterId
-                                        )
-                                        .onTapGesture {
-                                            print("📍 Expanded event tapped: \(event.title)")
-                                            handleEventTap(event)
-                                        }
-                                }
-                                .annotationTitles(.hidden)
-                            }
-                        } else {
-                            // COLLAPSED: Show cluster annotation
-                            Annotation("", coordinate: cluster.centerCoordinate) {
-                                ClusterAnnotationView(
-                                    cluster: cluster,
-                                    isExpanded: false,
-                                    cameraDistance: currentCameraDistance,
-                                    onTap: {
-                                        handleClusterTap(cluster)
-                                    },
-                                    onEventTap: { event in
-                                        handleEventTap(event)
-                                    },
-                                    currentUserId: FirebaseManager.shared.getCurrentUserId()
-                                )
-                            }
-                            .annotationTitles(.hidden)
-                        }
-                    }
-                    
-                    // Upcoming events annotations removed per request
-                    
-                    // User event pin at user's location
-                    
-                    // User location marker (character icon)
-                    if let userLocation = locationService.lastKnown {
-                        Annotation("", coordinate: userLocation) {
-                            ZStack {
-                                // Small dot shadow - rendered first (behind)
-                                Circle()
-                                    .fill(.primary.opacity(0.4))
-                                    .frame(width: 16, height: 16)
-                                    .blur(radius: 2)
-                                    .offset(x: -30, y: 20)
-                                
-                                Circle()
-                                    .fill(.primary.opacity(0.6))
-                                    .frame(width: 10, height: 10)
-                                    .offset(x: -30, y: 20)
-                                
-                                // Character icon - rendered last (in front)
-                                Image("UserLocationItem")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 50, height: 50)
-                                    .offset(x: -30, y: -2)
-                            }
-                        }
-                        .annotationTitles(.hidden)
-                    }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    // Dismiss dropdown or collapse expanded cluster when tapping map background
-                    if showClusterDropdown {
-                        dismissClusterDropdown()
-                    } else if expandedClusterId != nil {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            expandedClusterId = nil
-                        }
-                        print("📍 Collapsed cluster via background tap")
-                    }
-                }
-                .mapControls { MapCompass() }
-                    .ignoresSafeArea()
-                    .onAppear { snapTo(selectedRegion) }
-                    .onChange(of: selectedRegion) { _, new in snapTo(new) }
-                    .onMapCameraChange { ctx in
-                        currentCamera = ctx.camera
-                        let previousDistance = currentCameraDistance
-                        currentCameraDistance = ctx.camera.distance
-                        
-                        // Auto-collapse expanded clusters when zooming out to distance 3000 or more
-                        if expandedClusterId != nil {
-                            if currentCameraDistance >= 3000 {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    expandedClusterId = nil
-                                }
-                                print("📍 Auto-collapsed cluster at distance 3000")
-                            }
-                        }
-                        
-                        let spec = selectedRegion.spec
-                        let clamped = min(max(ctx.camera.distance, spec.minZoom), spec.maxZoom)
-                        if abs(clamped - ctx.camera.distance) > 1 {
-                            cameraPosition = .camera(
-                                MapCamera(
-                                    centerCoordinate: ctx.camera.centerCoordinate,
-                                    distance: clamped,
-                                    heading: ctx.camera.heading,
-                                    pitch: ctx.camera.pitch
-                                )
-                            )
-                    }
-                }
+                mapView
                 
                 // === DROPDOWN LIST OVERLAY ===
                 if let cluster = selectedCluster, showClusterDropdown {
