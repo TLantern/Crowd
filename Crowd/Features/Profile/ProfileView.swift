@@ -292,7 +292,7 @@ struct ProfileView: View {
                 
                 testNotificationRow(
                     title: "Nearby Event",
-                    description: "🎉 Party Crowd has spawned nearby",
+                    description: "🎉 Crowd has spawned nearby",
                     type: "nearby_event",
                     icon: "location.fill",
                     colors: [Color(hex: 0x4ECDC4), Color(hex: 0x44A08D)]
@@ -300,7 +300,7 @@ struct ProfileView: View {
                 
                 testNotificationRow(
                     title: "Engagement",
-                    description: "This Crowd is poppin off! 🔥",
+                    description: "This Crowd is popping off! 🔥",
                     type: "engagement",
                     icon: "flame.fill",
                     colors: [Color(hex: 0xFF6B6B), Color(hex: 0xFF8E53)]
@@ -308,7 +308,7 @@ struct ProfileView: View {
                 
                 testNotificationRow(
                     title: "Study Reminder",
-                    description: "Turn your study session into a vibe 📚",
+                    description: "Don’t study solo. 📚",
                     type: "study_reminder",
                     icon: "book.fill",
                     colors: [Color(hex: 0x667EEA), Color(hex: 0x764BA2)]

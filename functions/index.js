@@ -297,8 +297,8 @@ exports.notifyNearbyUsers = functions.firestore
       const message = {
         tokens: tokens,
         notification: {
-          title: `${interestEmoji} ${eventCategory} Crowd has spawned nearby 📍🎉`,
-          body: `${eventTitle} at ${eventLocationName}`,
+          title: 'Crowd has spawned nearby',
+          body: 'Don\'t miss the moment.',
         },
         data: {
           eventId: eventId,
@@ -316,8 +316,8 @@ exports.notifyNearbyUsers = functions.firestore
           payload: {
             aps: {
               alert: {
-                title: `${interestEmoji} ${eventCategory} Crowd has spawned nearby 📍🎉`,
-                body: `${eventTitle} at ${eventLocationName}`,
+                title: 'Crowd has spawned nearby',
+                body: 'Don\'t miss the moment.',
                 'launch-image': 'Logo', // Your app icon
               },
               sound: 'default',
@@ -452,7 +452,7 @@ exports.testNotification = onCall({
         message = {
           token: user.fcmToken,
           notification: {
-            title: '🎉 Party Crowd has spawned nearby 📍🎉',
+            title: '🎉  hasParty Crowd spawned nearby 📍🎉',
             body: 'Test Event at Test Location',
           },
           data: {
@@ -1270,8 +1270,8 @@ exports.notifyPopularEvent = functions.firestore
       const message = {
         tokens: tokens,
         notification: {
-          title: 'This Crowd is poppin off! Drop everything and pull up 🔥',
-          body: `${eventTitle} > 5 ppl`,
+          title: 'This Crowd is popping off!',
+          body: '5 are here. Join the Crowd.',
         },
         data: {
           eventId: eventId,
@@ -1287,8 +1287,8 @@ exports.notifyPopularEvent = functions.firestore
           payload: {
             aps: {
               alert: {
-                title: 'This Crowd is poppin off! Drop everything and pull up 🔥',
-                body: `${eventTitle} > 5 ppl`,
+                title: 'This Crowd is popping off!',
+                body: '5 are here. Join the Crowd.',
               },
               sound: 'default',
               badge: 1,
@@ -1353,8 +1353,8 @@ exports.sendStudySessionReminder = functions.pubsub
       const message = {
         tokens: tokens,
         notification: {
-          title: 'Turn your study session into a vibe 📚',
-          body: 'Start a crowd. Someone\'s always down to link.',
+          title: 'Don\'t study solo.',
+          body: 'Start a Crowd and find your study crew.',
         },
         data: {
           type: 'promotional',
@@ -1368,8 +1368,8 @@ exports.sendStudySessionReminder = functions.pubsub
           payload: {
             aps: {
               alert: {
-                title: 'Turn your study session into a vibe 📚',
-                body: 'Start a crowd. Someone\'s always down to link.',
+                title: 'Don\'t study solo.',
+                body: 'Start a Crowd and find your study crew.',
               },
               sound: 'default',
             },
