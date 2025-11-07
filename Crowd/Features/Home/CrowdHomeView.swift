@@ -280,357 +280,360 @@ struct CrowdHomeView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                mapView
-                
-                // === DROPDOWN LIST OVERLAY ===
-                if let cluster = selectedCluster, showClusterDropdown {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            dismissClusterDropdown()
-                        }
-                        .zIndex(998)
-                    
-                    VStack(spacing: 0) {
-                        Spacer()
-                            .frame(height: 120)
-                        
-                        ClusterEventFloatingCard(
-                            cluster: cluster,
-                            onSelect: { event in
-                                Haptics.light()
-                                handleEventTap(event)
-                                dismissClusterDropdown()
-                            },
-                            onDismiss: {
-                                dismissClusterDropdown()
-                            }
-                        )
-                        .transition(
-                            .asymmetric(
-                                insertion: .move(edge: .top).combined(with: .opacity),
-                                removal: .move(edge: .top).combined(with: .opacity)
-                            )
-                        )
-                        
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .zIndex(999)
-                    .allowsHitTesting(true)
+            mainContent
+                .sheet(isPresented: $showHostSheet) {
+                    hostEventSheet
                 }
-
-                // === OVERLAYS & CONTROLS ===
-                GeometryReader { geo in
-                    // Panel metrics shared by panel and floating buttons
-                    let panelWidth  = min(geo.size.width * 0.84, 520)
-                    let panelHeight: CGFloat = 140
-
-                    VStack(spacing: 0) {
-                        // === Centered main navbar (region) with smaller Type filter below ===
-                        VStack(spacing: 8) {
-                            // Main region picker (centered)
-                            Menu {
-                                ForEach(CampusRegion.allCases) { region in
-                                    Button {
-                                        selectedRegion = region
-                                    } label: {
-                                        Text(region.rawValue)
-                                            .font(.system(size: 16))
-                                    }
-                                }
-                            } label: {
-                                GlassPill(height: 48, horizontalPadding: 20) {
-                                    HStack(spacing: 10) {
-                                        Text(selectedRegion.displayName)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundStyle(.primary)
-                                            .lineLimit(1)
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundStyle(.primary.opacity(0.8))
-                                    }
-                                    .padding(.horizontal, 12)
-                                }
-                            }
-                            .fixedSize()
-                            .frame(maxWidth: geo.size.width * 0.9)
-
-                            // Small type filter (half height of main pill) centered below
-                            Menu {
-                                Button("User Created Events") { sourceFilter = .user }
-                                Button("School Hosted Events") { sourceFilter = .school }
-                            } label: {
-                                GlassPill(height: 24, horizontalPadding: 14) {
-                                    HStack(spacing: 6) {
-                                        Text(sourceFilter == .user ? "User Created" : (sourceFilter == .school ? "School Hosted" : "Sort"))
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundStyle(.primary)
-                                            .lineLimit(1)
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 11, weight: .semibold))
-                                            .foregroundStyle(.primary.opacity(0.8))
-                                    }
-                                    .padding(.horizontal, 8)
-                                }
-                            }
-                            .fixedSize()
-                        }
-                        .padding(.top, 0)
-                        .offset(y: -18) // raise just the navbar; tweak -10…-28 to taste
-                        .zIndex(5)
-
-                        Spacer(minLength: 0)
-
-                        // Bottom frosted panel + FAB cluster
-                        ZStack {
-                            // Frosted base
-                            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                        .stroke(.white.opacity(0.12), lineWidth: 1)
-                                )
-                                .background(
-                                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                        .fill(.ultraThinMaterial)
-                                )
-                                .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
-                                .frame(width: panelWidth, height: panelHeight)
-                                .allowsHitTesting(false)
-
-                            VStack(spacing: 10) {
-                                let fabSize: CGFloat = 72
-                                let centerYOffset: CGFloat = -14
-                                let spread = panelWidth * 0.35
-                                let sideYOffset: CGFloat = panelHeight * 0.16
-
-                                ZStack {
-                                    // Center FAB — Host
-                                    FABPlusButton(size: fabSize, color: Color(hex: 0x02853E)) {
-                                        showHostSheet = true
-                                        Haptics.light()
-                                    }
-                                    .offset(y: centerYOffset)
-
-                                    // Left — Profile (open at 3/4 screen)
-                                    FrostedIconButton(
-                                        systemName: "person",
-                                        baseSize: 54,
-                                        targetSize: 72,
-                                        frostOpacity: 0.22,
-                                        iconBaseColor: .black,
-                                        highlightColor: Color(red: 0.63, green: 0.82, blue: 1.0)
-                                    ) {
-                                        route = .profile
-                                        overlaySnapIndex = 1
-                                        overlayPresented = true
-                                        Haptics.light()
-                                    }
-                                    .accessibilityLabel("Open profile")
-                                    .offset(x: -spread, y: sideYOffset)
-
-                                    // Right — Calendar
-                                    FrostedIconButton(
-                                        systemName: "calendar",
-                                        baseSize: 54,
-                                        targetSize: 72,
-                                        frostOpacity: 0.22,
-                                        iconBaseColor: .black,
-                                        highlightColor: .blue
-                                    ) {
-                                        showCalendar = true
-                                        Haptics.light()
-                                    }
-                                    .accessibilityLabel("Open calendar")
-                                    .offset(x: spread, y: sideYOffset)
-                                }
-
-                                Text("Start a Crowd")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.primary.opacity(0.78))
-                                    .padding(.top, -8)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.bottom, 20)
-                    }
-
-                    // === FLOATING GLASS BUTTONS ===
-                    VStack(alignment: .trailing, spacing: 16) {
-                        // Achievement icon commented out for now
-                        // GlassIconButton(systemName: "trophy") { 
-                        //     route = .leaderboard
-                        //     overlaySnapIndex = 1
-                        //     overlayPresented = true
-                        // }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .padding(.trailing, 24)
-                    // sit above the panel regardless of screen height
-                    .padding(.bottom, panelHeight + 28)
+                .overlay(confettiOverlay)
+                .sheet(item: $selectedEvent) { event in
+                    EventDetailView(event: event)
+                        .environmentObject(appState)
+                        .presentationDetents([.fraction(0.75)])
+                        .presentationDragIndicator(.visible)
                 }
-
-                // === BOTTOM SHEET OVER MAP ===
-                BottomOverlay(
-                    isPresented: $overlayPresented,
-                    snapIndex: $overlaySnapIndex,
-                    snapFractions: [0.25, 0.75],
-                    onDismiss: { route = .none }
-                ) {
-                    switch route {
-                    case .profile:
-                        ProfileView(viewModel: ProfileViewModel.mock)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 2)
-                    case .leaderboard:
-                        LeaderboardView(viewModel: LeaderboardViewModel())
-                            .padding(.horizontal, 16)
-                            .padding(.top, 2)
-                    case .none:
-                        EmptyView()
+                .overlay(tutorialOverlay)
+                .onChange(of: appState.showTutorial) { _, shouldShow in
+                    if shouldShow {
+                        showTutorialOverlay = true
                     }
                 }
-                .ignoresSafeArea(edges: .bottom)
-                .onChange(of: route) { _, r in
-                    if r == .profile || r == .leaderboard {
-                        overlaySnapIndex = 1
+                .task {
+                    await loadFirebaseEvents()
+                    await loadUpcomingEvents()
+                }
+                .onChange(of: selectedRegion) { _, newRegion in
+                    Task {
+                        await loadFirebaseEvents(region: newRegion)
                     }
+                }
+                .onReceive(Timer.publish(every: 300, on: .main, in: .common).autoconnect()) { _ in
+                    removeExpiredEvents()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { notification in
+                    handleEventDeleted(notification)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .navigateToEventFromNotification)) { notification in
+                    handleNavigateToEvent(notification)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .showHostSheetFromNotification)) { _ in
+                    showHostSheet = true
                 }
                 .fullScreenCover(isPresented: $showCalendar) { CalenderView() }
-            }
         }
-        .sheet(isPresented: $showHostSheet) {
-            HostEventSheet(defaultRegion: selectedRegion) { event in
-                Task {
-                    do {
-                        // Save to Firebase first
-                        try await env.eventRepo.create(event: event)
-                        print("✅ Event created in Firebase: \(event.id)")
-                        
-                        // Then add to local array for immediate UI update
-                        await MainActor.run {
-                            hostedEvents.append(event)
-                            
-                            // Trigger celebration effects after successful save
-                            showConfetti = true
-                            Haptics.light() // Light haptic buzz
-                            
-                            // Hide confetti after animation completes
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                showConfetti = false
+    }
+    
+    private var mainContent: some View {
+        ZStack {
+            mapView
+            dropdownOverlay
+            overlaysAndControls
+        }
+    }
+    
+    @ViewBuilder
+    private var dropdownOverlay: some View {
+        if let cluster = selectedCluster, showClusterDropdown {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    dismissClusterDropdown()
+                }
+                .zIndex(998)
+            
+            VStack(spacing: 0) {
+                Spacer()
+                    .frame(height: 120)
+                
+                ClusterEventFloatingCard(
+                    cluster: cluster,
+                    onSelect: { event in
+                        Haptics.light()
+                        handleEventTap(event)
+                        dismissClusterDropdown()
+                    },
+                    onDismiss: {
+                        dismissClusterDropdown()
+                    }
+                )
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    )
+                )
+                
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .zIndex(999)
+            .allowsHitTesting(true)
+        }
+    }
+    
+    private var overlaysAndControls: some View {
+        ZStack {
+            GeometryReader { geo in
+                // Panel metrics shared by panel and floating buttons
+                let panelWidth  = min(geo.size.width * 0.84, 520)
+                let panelHeight: CGFloat = 140
+
+                VStack(spacing: 0) {
+                    // === Centered main navbar (region) with smaller Type filter below ===
+                    VStack(spacing: 8) {
+                        // Main region picker (centered)
+                        Menu {
+                            ForEach(CampusRegion.allCases) { region in
+                                Button {
+                                    selectedRegion = region
+                                } label: {
+                                    Text(region.rawValue)
+                                        .font(.system(size: 16))
+                                }
+                            }
+                        } label: {
+                            GlassPill(height: 48, horizontalPadding: 20) {
+                                HStack(spacing: 10) {
+                                    Text(selectedRegion.displayName)
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.primary.opacity(0.8))
+                                }
+                                .padding(.horizontal, 12)
                             }
                         }
-                    } catch {
-                        print("❌ Failed to create event in Firebase: \(error)")
-                        // Still add locally so user sees it, but warn about sync
-                        await MainActor.run {
-                            hostedEvents.append(event)
+                        .fixedSize()
+                        .frame(maxWidth: geo.size.width * 0.9)
+
+                        // Small type filter (half height of main pill) centered below
+                        Menu {
+                            Button("User Created Events") { sourceFilter = .user }
+                            Button("School Hosted Events") { sourceFilter = .school }
+                        } label: {
+                            GlassPill(height: 24, horizontalPadding: 14) {
+                                HStack(spacing: 6) {
+                                    Text(sourceFilter == .user ? "User Created" : (sourceFilter == .school ? "School Hosted" : "Sort"))
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.primary.opacity(0.8))
+                                }
+                                .padding(.horizontal, 8)
+                            }
+                        }
+                        .fixedSize()
+                    }
+                    .padding(.top, 0)
+                    .offset(y: -18)
+                    .zIndex(5)
+
+                    Spacer(minLength: 0)
+
+                    // Bottom frosted panel + FAB cluster
+                    ZStack {
+                        // Frosted base
+                        RoundedRectangle(cornerRadius: 32, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 32, style: .continuous)
+                                    .stroke(.white.opacity(0.12), lineWidth: 1)
+                            )
+                            .background(
+                                RoundedRectangle(cornerRadius: 32, style: .continuous)
+                                    .fill(.ultraThinMaterial)
+                            )
+                            .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
+                            .frame(width: panelWidth, height: panelHeight)
+                            .allowsHitTesting(false)
+
+                        VStack(spacing: 10) {
+                            let fabSize: CGFloat = 72
+                            let centerYOffset: CGFloat = -14
+                            let spread = panelWidth * 0.35
+                            let sideYOffset: CGFloat = panelHeight * 0.16
+
+                            ZStack {
+                                // Center FAB — Host
+                                FABPlusButton(size: fabSize, color: Color(hex: 0x02853E)) {
+                                    showHostSheet = true
+                                    Haptics.light()
+                                }
+                                .offset(y: centerYOffset)
+
+                                // Left — Profile (open at 3/4 screen)
+                                FrostedIconButton(
+                                    systemName: "person",
+                                    baseSize: 54,
+                                    targetSize: 72,
+                                    frostOpacity: 0.22,
+                                    iconBaseColor: .black,
+                                    highlightColor: Color(red: 0.63, green: 0.82, blue: 1.0)
+                                ) {
+                                    route = .profile
+                                    overlaySnapIndex = 1
+                                    overlayPresented = true
+                                    Haptics.light()
+                                }
+                                .accessibilityLabel("Open profile")
+                                .offset(x: -spread, y: sideYOffset)
+
+                                // Right — Calendar
+                                FrostedIconButton(
+                                    systemName: "calendar",
+                                    baseSize: 54,
+                                    targetSize: 72,
+                                    frostOpacity: 0.22,
+                                    iconBaseColor: .black,
+                                    highlightColor: .blue
+                                ) {
+                                    showCalendar = true
+                                    Haptics.light()
+                                }
+                                .accessibilityLabel("Open calendar")
+                                .offset(x: spread, y: sideYOffset)
+                            }
+
+                            Text("Start a Crowd")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.primary.opacity(0.78))
+                                .padding(.top, -8)
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 20)
+                }
+
+                // === FLOATING GLASS BUTTONS ===
+                VStack(alignment: .trailing, spacing: 16) {
+                    // Achievement icon commented out for now
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, 24)
+                .padding(.bottom, panelHeight + 28)
+            }
+
+            // === BOTTOM SHEET OVER MAP ===
+            BottomOverlay(
+                isPresented: $overlayPresented,
+                snapIndex: $overlaySnapIndex,
+                snapFractions: [0.25, 0.75],
+                onDismiss: { route = .none }
+            ) {
+                switch route {
+                case .profile:
+                    ProfileView(viewModel: ProfileViewModel.mock)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 2)
+                case .leaderboard:
+                    LeaderboardView(viewModel: LeaderboardViewModel())
+                        .padding(.horizontal, 16)
+                        .padding(.top, 2)
+                case .none:
+                    EmptyView()
                 }
             }
-                .presentationDetents([.fraction(0.75), .large])
-                .presentationDragIndicator(.visible)
-        }
-        .overlay(
-            Group {
-                if showConfetti {
-                    ConfettiOverlay()
-                        .allowsHitTesting(false)
+            .ignoresSafeArea(edges: .bottom)
+            .onChange(of: route) { _, r in
+                if r == .profile || r == .leaderboard {
+                    overlaySnapIndex = 1
                 }
             }
-        )
-        .sheet(item: $selectedEvent) { event in
-            EventDetailView(event: event)
-                .environmentObject(appState)
-                .presentationDetents([.fraction(0.75)])
-                .presentationDragIndicator(.visible)
         }
-        .overlay(
-            Group {
-                if showTutorialOverlay {
-                    TutorialOverlayView(
-                        steps: TutorialStep.allSteps,
-                        targetPositions: [:],
-                        onComplete: {
-                            TutorialManager.shared.markTutorialComplete()
-                            showTutorialOverlay = false
-                            appState.showTutorial = false
-                        }
-                    )
-                    .transition(.opacity)
-                    .zIndex(1000)
-                }
-            }
-        )
-        .onChange(of: appState.showTutorial) { _, shouldShow in
-            if shouldShow {
-                showTutorialOverlay = true
-            }
-        }
-        .task {
-            await loadFirebaseEvents()
-            await loadUpcomingEvents()
-        }
-        .onChange(of: selectedRegion) { _, newRegion in
+    }
+    
+    @ViewBuilder
+    private var hostEventSheet: some View {
+        HostEventSheet(defaultRegion: selectedRegion) { event in
             Task {
-                await loadFirebaseEvents(region: newRegion)
-            }
-        }
-        .onReceive(Timer.publish(every: 300, on: .main, in: .common).autoconnect()) { _ in
-            // Check every 5 minutes to remove events that ended 4+ hours ago
-            removeExpiredEvents()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { notification in
-            // Remove deleted event from ALL event arrays
-            if let eventId = notification.object as? String {
-                hostedEvents.removeAll { $0.id == eventId }
-                officialEvents.removeAll { $0.id == eventId }
-                userEventsFromFirebase.removeAll { $0.id == eventId }
-                upcomingEvents.removeAll { $0.id == eventId }
-                
-                print("🗑️ Removed deleted event from all arrays: \(eventId)")
-                print("   - Current hosted events: \(hostedEvents.count)")
-                print("   - Current official events: \(officialEvents.count)")
-                print("   - Current user events from Firebase: \(userEventsFromFirebase.count)")
-                print("   - Clusters will auto-update with new counts")
-                
-                // Collapse any expanded cluster that might have contained this event
-                if expandedClusterId != nil {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        expandedClusterId = nil
-                    }
-                    print("   - Collapsed expanded cluster")
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .navigateToEventFromNotification)) { notification in
-            // Handle navigation to event from push notification tap
-            if let eventId = notification.userInfo?["eventId"] as? String {
-                print("📲 Navigating to event from notification: \(eventId)")
-                
-                // Find the event in all event arrays
-                if let event = allEvents.first(where: { $0.id == eventId }) {
-                    selectedEvent = event
-                } else {
-                    // If event not found locally, reload events to ensure we have it
-                    Task {
-                        await loadFirebaseEvents()
-                        await loadUpcomingEvents()
-                        if let event = allEvents.first(where: { $0.id == eventId }) {
-                            selectedEvent = event
+                do {
+                    try await env.eventRepo.create(event: event)
+                    print("✅ Event created in Firebase: \(event.id)")
+                    
+                    await MainActor.run {
+                        hostedEvents.append(event)
+                        showConfetti = true
+                        Haptics.light()
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            showConfetti = false
                         }
                     }
+                } catch {
+                    print("❌ Failed to create event in Firebase: \(error)")
+                    await MainActor.run {
+                        hostedEvents.append(event)
+                    }
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .showHostSheetFromNotification)) { _ in
-            // Handle promotional notification - show host sheet to encourage event creation
-            print("📲 Showing host sheet from promotional notification")
-            showHostSheet = true
+        .presentationDetents([.fraction(0.75), .large])
+        .presentationDragIndicator(.visible)
+    }
+    
+    @ViewBuilder
+    private var confettiOverlay: some View {
+        if showConfetti {
+            ConfettiOverlay()
+                .allowsHitTesting(false)
+        }
+    }
+    
+    @ViewBuilder
+    private var tutorialOverlay: some View {
+        if showTutorialOverlay {
+            TutorialOverlayView(
+                steps: TutorialStep.allSteps,
+                targetPositions: [:],
+                onComplete: {
+                    TutorialManager.shared.markTutorialComplete()
+                    showTutorialOverlay = false
+                    appState.showTutorial = false
+                }
+            )
+            .transition(.opacity)
+            .zIndex(1000)
+        }
+    }
+    
+    // MARK: - Notification Handlers
+    
+    private func handleEventDeleted(_ notification: Notification) {
+        if let eventId = notification.object as? String {
+            hostedEvents.removeAll { $0.id == eventId }
+            officialEvents.removeAll { $0.id == eventId }
+            userEventsFromFirebase.removeAll { $0.id == eventId }
+            upcomingEvents.removeAll { $0.id == eventId }
+            
+            print("🗑️ Removed deleted event from all arrays: \(eventId)")
+            
+            if expandedClusterId != nil {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    expandedClusterId = nil
+                }
+            }
+        }
+    }
+    
+    private func handleNavigateToEvent(_ notification: Notification) {
+        if let eventId = notification.userInfo?["eventId"] as? String {
+            print("📲 Navigating to event from notification: \(eventId)")
+            
+            if let event = allEvents.first(where: { $0.id == eventId }) {
+                selectedEvent = event
+            } else {
+                Task {
+                    await loadFirebaseEvents()
+                    await loadUpcomingEvents()
+                    if let event = allEvents.first(where: { $0.id == eventId }) {
+                        selectedEvent = event
+                    }
+                }
+            }
         }
     }
     

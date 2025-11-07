@@ -17,7 +17,7 @@ struct TutorialCardView: View {
         VStack(spacing: 0) {
             // Arrow pointer at top (if direction is bottom)
             if step.arrowDirection == .bottom {
-                ArrowPointer(direction: .bottom)
+                TutorialArrowPointer(direction: .bottom)
                     .offset(y: 1)
             }
             
@@ -86,7 +86,7 @@ struct TutorialCardView: View {
             
             // Arrow pointer at bottom (if direction is top)
             if step.arrowDirection == .top {
-                ArrowPointer(direction: .top)
+                TutorialArrowPointer(direction: .top)
                     .offset(y: -1)
             }
         }
@@ -94,14 +94,14 @@ struct TutorialCardView: View {
     }
 }
 
-struct ArrowPointer: View {
+struct TutorialArrowPointer: View {
     let direction: ArrowDirection
     
     var body: some View {
-        Triangle()
+        TutorialTriangle()
             .fill(.ultraThinMaterial)
             .overlay(
-                Triangle()
+                TutorialTriangle()
                     .stroke(.white.opacity(0.12), lineWidth: 1)
             )
             .frame(width: 20, height: 16)
@@ -120,7 +120,7 @@ struct ArrowPointer: View {
     }
 }
 
-struct Triangle: Shape {
+struct TutorialTriangle: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: CGPoint(x: rect.midX, y: rect.minY))
