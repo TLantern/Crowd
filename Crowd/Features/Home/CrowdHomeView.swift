@@ -139,24 +139,8 @@ struct CrowdHomeView: View {
         )
     }
 
-    // MARK: - Map Content
-    @ViewBuilder
-    private var mapContent: some MapContent {
-        ForEach(currentEventsClusters) { cluster in
-            if expandedClusterId == cluster.id && cluster.eventCount > 1 {
-                expandedClusterContent(cluster: cluster)
-            } else {
-                collapsedClusterContent(cluster: cluster)
-            }
-        }
-        
-        if let userLocation = locationService.lastKnown {
-            userLocationAnnotation(coordinate: userLocation)
-        }
-    }
-    
-    @ViewBuilder
-    private func expandedClusterContent(cluster: EventCluster) -> some MapContent {
+    // MARK: - Map Content Helpers
+    private func expandedClusterAnnotations(cluster: EventCluster) -> some MapContent {
         ForEach(Array(cluster.events.enumerated()), id: \.element.id) { index, event in
             let angle = (2.0 * .pi * Double(index)) / Double(cluster.eventCount)
             let radius = expansionRadius(for: cluster)
@@ -189,8 +173,7 @@ struct CrowdHomeView: View {
         }
     }
     
-    @ViewBuilder
-    private func collapsedClusterContent(cluster: EventCluster) -> some MapContent {
+    private func collapsedClusterAnnotation(cluster: EventCluster) -> some MapContent {
         Annotation("", coordinate: cluster.centerCoordinate) {
             ClusterAnnotationView(
                 cluster: cluster,
@@ -208,7 +191,6 @@ struct CrowdHomeView: View {
         .annotationTitles(.hidden)
     }
     
-    @ViewBuilder
     private func userLocationAnnotation(coordinate: CLLocationCoordinate2D) -> some MapContent {
         Annotation("", coordinate: coordinate) {
             ZStack {
@@ -236,7 +218,17 @@ struct CrowdHomeView: View {
     // MARK: - Map View
     private var mapView: some View {
         Map(position: $cameraPosition) {
-            mapContent
+            ForEach(currentEventsClusters) { cluster in
+                if expandedClusterId == cluster.id && cluster.eventCount > 1 {
+                    expandedClusterAnnotations(cluster: cluster)
+                } else {
+                    collapsedClusterAnnotation(cluster: cluster)
+                }
+            }
+            
+            if let userLocation = locationService.lastKnown {
+                userLocationAnnotation(coordinate: userLocation)
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture {
