@@ -9,7 +9,8 @@ import SwiftUI
 
 struct InterestsView: View {
     @State private var selectedInterests: Set<String> = []
-    @State private var currentPage = 0
+    @State private var currentRow = 0
+    @State private var autoScrollTimer: Timer?
     
     let onNext: ([String]) -> Void
     let onBack: (() -> Void)?
@@ -67,11 +68,9 @@ struct InterestsView: View {
         ("🔥", "Campus Events")
     ]
     
-    // Split interests into pages of 9
-    var interestPages: [[(emoji: String, title: String)]] {
-        stride(from: 0, to: interests.count, by: 9).map {
-            Array(interests[$0..<min($0 + 9, interests.count)])
-        }
+    // Calculate number of rows (3 columns per row)
+    var numberOfRows: Int {
+        (interests.count + 2) / 3 // Round up division
     }
     
     var body: some View {
@@ -97,15 +96,15 @@ struct InterestsView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(.black.opacity(0.7))
                             
-                            // Carousel of interest chips
-                            TabView(selection: $currentPage) {
-                                ForEach(0..<interestPages.count, id: \.self) { pageIndex in
+                            // Vertical carousel of interest chips
+                            ScrollViewReader { proxy in
+                                ScrollView(.vertical, showsIndicators: false) {
                                     LazyVGrid(columns: [
                                         GridItem(.flexible()),
                                         GridItem(.flexible()),
                                         GridItem(.flexible())
                                     ], spacing: 12) {
-                                        ForEach(interestPages[pageIndex], id: \.title) { interest in
+                                        ForEach(Array(interests.enumerated()), id: \.element.title) { index, interest in
                                             InterestChip(
                                                 emoji: interest.emoji,
                                                 name: interest.title,
@@ -119,16 +118,19 @@ struct InterestsView: View {
                                                     }
                                                 }
                                             }
+                                            .id("interest-\(index)")
                                         }
                                     }
                                     .padding(.horizontal, 4)
-                                    .tag(pageIndex)
                                 }
-                            }
-                            .tabViewStyle(.page(indexDisplayMode: .never))
-                            .frame(height: 300)
-                            .onAppear {
-                                startAutoRotation()
+                                .scrollTargetBehavior(.paging)
+                                .frame(height: 350)
+                                .onAppear {
+                                    startAutoScroll(proxy: proxy)
+                                }
+                                .onDisappear {
+                                    stopAutoScroll()
+                                }
                             }
                             
                             HStack(spacing: 12) {
@@ -177,13 +179,27 @@ struct InterestsView: View {
         }
     }
     
-    // MARK: - Auto Rotation
-    private func startAutoRotation() {
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-            withAnimation(.easeInOut(duration: 0.5)) {
-                currentPage = (currentPage + 1) % interestPages.count
+    // MARK: - Auto Scroll
+    private func startAutoScroll(proxy: ScrollViewProxy) {
+        // Stop any existing timer
+        stopAutoScroll()
+        
+        // Start minimal auto-scroll (every 9 seconds, scroll by one row)
+        autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 9.0, repeats: true) { _ in
+            let nextRow = (currentRow + 1) % numberOfRows
+            let interestIndex = min(nextRow * 3, interests.count - 1)
+            
+            withAnimation(.easeInOut(duration: 1.0)) {
+                proxy.scrollTo("interest-\(interestIndex)", anchor: .top)
             }
+            
+            currentRow = nextRow
         }
+    }
+    
+    private func stopAutoScroll() {
+        autoScrollTimer?.invalidate()
+        autoScrollTimer = nil
     }
 }
 
