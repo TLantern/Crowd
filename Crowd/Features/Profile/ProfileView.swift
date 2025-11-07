@@ -338,6 +338,8 @@ struct ProfileView: View {
                 "testMessage": "This is a test notification! 🔔"
             ]
             
+            print("📞 Calling testNotification function with data: \(data)")
+            
             let result = try await callable.call(data)
             print("✅ Test notification sent successfully")
             
@@ -351,8 +353,34 @@ struct ProfileView: View {
             }
         } catch {
             print("❌ Failed to send test notification: \(error.localizedDescription)")
+            
+            // Enhanced error logging
+            if let nsError = error as NSError? {
+                print("   - Error domain: \(nsError.domain)")
+                print("   - Error code: \(nsError.code)")
+                print("   - Error userInfo: \(nsError.userInfo)")
+                
+                // Check for Firebase Functions specific errors
+                if let functionsError = nsError.userInfo["FIRFunctionsErrorCode"] as? String {
+                    print("   - Functions error code: \(functionsError)")
+                }
+                if let functionsMessage = nsError.userInfo["FIRFunctionsErrorMessage"] as? String {
+                    print("   - Functions error message: \(functionsMessage)")
+                }
+            }
+            
+            // Provide user-friendly error messages
+            var errorMessage = "Failed to send notification"
+            if error.localizedDescription.contains("not-found") || error.localizedDescription.contains("NOT FOUND") {
+                errorMessage = "User not found in database. Check if Cloud Function is deployed."
+            } else if error.localizedDescription.contains("failed-precondition") {
+                errorMessage = "FCM token missing. Try again in a moment."
+            } else if error.localizedDescription.contains("unavailable") || error.localizedDescription.contains("UNAVAILABLE") {
+                errorMessage = "Cloud Function unavailable. Check deployment."
+            }
+            
             await MainActor.run {
-                toastMessage = "Failed to send notification"
+                toastMessage = errorMessage
                 withAnimation { showToast = true }
             }
         }
