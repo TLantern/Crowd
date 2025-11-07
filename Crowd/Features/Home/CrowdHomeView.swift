@@ -55,7 +55,7 @@ struct CrowdHomeView: View {
     
     // MARK: - Source filter (mini navbar)
     private enum SourceFilter { case user, school }
-    @State private var sourceFilter: SourceFilter? = nil
+    @State private var sourceFilter: SourceFilter? = .user
     
     // MARK: - Computed
     var allEvents: [CrowdEvent] {

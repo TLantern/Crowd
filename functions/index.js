@@ -452,8 +452,8 @@ exports.testNotification = onCall({
         message = {
           token: user.fcmToken,
           notification: {
-            title: '🎉  hasParty Crowd spawned nearby 📍🎉',
-            body: 'Test Event at Test Location',
+            title: 'Crowd has spawned nearby',
+            body: 'Don\'t miss the moment.',
           },
           data: {
             eventId: 'test-event-id',
@@ -470,8 +470,8 @@ exports.testNotification = onCall({
             payload: {
               aps: {
                 alert: {
-                  title: '🎉 Party Crowd has spawned nearby 📍🎉',
-                  body: 'Test Event at Test Location',
+                  title: 'Crowd has spawned nearby',
+                  body: 'Don\'t miss the moment.',
                 },
                 sound: 'default',
                 badge: 1,
@@ -492,8 +492,8 @@ exports.testNotification = onCall({
         message = {
           token: user.fcmToken,
           notification: {
-            title: 'This Crowd is poppin off! Drop everything and pull up 🔥',
-            body: '5 people are already there - join the vibe!',
+            title: 'This Crowd is popping off!',
+            body: '5 are here. Join the Crowd.',
           },
           data: {
             eventId: 'test-event-id',
@@ -504,8 +504,8 @@ exports.testNotification = onCall({
             payload: {
               aps: {
                 alert: {
-                  title: 'This Crowd is poppin off! Drop everything and pull up 🔥',
-                  body: '5 people are already there - join the vibe!',
+                  title: 'This Crowd is popping off!',
+                  body: '5 are here. Join the Crowd.',
                 },
                 sound: 'default',
                 badge: 1,
@@ -521,8 +521,8 @@ exports.testNotification = onCall({
         message = {
           token: user.fcmToken,
           notification: {
-            title: 'Turn your study session into a vibe 📚',
-            body: 'Start a crowd. Someone\'s always down to link.',
+            title: 'Don\'t study solo.',
+            body: 'Start a Crowd and find your study crew.',
           },
           data: {
             type: 'promotional',
@@ -532,8 +532,8 @@ exports.testNotification = onCall({
             payload: {
               aps: {
                 alert: {
-                  title: 'Turn your study session into a vibe 📚',
-                  body: 'Start a crowd. Someone\'s always down to link.',
+                  title: 'Don\'t study solo.',
+                  body: 'Start a Crowd and find your study crew.',
                 },
                 sound: 'default',
                 badge: 1,
