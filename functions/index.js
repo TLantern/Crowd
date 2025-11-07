@@ -410,20 +410,32 @@ exports.notifyNearbyUsers = functions.firestore
 exports.testNotification = functions.https.onCall(async (data, context) => {
   const { userId, testMessage } = data;
   
+  console.log('🧪 Test notification called for userId:', userId);
+  console.log('   - Test message:', testMessage || 'default');
+  
   if (!userId) {
+    console.log('❌ No userId provided');
     throw new functions.https.HttpsError('invalid-argument', 'userId is required');
   }
   
   try {
+    console.log('🔍 Fetching user document...');
     const userDoc = await db.collection('users').doc(userId).get();
+    
     if (!userDoc.exists) {
+      console.log('❌ User document does not exist');
       throw new functions.https.HttpsError('not-found', 'User not found');
     }
     
     const user = userDoc.data();
+    console.log('✅ User found:', user.displayName || 'Unknown');
+    
     if (!user.fcmToken) {
+      console.log('❌ User has no FCM token');
       throw new functions.https.HttpsError('failed-precondition', 'User has no FCM token');
     }
+    
+    console.log('🔑 FCM token found, preparing notification...');
     
     const message = {
       token: user.fcmToken,

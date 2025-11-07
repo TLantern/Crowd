@@ -59,7 +59,7 @@ struct ProfileView: View {
                         tagsSection
                         statsRow
                         attendedEventsSection
-                        testNotificationButton
+//                        testNotificationButton
 
                     }
                     .padding(16)
@@ -320,6 +320,14 @@ struct ProfileView: View {
         }
         
         print("🧪 Sending test notification for user: \(userId)")
+        
+        // Ensure FCM token is saved before testing
+        if let fcmToken = FirebaseManager.shared.getFCMToken() {
+            print("🔑 Found FCM token, ensuring it's saved to Firestore...")
+            await NotificationService.shared.saveFCMTokenToProfile(token: fcmToken)
+        } else {
+            print("⚠️ No FCM token available yet")
+        }
         
         do {
             let functions = FirebaseManager.shared.functions

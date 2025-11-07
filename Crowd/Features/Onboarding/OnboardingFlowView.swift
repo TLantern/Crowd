@@ -115,6 +115,11 @@ struct OnboardingFlowView: View {
             
             print("✅ Profile created successfully!")
             
+            // Save FCM token if available (for verified users)
+            if let fcmToken = FirebaseManager.shared.getFCMToken() {
+                await NotificationService.shared.saveFCMTokenToProfile(token: fcmToken)
+            }
+            
             // Complete onboarding
             await MainActor.run {
                 isSaving = false

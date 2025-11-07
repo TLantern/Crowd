@@ -71,12 +71,15 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         print("🔑 NotificationService: FCM Token received")
         print("🔑 Token: \(token)")
         
-        // Save token to user's Firestore profile
+        // Save token to user's Firestore profile only for verified users
         Task {
-            await saveFCMTokenToProfile(token: token)
-            #if DEBUG
-            await sendDebugTestNotification()
-            #endif
+            // Only save token if user is verified (non-anonymous)
+            if FirebaseManager.shared.isCurrentUserVerified() {
+                await saveFCMTokenToProfile(token: token)
+                await sendDebugTestNotification()
+            } else {
+                print("⏭️ NotificationService: Skipping FCM token save for anonymous user")
+            }
         }
     }
     
@@ -88,14 +91,17 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
             return
         }
         
-        print("💾 NotificationService: Saving FCM token to Firestore...")
+        print("💾 NotificationService: Saving FCM token to Firestore for user: \(userId)")
         
         do {
             // Check if user document exists
+            print("🔍 Checking if user document exists...")
             let userDoc = try await FirebaseManager.shared.db
                 .collection("users")
                 .document(userId)
                 .getDocument()
+            
+            print("   - Document exists: \(userDoc.exists)")
             
             // If document doesn't exist, create a minimal user document
             let data: [String: Any]
@@ -119,13 +125,14 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
                     "lastTokenUpdate": Timestamp(date: Date())
                 ]
             } else {
-                // Just update FCM token on existing document
+                print("📝 Updating FCM token on existing document")
                 data = [
                     "fcmToken": token,
                     "lastTokenUpdate": Timestamp(date: Date())
                 ]
             }
             
+            print("💾 Writing to Firestore...")
             try await FirebaseManager.shared.db
                 .collection("users")
                 .document(userId)
@@ -134,6 +141,11 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
             print("✅ NotificationService: FCM token saved to user profile")
         } catch {
             print("❌ NotificationService: Failed to save token - \(error.localizedDescription)")
+            if let nsError = error as NSError? {
+                print("   - Domain: \(nsError.domain)")
+                print("   - Code: \(nsError.code)")
+                print("   - UserInfo: \(nsError.userInfo)")
+            }
         }
     }
     
@@ -189,16 +201,36 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         completionHandler()
     }
 
-    #if DEBUG
     private func sendDebugTestNotification() async {
-        guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else { 
+            print("❌ Debug: No user ID available for test notification")
+            return 
+        }
+        
+        print("🧪 Debug: Starting test notification for verified user")
+        print("   - User ID: \(userId)")
+        print("   - Is verified: \(FirebaseManager.shared.isCurrentUserVerified())")
+        
         do {
+            print("📞 Debug: Calling testNotification Firebase Function...")
             let callable = FirebaseManager.shared.functions.httpsCallable("testNotification")
-            _ = try await callable.call(["userId": userId, "testMessage": "Debug test 🔔"])
-            print("✅ Debug: test notification requested for \(userId)")
+            
+            let data: [String: Any] = [
+                "userId": userId,
+                "testMessage": "Debug test 🔔"
+            ]
+            print("   - Data: \(data)")
+            
+            let result = try await callable.call(data)
+            print("✅ Debug: test notification requested successfully for \(userId)")
+            print("   - Result: \(result.data)")
         } catch {
             print("❌ Debug: test notification error - \(error.localizedDescription)")
+            if let nsError = error as NSError? {
+                print("   - Domain: \(nsError.domain)")
+                print("   - Code: \(nsError.code)")
+                print("   - UserInfo: \(nsError.userInfo)")
+            }
         }
     }
-    #endif
 }
