@@ -56,6 +56,12 @@ struct CrowdHomeView: View {
     @State private var selectedCluster: EventCluster?
     @State private var showClusterDropdown: Bool = false
     
+    // MARK: - Event Search
+    @State private var searchText: String = ""
+    @State private var showSearchResults: Bool = false
+    @State private var initialEventTitle: String? = nil
+    @FocusState private var isSearchFocused: Bool
+    
     // MARK: - Source filter (mini navbar)
     private enum SourceFilter { case user, school }
     @State private var sourceFilter: SourceFilter? = .user
@@ -82,6 +88,14 @@ struct CrowdHomeView: View {
         return upcomingEvents.filter { event in
             guard let startsAt = event.startsAt else { return false }
             return startsAt >= now && startsAt <= twoDaysFromNow
+        }
+    }
+    
+    // MARK: - Filtered Events for Search
+    var filteredEvents: [CrowdEvent] {
+        guard !searchText.isEmpty else { return [] }
+        return allEvents.filter { event in
+            event.title.lowercased().contains(searchText.lowercased())
         }
     }
     
@@ -237,6 +251,9 @@ struct CrowdHomeView: View {
         .onTapGesture {
             if showClusterDropdown {
                 dismissClusterDropdown()
+            } else if showSearchResults {
+                isSearchFocused = false
+                showSearchResults = false
             } else if expandedClusterId != nil {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     expandedClusterId = nil
@@ -434,6 +451,98 @@ struct CrowdHomeView: View {
 
                     Spacer(minLength: 0)
 
+                    // Event Search Bar
+                    VStack(spacing: 0) {
+                        GlassPill(height: 48, horizontalPadding: 16) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(.primary.opacity(0.6))
+                                
+                                TextField("Search by Name…", text: $searchText)
+                                    .focused($isSearchFocused)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(.primary)
+                                    .onChange(of: searchText) { _, newValue in
+                                        showSearchResults = !newValue.isEmpty
+                                    }
+                                    .onSubmit {
+                                        if let firstEvent = filteredEvents.first {
+                                            navigateToEvent(firstEvent)
+                                        }
+                                    }
+                                
+                                if !searchText.isEmpty {
+                                    Button(action: {
+                                        searchText = ""
+                                        isSearchFocused = false
+                                        showSearchResults = false
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 18, weight: .medium))
+                                            .foregroundStyle(.primary.opacity(0.5))
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                        }
+                        .frame(maxWidth: min(geo.size.width * 0.84, 520))
+                        .padding(.bottom, 12)
+                        
+                        // Search Results Dropdown
+                        if showSearchResults && !filteredEvents.isEmpty {
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    ForEach(filteredEvents) { event in
+                                        Button(action: {
+                                            navigateToEvent(event)
+                                        }) {
+                                            HStack(spacing: 12) {
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text(event.title)
+                                                        .font(.system(size: 16, weight: .semibold))
+                                                        .foregroundStyle(.primary)
+                                                        .lineLimit(1)
+                                                    
+                                                    if let dateFormatted = event.dateFormatted {
+                                                        Text(dateFormatted)
+                                                            .font(.system(size: 13))
+                                                            .foregroundStyle(.secondary)
+                                                    }
+                                                }
+                                                
+                                                Spacer()
+                                                
+                                                Image(systemName: "chevron.right")
+                                                    .font(.system(size: 14, weight: .semibold))
+                                                    .foregroundStyle(.secondary.opacity(0.5))
+                                            }
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 12)
+                                            .background(.ultraThinMaterial)
+                                        }
+                                        .buttonStyle(.plain)
+                                        
+                                        if event.id != filteredEvents.last?.id {
+                                            Divider()
+                                                .padding(.leading, 16)
+                                        }
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 300)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(.white.opacity(0.12), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
+                            .frame(maxWidth: min(geo.size.width * 0.84, 520))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 8)
+
                     // Bottom frosted panel + FAB cluster
                     ZStack {
                         // Frosted base
@@ -548,7 +657,7 @@ struct CrowdHomeView: View {
     
     @ViewBuilder
     private var hostEventSheet: some View {
-        HostEventSheet(defaultRegion: selectedRegion) { event in
+        HostEventSheet(defaultRegion: selectedRegion, initialTitle: initialEventTitle) { event in
             Task {
                 do {
                     try await env.eventRepo.create(event: event)
@@ -573,6 +682,10 @@ struct CrowdHomeView: View {
         }
         .presentationDetents([.fraction(0.75), .large])
         .presentationDragIndicator(.visible)
+        .onDisappear {
+            // Clear initialEventTitle after sheet is dismissed
+            initialEventTitle = nil
+        }
     }
     
     @ViewBuilder
@@ -755,6 +868,32 @@ struct CrowdHomeView: View {
     private func handleEventTap(_ event: CrowdEvent) {
         print("✅ handleEventTap called for: \(event.title)")
         selectedEvent = event
+    }
+    
+    // MARK: - Event Search Navigation
+    private func navigateToEvent(_ event: CrowdEvent) {
+        // Animate camera to event coordinates
+        withAnimation(.easeInOut(duration: 0.35)) {
+            cameraPosition = .camera(
+                MapCamera(
+                    centerCoordinate: event.coordinates,
+                    distance: 1000,
+                    heading: currentCamera.heading,
+                    pitch: currentCamera.pitch
+                )
+            )
+        }
+        
+        // Open event detail sheet
+        selectedEvent = event
+        
+        // Store title for HostEventSheet
+        initialEventTitle = event.title
+        
+        // Clear search and dismiss keyboard
+        searchText = ""
+        isSearchFocused = false
+        showSearchResults = false
     }
 }
 

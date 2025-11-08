@@ -72,10 +72,13 @@ struct HostEventSheet: View {
     // Confetti celebration
     @State private var showConfetti = false
 
-    init(defaultRegion: CampusRegion, onCreate: @escaping (CrowdEvent) -> Void) {
+    init(defaultRegion: CampusRegion, initialTitle: String? = nil, onCreate: @escaping (CrowdEvent) -> Void) {
         self.defaultRegion = defaultRegion
         self.onCreate = onCreate
         _coord = State(initialValue: defaultRegion.spec.center)
+        if let initialTitle = initialTitle {
+            _title = State(initialValue: initialTitle)
+        }
     }
 
     var body: some View {
