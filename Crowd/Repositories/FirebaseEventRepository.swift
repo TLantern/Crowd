@@ -206,6 +206,47 @@ final class FirebaseEventRepository: EventRepository {
         }
     }
     
+    func leave(eventId: String, userId: String) async throws {
+        print("🔍 FirebaseEventRepository: Attempting to leave event \(eventId) for user \(userId)")
+        
+        // Find user's signal for this event
+        let signalsSnapshot = try await db.collection("signals")
+            .whereField("eventId", isEqualTo: eventId)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+        
+        guard !signalsSnapshot.documents.isEmpty else {
+            print("⚠️ User \(userId) has no signal for event \(eventId)")
+            return // Not joined, no error
+        }
+        
+        // Get signal strength before deletion
+        let signalDoc = signalsSnapshot.documents.first!
+        let signalStrength = signalDoc.data()["signalStrength"] as? Int ?? 3
+        
+        // Delete signal document
+        try await signalDoc.reference.delete()
+        print("✅ Deleted signal document: \(signalDoc.documentID)")
+        
+        // Check which collection the event is in
+        let eventDoc = try await db.collection("events").document(eventId).getDocument()
+        let userEventDoc = try await db.collection("userEvents").document(eventId).getDocument()
+        
+        guard eventDoc.exists || userEventDoc.exists else {
+            print("⚠️ Event \(eventId) not found, but signal was deleted")
+            return // Signal deleted, event might have been deleted
+        }
+        
+        // Decrement event attendeeCount and signalStrength
+        let eventRef = eventDoc.exists ? db.collection("events").document(eventId) : db.collection("userEvents").document(eventId)
+        try await eventRef.updateData([
+            "attendeeCount": FieldValue.increment(Int64(-1)),
+            "signalStrength": FieldValue.increment(Int64(-signalStrength))
+        ])
+        
+        print("✅ Successfully left event \(eventId), decremented attendeeCount and signalStrength")
+    }
+    
     func deleteEvent(eventId: String) async throws {
         print("🗑️ Deleting event from userEvents: \(eventId)")
         

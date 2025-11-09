@@ -22,6 +22,8 @@ struct EventDetailView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showCancelConfirmation = false
     @State private var showNavigationModal = false
+    @State private var showLeaveConfirmation = false
+    @ObservedObject private var attendedEventsService = AttendedEventsService.shared
     
     var currentUserName: String {
         appState.sessionUser?.displayName ?? "You"
@@ -35,6 +37,10 @@ struct EventDetailView: View {
     }
     
     var emoji: String { TagEmoji.emoji(for: event.tags, fallbackCategory: event.category) }
+    
+    var hasJoined: Bool {
+        attendedEventsService.isAttendingEvent(event.id)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -59,8 +65,29 @@ struct EventDetailView: View {
                 VStack(spacing: 24) {
                     // Header: Emoji + Title (centered together)
                     HStack(spacing: 8) {
-                        Text(emoji)
-                            .font(.system(size: 40))
+                        if hasJoined {
+                            // Emoji button with X overlay when joined
+                            ZStack(alignment: .topTrailing) {
+                                Text(emoji)
+                                    .font(.system(size: 30))
+                                
+                                // X button overlay at top-right
+                                Button {
+                                    showLeaveConfirmation = true
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundColor(.red)
+                                        .background(Color.white)
+                                        .clipShape(Circle())
+                                }
+                                .offset(x: 10, y: -10)
+                            }
+                        } else {
+                            // Regular emoji when not joined
+                            Text(emoji)
+                                .font(.system(size: 40))
+                        }
                         
                         Text(event.title)
                             .font(.system(size: 24, weight: .bold))
@@ -137,11 +164,15 @@ struct EventDetailView: View {
             
             // Action button
             Button {
-                Task {
-                    let success = await viewModel.joinEvent(event: event)
-                    if success {
-                        appState.currentJoinedEvent = event
-                        showNavigationModal = true
+                if hasJoined {
+                    // Already joined - button is disabled
+                } else {
+                    Task {
+                        let success = await viewModel.joinEvent(event: event)
+                        if success {
+                            appState.currentJoinedEvent = event
+                            showNavigationModal = true
+                        }
                     }
                 }
             } label: {
@@ -150,9 +181,15 @@ struct EventDetailView: View {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .controlSize(.small)
+                    } else if hasJoined {
+                        Text("Joined")
+                            .font(.system(size: 18, weight: .semibold))
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 18, weight: .semibold))
+                    } else {
+                        Text("Join Crowd")
+                            .font(.system(size: 18, weight: .semibold))
                     }
-                    Text("Join Crowd")
-                        .font(.system(size: 18, weight: .semibold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -166,7 +203,7 @@ struct EventDetailView: View {
                 )
                 .cornerRadius(16)
             }
-            .disabled(viewModel.isJoining)
+            .disabled(viewModel.isJoining || hasJoined)
             .padding(.horizontal)
             .padding(.bottom, 20)
         }
@@ -181,6 +218,13 @@ struct EventDetailView: View {
         } message: {
             Text(viewModel.joinError ?? "Unknown error")
         }
+        .alert("Error", isPresented: .constant(viewModel.leaveError != nil)) {
+            Button("OK") {
+                viewModel.leaveError = nil
+            }
+        } message: {
+            Text(viewModel.leaveError ?? "Unknown error")
+        }
         .confirmationDialog("Cancel Crowd", isPresented: $showCancelConfirmation, titleVisibility: .visible) {
             Button("Cancel Crowd", role: .destructive) {
                 cancelEvent()
@@ -188,6 +232,14 @@ struct EventDetailView: View {
             Button("Keep Crowd", role: .cancel) {}
         } message: {
             Text("Are you sure you want to cancel this crowd? This action cannot be undone.")
+        }
+        .confirmationDialog("Leave Crowd", isPresented: $showLeaveConfirmation, titleVisibility: .visible) {
+            Button("Leave Crowd", role: .destructive) {
+                leaveEvent()
+            }
+            Button("Stay", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to leave this crowd?")
         }
         .fullScreenCover(isPresented: $showNavigationModal) {
             EventNavigationModal(event: event)
@@ -200,6 +252,18 @@ struct EventDetailView: View {
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
     
+    
+    private func leaveEvent() {
+        Task {
+            let success = await viewModel.leaveEvent(event: event)
+            if success {
+                // Clear currentJoinedEvent if it matches
+                if appState.currentJoinedEvent?.id == event.id {
+                    appState.currentJoinedEvent = nil
+                }
+            }
+        }
+    }
     
     private func cancelEvent() {
         // Get current user ID with detailed logging

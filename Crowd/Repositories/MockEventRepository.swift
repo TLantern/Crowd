@@ -46,6 +46,13 @@ actor MockEventRepository: EventRepository {
         store[eventId] = e
     }
     
+    func leave(eventId: String, userId: String) async throws {
+        guard var e = store[eventId] else { return }
+        e.attendeeCount = max(0, e.attendeeCount - 1)
+        e.signalStrength = max(0, e.signalStrength - 2)
+        store[eventId] = e
+    }
+    
     func deleteEvent(eventId: String) async throws {
         store.removeValue(forKey: eventId)
     }

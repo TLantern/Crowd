@@ -18,6 +18,8 @@ final class EventDetailViewModel: ObservableObject {
     @Published var isLoadingFriends = false
     @Published var isJoining = false
     @Published var joinError: String?
+    @Published var isLeaving = false
+    @Published var leaveError: String?
     
     private let profileService = UserProfileService.shared
     private let attendeesService = EventAttendeesService.shared
@@ -109,6 +111,39 @@ final class EventDetailViewModel: ObservableObject {
         } catch {
             print("Failed to load friends attending: \(error)")
             friendsAttending = []
+        }
+    }
+    
+    func leaveEvent(event: CrowdEvent) async -> Bool {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            leaveError = "Not logged in"
+            return false
+        }
+        
+        isLeaving = true
+        leaveError = nil
+        defer { isLeaving = false }
+        
+        // Calendar/live campus events (with sourceURL) are not stored in backend events collection.
+        // Leave locally for these events.
+        if event.sourceURL != nil {
+            attendedEventsService.removeAttendedEvent(event.id)
+            print("✅ Locally left live campus event: \(event.id)")
+            return true
+        }
+        
+        do {
+            try await eventRepo.leave(eventId: event.id, userId: userId)
+            
+            // Remove from attended events
+            attendedEventsService.removeAttendedEvent(event.id)
+            
+            print("✅ Successfully left event: \(event.id)")
+            return true
+        } catch {
+            leaveError = "Failed to leave event"
+            print("❌ Failed to leave event: \(error)")
+            return false
         }
     }
 }
