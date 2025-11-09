@@ -693,22 +693,22 @@ struct CrowdHomeView: View {
                                 }
                                 .offset(y: centerYOffset)
 
-                                // Left — Profile (open at 3/4 screen)
-                                FrostedIconButton(
-                                    systemName: "person",
-                                    baseSize: 54,
-                                    targetSize: 72,
-                                    frostOpacity: 0.22,
-                                    iconBaseColor: .black,
-                                    highlightColor: Color(red: 0.63, green: 0.82, blue: 1.0)
-                                ) {
-                                    route = .profile
-                                    overlaySnapIndex = 1
-                                    overlayPresented = true
-                                    Haptics.light()
-                                }
-                                .accessibilityLabel("Open profile")
-                                .offset(x: -spread, y: sideYOffset)
+                                 // Left — Profile (open at 3/4 screen)
+                                 FrostedIconButton(
+                                     systemName: "person",
+                                     baseSize: 54,
+                                     targetSize: 72,
+                                     frostOpacity: 0.22,
+                                     iconBaseColor: Color(.sRGB, red: 0, green: 0, blue: 0),
+                                     highlightColor: Color(red: 0.63, green: 0.82, blue: 1.0)
+                                 ) {
+                                     route = .profile
+                                     overlaySnapIndex = 1
+                                     overlayPresented = true
+                                     Haptics.light()
+                                 }
+                                 .accessibilityLabel("Open profile")
+                                 .offset(x: -spread, y: sideYOffset)
 
                                 // Right — Calendar
                                 FrostedIconButton(
@@ -716,7 +716,7 @@ struct CrowdHomeView: View {
                                     baseSize: 54,
                                     targetSize: 72,
                                     frostOpacity: 0.22,
-                                    iconBaseColor: .black,
+                                    iconBaseColor: Color(.sRGB, red: 0, green: 0, blue: 0),
                                     highlightColor: .blue
                                 ) {
                                     showCalendar = true
