@@ -37,6 +37,9 @@ final class AppState: ObservableObject {
             // Start monitoring location updates
             startLocationMonitoring(userId: userId)
             
+            // Start chat notification service
+            ChatNotificationService.shared.start()
+            
             // Check if tutorial should be shown
             await MainActor.run {
                 if TutorialManager.shared.shouldShowTutorial() {

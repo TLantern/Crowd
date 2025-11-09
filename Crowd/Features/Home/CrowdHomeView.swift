@@ -746,31 +746,16 @@ struct CrowdHomeView: View {
                         HStack(spacing: 0) {
                             Spacer()
                             
-                            ZStack {
-                                // White circle with drop shadow
-                                Circle()
-                                    .fill(Color.white)
-                                    .frame(width: 60, height: 60)
-                                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-                                
-                                // Event emoji
-                                Text(TagEmoji.emoji(for: joinedEvent.tags, fallbackCategory: joinedEvent.category))
-                                    .font(.system(size: 30))
-                                
-                                // Red X button at top right
-                                Button(action: {
-                                    appState.currentJoinedEvent = nil
-                                    eventListener?.remove()
-                                    eventListener = nil
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 20, weight: .bold))
-                                        .foregroundColor(.red)
-                                        .background(Color.white)
-                                        .clipShape(Circle())
-                                }
-                                .offset(x: 8, y: -8)
-                            }
+                            // White circle with drop shadow
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 60, height: 60)
+                                .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                                .overlay(
+                                    // Event emoji
+                                    Text(TagEmoji.emoji(for: joinedEvent.tags, fallbackCategory: joinedEvent.category))
+                                        .font(.system(size: 30))
+                                )
                             .onTapGesture {
                                 showNavigationModal = true
                             }

@@ -230,6 +230,8 @@ struct EventNavigationModal: View {
                 if let finalUserId = userId {
                     await MainActor.run {
                         chatService.startListening(eventId: event.id, currentUserId: finalUserId)
+                        // Mark messages as read when opening chat
+                        ChatNotificationService.shared.markAsRead(eventId: event.id)
                     }
                 }
             }
@@ -243,6 +245,18 @@ struct EventNavigationModal: View {
             chatService.stopListening()
             eventListener?.remove()
             eventListener = nil
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            // Mark messages as read when switching to chat tab
+            if newTab == .chat {
+                ChatNotificationService.shared.markAsRead(eventId: event.id)
+            }
+        }
+        .onChange(of: chatService.messages.count) { _, _ in
+            // Update last seen timestamp when new messages arrive (if on chat tab)
+            if selectedTab == .chat, let lastMessage = chatService.messages.last {
+                ChatNotificationService.shared.updateLastSeen(eventId: event.id, timestamp: lastMessage.timestamp)
+            }
         }
         .onReceive(motionManager.$heading) { newHeading in
             deviceHeading = newHeading
@@ -460,6 +474,9 @@ struct EventNavigationModal: View {
                 
                 // Track analytics
                 AnalyticsService.shared.trackMessageSent(eventId: event.id, messageLength: text.count)
+                
+                // Update last seen timestamp after sending message
+                ChatNotificationService.shared.updateLastSeen(eventId: event.id, timestamp: Date())
                 
                 await MainActor.run {
                     messageText = ""

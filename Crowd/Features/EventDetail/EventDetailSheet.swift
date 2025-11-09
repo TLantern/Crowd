@@ -43,58 +43,42 @@ struct EventDetailView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Cancel button for hosts
-            if isHost {
-                HStack {
-                    Spacer()
-                    Button {
-                        showCancelConfirmation = true
-                    } label: {
-                        Image(systemName: "trash.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.red)
-                            .background(Circle().fill(Color(.systemBackground)))
-                    }
-                    .padding(.trailing, 16)
-                    .padding(.top, 8)
-                }
-            }
-            
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Header: Emoji + Title (centered together)
-                    HStack(spacing: 8) {
-                        if hasJoined {
-                            // Emoji button with X overlay when joined
-                            ZStack(alignment: .topTrailing) {
-                                Text(emoji)
-                                    .font(.system(size: 30))
-                                
-                                // X button overlay at top-right
-                                Button {
-                                    showLeaveConfirmation = true
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 20, weight: .bold))
-                                        .foregroundColor(.red)
-                                        .background(Color.white)
-                                        .clipShape(Circle())
-                                }
-                                .offset(x: 10, y: -10)
+        ZStack {
+            VStack(spacing: 0) {
+                // X button in top right for hosts (cancel) or joined users (leave)
+                if isHost || hasJoined {
+                    HStack {
+                        Spacer()
+                        Button {
+                            if isHost {
+                                showCancelConfirmation = true
+                            } else {
+                                showLeaveConfirmation = true
                             }
-                        } else {
-                            // Regular emoji when not joined
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(.red)
+                                .background(Circle().fill(Color(.systemBackground)))
+                        }
+                        .padding(.trailing, 16)
+                        .padding(.top, 8)
+                    }
+                }
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Header: Emoji + Title (centered together)
+                        HStack(spacing: 8) {
                             Text(emoji)
                                 .font(.system(size: 40))
+                            
+                            Text(event.title)
+                                .font(.system(size: 24, weight: .bold))
                         }
-                        
-                        Text(event.title)
-                            .font(.system(size: 24, weight: .bold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal)
-                    .padding(.top, isHost ? 0 : 20)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal)
+                        .padding(.top, (isHost || hasJoined) ? 0 : 20)
                     
                     // Host info with aura points
                     VStack(spacing: 4) {
@@ -206,6 +190,7 @@ struct EventDetailView: View {
             .disabled(viewModel.isJoining || hasJoined)
             .padding(.horizontal)
             .padding(.bottom, 20)
+            }
         }
         .task {
             await viewModel.loadHostProfile(hostId: event.hostId)

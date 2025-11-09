@@ -176,7 +176,21 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         print("👆 Notification data: \(userInfo)")
         
         // Parse notification data
-        if let eventId = userInfo["eventId"] as? String {
+        if let notificationType = userInfo["type"] as? String,
+           notificationType == "chat_message",
+           let eventId = userInfo["eventId"] as? String {
+            print("📲 Navigate to event chat: \(eventId)")
+            
+            // Mark chat as read
+            ChatNotificationService.shared.markAsRead(eventId: eventId)
+            
+            // Post notification to trigger navigation in app
+            NotificationCenter.default.post(
+                name: .navigateToEventFromNotification,
+                object: nil,
+                userInfo: ["eventId": eventId]
+            )
+        } else if let eventId = userInfo["eventId"] as? String {
             print("📲 Navigate to event: \(eventId)")
             
             // Post notification to trigger navigation in app
