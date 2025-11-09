@@ -68,7 +68,12 @@ struct EventNavigationModal: View {
     @State private var messageText: String = ""
     @State private var liveAttendeeCount: Int = 0
     @State private var eventListener: ListenerRegistration?
-    // @State private var transportMode: TransportMode = .automobile
+    @State private var selectedTab: TabSelection = .map
+    
+    enum TabSelection {
+        case map
+        case chat
+    }
     
     // MARK: - Body
     var body: some View {
@@ -78,35 +83,54 @@ struct EventNavigationModal: View {
                 Color(hex: 0x02853E)
                     .ignoresSafeArea()
                 
-                GeometryReader { geo in
+                VStack(spacing: 0) {
+                    // Top bar with close button
                     VStack(spacing: 0) {
-                        // Top bar with close button
-                        VStack(spacing: 0) {
-                            ZStack {
-                                Color(hex: 0x02853E)
-                                    .frame(height: 40)
+                        ZStack {
+                            Color(hex: 0x02853E)
+                                .frame(height: 40)
 
-                                // Center title: slow-moving marquee when long
-                                MarqueeTitle(text: "\(eventEmoji) \(event.title)")
-                                    .padding(.horizontal, 5)
-                                    .padding(.bottom, 4)
+                            // Center title: slow-moving marquee when long
+                            MarqueeTitle(text: "\(eventEmoji) \(event.title)")
+                                .padding(.horizontal, 5)
+                                .padding(.bottom, 4)
 
-                                HStack {
-                                    Spacer()
-                                    Button(action: { 
-                                        dismiss() 
-                                    }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 22, weight: .bold))
-                                            .foregroundColor(.red)
-                                            .background(Color.white)
-                                            .clipShape(Circle())
-                                    }
-                                    .padding(.trailing, 12)
+                            HStack {
+                                Spacer()
+                                Button(action: { 
+                                    dismiss() 
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.red)
+                                        .background(Color.white)
+                                        .clipShape(Circle())
                                 }
+                                .padding(.trailing, 12)
                             }
+                        }
+                        
+                        // Tab switcher
+                        HStack(spacing: 0) {
+                            TabButton(
+                                title: "Map",
+                                isSelected: selectedTab == .map,
+                                action: { selectedTab = .map }
+                            )
                             
-                            // Joined status row
+                            TabButton(
+                                title: "Chat",
+                                isSelected: selectedTab == .chat,
+                                action: { selectedTab = .chat }
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color(hex: 0x02853E))
+                        
+                        // Joined status row - centered
+                        HStack {
+                            Spacer()
                             HStack(spacing: 12) {
                                 GlassPill(height: 32, horizontalPadding: 12) {
                                     Text("Joined")
@@ -125,82 +149,31 @@ struct EventNavigationModal: View {
                                         .font(.system(size: 11, weight: .bold))
                                         .foregroundColor(.white)
                                 }
-                                
-                                Spacer()
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color(hex: 0x02853E))
+                            Spacer()
                         }
-                        .padding(.top, 20)
-                        
-                        // Split view: 50% map (top), 50% chat (bottom)
-                        VStack(spacing: 0) {
-                            // MAP AREA (50% - top)
-                            RouteMapView(
-                                destination: event.coordinates,
-                                userCoordinate: userLocation
-                            )
-                            .frame(height: max(0, (geo.size.height * 0.85 - 100) / 2))
-                            .background(Color.white)
-                            
-                            Divider()
-                            
-                            // CHAT AREA (50% - bottom)
-                            VStack(spacing: 0) {
-                                // Messages list
-                                ScrollViewReader { proxy in
-                                    ScrollView {
-                                        LazyVStack(spacing: 12) {
-                                            ForEach(chatService.messages) { message in
-                                                ChatMessageBubble(
-                                                    message: message.text,
-                                                    author: message.userName,
-                                                    isCurrentUser: message.isCurrentUser
-                                                )
-                                                .id(message.id)
-                                            }
-                                        }
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 12)
-                                    }
-                                    .onChange(of: chatService.messages.count) { _, _ in
-                                        if let lastMessage = chatService.messages.last {
-                                            withAnimation {
-                                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                                            }
-                                        }
-                                    }
-                                }
-                                .background(Color(uiColor: .systemBackground))
-                                
-                                Divider()
-                                
-                                // Message input
-                                HStack(spacing: 12) {
-                                    TextField("Type a message...", text: $messageText)
-                                        .textFieldStyle(.plain)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 10)
-                                        .background(Color(uiColor: .secondarySystemBackground))
-                                        .cornerRadius(20)
-                                    
-                                    Button(action: sendMessage) {
-                                        Image(systemName: "arrow.up.circle.fill")
-                                            .font(.system(size: 28))
-                                            .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : Color(hex: 0x02853E))
-                                    }
-                                    .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(Color(uiColor: .systemBackground))
-                            }
-                            .frame(height: max(0, (geo.size.height * 0.85 - 100) / 2))
-                        }
-                        .frame(height: max(0, geo.size.height * 0.85 - 100))
-                        .ignoresSafeArea(edges: .top)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color(hex: 0x02853E))
                     }
+                    .padding(.top, 20)
+                    
+                    // Full screen tab content
+                    Group {
+                        if selectedTab == .map {
+                            MapTabView(
+                                event: event,
+                                userLocation: userLocation
+                            )
+                        } else {
+                            ChatTabView(
+                                chatService: chatService,
+                                messageText: $messageText,
+                                sendMessage: sendMessage
+                            )
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .navigationBarHidden(true)
             }
@@ -307,11 +280,7 @@ struct EventNavigationModal: View {
     }
     
     private var eventEmoji: String {
-        if let category = event.category,
-           let cat = EventCategory(rawValue: category) {
-            return cat.emoji
-        }
-        return EventCategory.other.emoji
+        TagEmoji.emoji(for: event.tags, fallbackCategory: event.category)
     }
     
     // MARK: - Location
@@ -426,24 +395,22 @@ struct EventNavigationModal: View {
         
         // Try events collection first
         let eventRef = db.collection("events").document(event.id)
-        eventListener = eventRef.addSnapshotListener { [weak self] snapshot, error in
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                
+        eventListener = eventRef.addSnapshotListener { snapshot, error in
+            Task { @MainActor in
                 if let error = error {
                     print("⚠️ EventNavigationModal: Error listening to event: \(error)")
                     // Try userEvents collection as fallback
-                    self.tryUserEventsListener()
+                    tryUserEventsListener()
                     return
                 }
                 
                 if let data = snapshot?.data(),
                    let attendeeCount = data["attendeeCount"] as? Int {
-                    self.liveAttendeeCount = attendeeCount
+                    liveAttendeeCount = attendeeCount
                     print("📊 EventNavigationModal: Updated attendee count to \(attendeeCount)")
                 } else if !(snapshot?.exists ?? false) {
                     // Document doesn't exist in events, try userEvents
-                    self.tryUserEventsListener()
+                    tryUserEventsListener()
                 }
             }
         }
@@ -454,10 +421,8 @@ struct EventNavigationModal: View {
         eventListener?.remove()
         
         let eventRef = db.collection("userEvents").document(event.id)
-        eventListener = eventRef.addSnapshotListener { [weak self] snapshot, error in
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                
+        eventListener = eventRef.addSnapshotListener { snapshot, error in
+            Task { @MainActor in
                 if let error = error {
                     print("⚠️ EventNavigationModal: Error listening to userEvent: \(error)")
                     return
@@ -465,7 +430,7 @@ struct EventNavigationModal: View {
                 
                 if let data = snapshot?.data(),
                    let attendeeCount = data["attendeeCount"] as? Int {
-                    self.liveAttendeeCount = attendeeCount
+                    liveAttendeeCount = attendeeCount
                     print("📊 EventNavigationModal: Updated attendee count to \(attendeeCount)")
                 }
             }
@@ -496,6 +461,102 @@ struct EventNavigationModal: View {
             } catch {
                 print("❌ EventNavigationModal: Failed to send message: \(error)")
             }
+        }
+    }
+}
+
+// MARK: - Tab Button
+struct TabButton: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 16, weight: isSelected ? .bold : .medium))
+                .foregroundColor(isSelected ? .white : .white.opacity(0.6))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    isSelected
+                    ? Color.white.opacity(0.2)
+                    : Color.clear
+                )
+                .cornerRadius(8)
+        }
+    }
+}
+
+// MARK: - Map Tab View
+struct MapTabView: View {
+    let event: CrowdEvent
+    let userLocation: CLLocationCoordinate2D?
+    
+    var body: some View {
+        RouteMapView(
+            destination: event.coordinates,
+            userCoordinate: userLocation
+        )
+        .background(Color.white)
+    }
+}
+
+// MARK: - Chat Tab View
+struct ChatTabView: View {
+    @ObservedObject var chatService: EventChatService
+    @Binding var messageText: String
+    let sendMessage: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Messages list
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(chatService.messages) { message in
+                            ChatMessageBubble(
+                                message: message.text,
+                                author: message.userName,
+                                isCurrentUser: message.isCurrentUser
+                            )
+                            .id(message.id)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .onChange(of: chatService.messages.count) { _, _ in
+                    if let lastMessage = chatService.messages.last {
+                        withAnimation {
+                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+            .background(Color(uiColor: .systemBackground))
+            
+            Divider()
+            
+            // Message input
+            HStack(spacing: 12) {
+                TextField("Type a message...", text: $messageText)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .cornerRadius(20)
+                
+                Button(action: sendMessage) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : Color(hex: 0x02853E))
+                }
+                .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(uiColor: .systemBackground))
         }
     }
 }
@@ -572,34 +633,33 @@ struct ChatMessageBubble: View {
     let isCurrentUser: Bool
     
     var body: some View {
-        VStack(
-            alignment: isCurrentUser ? .trailing : .leading,
-            spacing: 4
-        ) {
-            Text(author)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
-            
-            Text(message)
-                .font(.system(size: 15))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    isCurrentUser
-                    ? Color(hex: 0x02853E)
-                    : Color(.systemGray5)
-                )
-                .foregroundColor(
-                    isCurrentUser
-                    ? .white
-                    : .primary
-                )
-                .cornerRadius(16)
+        HStack(spacing: 8) {
+            if isCurrentUser {
+                Spacer()
+                Text(message)
+                    .font(.system(size: 15))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(hex: 0x02853E))
+                    .foregroundColor(.white)
+                    .cornerRadius(16)
+                Text(author)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+            } else {
+                Text(author)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Text(message)
+                    .font(.system(size: 15))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(.systemGray5))
+                    .foregroundColor(.primary)
+                    .cornerRadius(16)
+                Spacer()
+            }
         }
-        .frame(
-            maxWidth: .infinity,
-            alignment: isCurrentUser ? .trailing : .leading
-        )
     }
 }
 
