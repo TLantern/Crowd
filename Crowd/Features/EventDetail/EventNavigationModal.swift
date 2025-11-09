@@ -127,6 +127,11 @@ struct EventNavigationModal: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(Color(hex: 0x02853E))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        )
                         
                         // Joined status row - centered
                         HStack {
@@ -174,6 +179,7 @@ struct EventNavigationModal: View {
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea(edges: .bottom)
                 }
                 .navigationBarHidden(true)
             }
@@ -481,7 +487,7 @@ struct TabButton: View {
                 .background(
                     isSelected
                     ? Color.white.opacity(0.2)
-                    : Color.clear
+                    : Color.black
                 )
                 .cornerRadius(8)
         }
@@ -499,6 +505,7 @@ struct MapTabView: View {
             userCoordinate: userLocation
         )
         .background(Color.white)
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 
