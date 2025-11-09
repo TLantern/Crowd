@@ -272,6 +272,13 @@ final class FirebaseEventRepository: EventRepository {
         
         let callable = functions.httpsCallable("updateSignal")
         _ = try await callable.call(data)
+        
+        // Track analytics
+        AnalyticsService.shared.trackSignalBoosted(
+            eventId: eventId,
+            oldStrength: currentStrength,
+            newStrength: newStrength
+        )
     }
     
     // MARK: - Real-time Listeners

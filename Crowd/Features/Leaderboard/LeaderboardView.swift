@@ -28,6 +28,9 @@ struct LeaderboardView: View {
             }
             .padding(16)
         }
+        .onAppear {
+            AnalyticsService.shared.trackScreenView("leaderboard")
+        }
     }
 
     // MARK: - Sections

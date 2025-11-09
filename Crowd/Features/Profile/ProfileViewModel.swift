@@ -149,6 +149,10 @@ final class ProfileViewModel: ObservableObject {
                 // Save image locally and update profile
                 let imageURL = try await UserProfileService.shared.uploadProfileImage(image, userId: userId)
                 try await UserProfileService.shared.updateProfile(userId: userId, updates: ["profileImageURL": imageURL])
+                
+                // Track analytics
+                AnalyticsService.shared.trackProfileImageUploaded(userId: userId)
+                
                 print("✅ Profile image saved locally and updated: \(imageURL)")
             } catch {
                 print("❌ Failed to save profile image: \(error)")
@@ -292,6 +296,10 @@ final class ProfileViewModel: ObservableObject {
             ]
             
             try await UserProfileService.shared.updateProfile(userId: userId, updates: updates)
+            
+            // Track interests update separately
+            AnalyticsService.shared.trackInterestsUpdated(userId: userId, interestsCount: interests.count)
+            
             print("✅ Profile changes saved")
             
         } catch {

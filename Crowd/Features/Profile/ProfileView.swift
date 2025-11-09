@@ -87,6 +87,9 @@ struct ProfileView: View {
                 statsService.startListening(userId: userId)
             }
         }
+        .onAppear {
+            AnalyticsService.shared.trackScreenView("profile")
+        }
         .onDisappear {
             statsService.stopListening()
         }

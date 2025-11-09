@@ -84,6 +84,7 @@ struct OnboardingFlowView: View {
         }
         .preferredColorScheme(.light)
         .onAppear {
+            AnalyticsService.shared.trackScreenView("onboarding")
             withAnimation(.easeInOut(duration: 0.6)) {
                 isAppearing = true
             }
@@ -114,6 +115,14 @@ struct OnboardingFlowView: View {
             )
             
             print("✅ Profile created successfully!")
+            
+            // Track analytics
+            AnalyticsService.shared.trackUserCreated(
+                userId: userId,
+                displayName: username.isEmpty ? "Guest" : username,
+                campus: selectedCampus.isEmpty ? nil : selectedCampus,
+                interestsCount: selectedInterests.count
+            )
             
             // Save FCM token if available (for verified users)
             if let fcmToken = FirebaseManager.shared.getFCMToken() {

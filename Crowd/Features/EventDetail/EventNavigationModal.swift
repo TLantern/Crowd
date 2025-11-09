@@ -10,6 +10,7 @@ import CoreLocation
 // import MapKit
 import CoreMotion
 import Combine
+import FirebaseFirestore
 
 // MARK: - Motion Manager for device heading
 @MainActor
@@ -62,6 +63,11 @@ struct EventNavigationModal: View {
     @State private var locationUpdateTimer: Timer?
     
     @State private var currentUserId: String = "unknown"
+    @State private var currentUserName: String = "Guest"
+    @StateObject private var chatService = EventChatService.shared
+    @State private var messageText: String = ""
+    @State private var liveAttendeeCount: Int = 0
+    @State private var eventListener: ListenerRegistration?
     // @State private var transportMode: TransportMode = .automobile
     
     // MARK: - Body
@@ -75,48 +81,124 @@ struct EventNavigationModal: View {
                 GeometryReader { geo in
                     VStack(spacing: 0) {
                         // Top bar with close button
-                        ZStack {
-                            Color(hex: 0x02853E)
-                                .frame(height: 40)
+                        VStack(spacing: 0) {
+                            ZStack {
+                                Color(hex: 0x02853E)
+                                    .frame(height: 40)
 
-                            // Center title: slow-moving marquee when long
-                            MarqueeTitle(text: "\(eventEmoji) \(event.title)")
-                                .padding(.horizontal, 5)
-                                .padding(.bottom, 4)
+                                // Center title: slow-moving marquee when long
+                                MarqueeTitle(text: "\(eventEmoji) \(event.title)")
+                                    .padding(.horizontal, 5)
+                                    .padding(.bottom, 4)
 
-                            HStack {
-                                Spacer()
-                                Button(action: { dismiss() }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 22, weight: .bold))
-                                        .foregroundColor(.red)
-                                        .background(Color.white)
-                                        .clipShape(Circle())
+                                HStack {
+                                    Spacer()
+                                    Button(action: { 
+                                        dismiss() 
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 22, weight: .bold))
+                                            .foregroundColor(.red)
+                                            .background(Color.white)
+                                            .clipShape(Circle())
+                                    }
+                                    .padding(.trailing, 12)
                                 }
-                                .padding(.trailing, 12)
                             }
+                            
+                            // Joined status row
+                            HStack(spacing: 12) {
+                                GlassPill(height: 32, horizontalPadding: 12) {
+                                    Text("Joined")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                }
+                                
+                                Text("\(liveAttendeeCount)")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(.white)
+                                
+                                // Green live indicator
+                                HStack(spacing: 4) {
+                                    LiveIndicatorView()
+                                    Text("LIVE")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color(hex: 0x02853E))
                         }
                         .padding(.top, 20)
                         
-                        // White container for map and transport picker
+                        // Split view: 50% map (top), 50% chat (bottom)
                         VStack(spacing: 0) {
-                            // MAP AREA
+                            // MAP AREA (50% - top)
                             RouteMapView(
                                 destination: event.coordinates,
                                 userCoordinate: userLocation
                             )
-                            .frame(height: max(0, geo.size.height * 0.85 - 100))
+                            .frame(height: max(0, (geo.size.height * 0.85 - 100) / 2))
                             .background(Color.white)
-
-                            // Transport mode picker below the map (temporarily disabled)
-                            // Picker("", selection: $transportMode) {
-                            //     Text("Car").tag(TransportMode.automobile)
-                            //     Text("Walk").tag(TransportMode.walking)
-                            //     Text("Transit").tag(TransportMode.transit)
-                            // }
-                            // .pickerStyle(.segmented)
-                            // .padding()
+                            
+                            Divider()
+                            
+                            // CHAT AREA (50% - bottom)
+                            VStack(spacing: 0) {
+                                // Messages list
+                                ScrollViewReader { proxy in
+                                    ScrollView {
+                                        LazyVStack(spacing: 12) {
+                                            ForEach(chatService.messages) { message in
+                                                ChatMessageBubble(
+                                                    message: message.text,
+                                                    author: message.userName,
+                                                    isCurrentUser: message.isCurrentUser
+                                                )
+                                                .id(message.id)
+                                            }
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 12)
+                                    }
+                                    .onChange(of: chatService.messages.count) { _, _ in
+                                        if let lastMessage = chatService.messages.last {
+                                            withAnimation {
+                                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                            }
+                                        }
+                                    }
+                                }
+                                .background(Color(uiColor: .systemBackground))
+                                
+                                Divider()
+                                
+                                // Message input
+                                HStack(spacing: 12) {
+                                    TextField("Type a message...", text: $messageText)
+                                        .textFieldStyle(.plain)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                        .background(Color(uiColor: .secondarySystemBackground))
+                                        .cornerRadius(20)
+                                    
+                                    Button(action: sendMessage) {
+                                        Image(systemName: "arrow.up.circle.fill")
+                                            .font(.system(size: 28))
+                                            .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : Color(hex: 0x02853E))
+                                    }
+                                    .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(Color(uiColor: .systemBackground))
+                            }
+                            .frame(height: max(0, (geo.size.height * 0.85 - 100) / 2))
                         }
+                        .frame(height: max(0, geo.size.height * 0.85 - 100))
                         .ignoresSafeArea(edges: .top)
                     }
                 }
@@ -125,21 +207,50 @@ struct EventNavigationModal: View {
         }
         // MARK: lifecycle / listeners
         .onAppear {
+            // Track screen view
+            AnalyticsService.shared.trackScreenView("event_navigation")
+            
+            // Initialize live attendee count
+            liveAttendeeCount = event.attendeeCount
+            
+            // Start listening to event document for real-time attendee count
+            startEventListener()
+            
             // ensure user auth
             Task {
-                if let userId = FirebaseManager.shared.getCurrentUserId() {
+                var userId: String?
+                
+                if let existingUserId = FirebaseManager.shared.getCurrentUserId() {
+                    userId = existingUserId
                     await MainActor.run {
-                        currentUserId = userId
+                        currentUserId = existingUserId
+                    }
+                    // Fetch user profile for display name
+                    do {
+                        let profile = try await UserProfileService.shared.fetchProfile(userId: existingUserId)
+                        await MainActor.run {
+                            currentUserName = profile.displayName
+                        }
+                    } catch {
+                        print("⚠️ EventNavigationModal: Failed to fetch profile: \(error)")
                     }
                 } else {
                     do {
-                        let userId = try await FirebaseManager.shared.signInAnonymously()
+                        let newUserId = try await FirebaseManager.shared.signInAnonymously()
+                        userId = newUserId
                         await MainActor.run {
-                            currentUserId = userId
+                            currentUserId = newUserId
                         }
-                        print("✅ EventNavigationModal: User signed in anonymously: \(userId)")
+                        print("✅ EventNavigationModal: User signed in anonymously: \(newUserId)")
                     } catch {
                         print("❌ EventNavigationModal: Failed to sign in anonymously: \(error)")
+                    }
+                }
+                
+                // Start chat listening after userId is set
+                if let finalUserId = userId {
+                    await MainActor.run {
+                        chatService.startListening(eventId: event.id, currentUserId: finalUserId)
                     }
                 }
             }
@@ -150,6 +261,9 @@ struct EventNavigationModal: View {
         .onDisappear {
             stopLocationUpdates()
             stopMotionUpdates()
+            chatService.stopListening()
+            eventListener?.remove()
+            eventListener = nil
         }
         .onReceive(motionManager.$heading) { newHeading in
             deviceHeading = newHeading
@@ -305,7 +419,85 @@ struct EventNavigationModal: View {
         compassRotation = bearingToEvent - deviceHeading
     }
     
-    // Chat removed
+    // MARK: - Event Listener
+    
+    private func startEventListener() {
+        let db = FirebaseManager.shared.db
+        
+        // Try events collection first
+        let eventRef = db.collection("events").document(event.id)
+        eventListener = eventRef.addSnapshotListener { [weak self] snapshot, error in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("⚠️ EventNavigationModal: Error listening to event: \(error)")
+                    // Try userEvents collection as fallback
+                    self.tryUserEventsListener()
+                    return
+                }
+                
+                if let data = snapshot?.data(),
+                   let attendeeCount = data["attendeeCount"] as? Int {
+                    self.liveAttendeeCount = attendeeCount
+                    print("📊 EventNavigationModal: Updated attendee count to \(attendeeCount)")
+                } else if !(snapshot?.exists ?? false) {
+                    // Document doesn't exist in events, try userEvents
+                    self.tryUserEventsListener()
+                }
+            }
+        }
+    }
+    
+    private func tryUserEventsListener() {
+        let db = FirebaseManager.shared.db
+        eventListener?.remove()
+        
+        let eventRef = db.collection("userEvents").document(event.id)
+        eventListener = eventRef.addSnapshotListener { [weak self] snapshot, error in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("⚠️ EventNavigationModal: Error listening to userEvent: \(error)")
+                    return
+                }
+                
+                if let data = snapshot?.data(),
+                   let attendeeCount = data["attendeeCount"] as? Int {
+                    self.liveAttendeeCount = attendeeCount
+                    print("📊 EventNavigationModal: Updated attendee count to \(attendeeCount)")
+                }
+            }
+        }
+    }
+    
+    // MARK: - Chat
+    
+    private func sendMessage() {
+        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        
+        Task {
+            do {
+                try await chatService.sendMessage(
+                    eventId: event.id,
+                    text: text,
+                    userId: currentUserId,
+                    userName: currentUserName
+                )
+                
+                // Track analytics
+                AnalyticsService.shared.trackMessageSent(eventId: event.id, messageLength: text.count)
+                
+                await MainActor.run {
+                    messageText = ""
+                }
+            } catch {
+                print("❌ EventNavigationModal: Failed to send message: \(error)")
+            }
+        }
+    }
 }
 
 // MARK: - Transport mode helper (temporarily disabled)
@@ -408,5 +600,27 @@ struct ChatMessageBubble: View {
             maxWidth: .infinity,
             alignment: isCurrentUser ? .trailing : .leading
         )
+    }
+}
+
+// MARK: - Live Indicator View
+struct LiveIndicatorView: View {
+    @State private var pulseScale: CGFloat = 1.0
+    
+    var body: some View {
+        Circle()
+            .fill(Color.green)
+            .frame(width: 8, height: 8)
+            .overlay(
+                Circle()
+                    .stroke(Color.green.opacity(0.5), lineWidth: 2)
+                    .scaleEffect(pulseScale)
+                    .opacity(2.0 - pulseScale)
+            )
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: false)) {
+                    pulseScale = 2.0
+                }
+            }
     }
 }

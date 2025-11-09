@@ -8,6 +8,7 @@
 import SwiftUI
 import MapKit
 import Combine
+import FirebaseFirestore
 
 struct CrowdHomeView: View {
     @Environment(\.appEnvironment) var env
@@ -66,6 +67,11 @@ struct CrowdHomeView: View {
     private enum SourceFilter { case user, school }
     @State private var sourceFilter: SourceFilter? = .user
     
+    // MARK: - Joined Event Indicator
+    @State private var liveAttendeeCount: Int = 0
+    @State private var eventListener: ListenerRegistration?
+    @State private var showNavigationModal = false
+    
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
         // Combine all events with deduplication
@@ -94,8 +100,30 @@ struct CrowdHomeView: View {
     // MARK: - Filtered Events for Search
     var filteredEvents: [CrowdEvent] {
         guard !searchText.isEmpty else { return [] }
-        return allEvents.filter { event in
+        let todayEvents = filterEventsForToday(allEvents)
+        return todayEvents.filter { event in
             event.title.lowercased().contains(searchText.lowercased())
+        }
+    }
+    
+    // MARK: - Helper: Filter events to today only
+    private func filterEventsForToday(_ events: [CrowdEvent]) -> [CrowdEvent] {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        return events.filter { event in
+            // If event has a start time, check if it's today
+            if let startsAt = event.startsAt {
+                return calendar.isDateInToday(startsAt)
+            }
+            
+            // If event has an end time but no start time, check if it ends today or later
+            if let endsAt = event.endsAt {
+                return calendar.isDateInToday(endsAt) || endsAt > now
+            }
+            
+            // If no time info, include events created today (for user-created events)
+            return calendar.isDateInToday(event.createdAt)
         }
     }
     
@@ -104,21 +132,25 @@ struct CrowdHomeView: View {
         let calendar = Calendar.current
         let filteredUpcoming = upcomingEvents.filter { ev in
             guard let s = ev.startsAt else { return false }
-            return calendar.isDateInToday(s) || calendar.isDateInTomorrow(s)
+            return calendar.isDateInToday(s)
         }
         
         let inputEvents: [CrowdEvent]
         switch sourceFilter {
         case .user:
-            // Only user-created events (local + firebase, deduplicated)
-            inputEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
-        case .school:
-            // Only official school events + upcoming school events
-            inputEvents = officialEvents + filteredUpcoming
-        case .none:
-            // All events (deduplicated user events)
+            // Only user-created events (local + firebase, deduplicated) - today only
             let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
-            inputEvents = officialEvents + allUserEvents + filteredUpcoming
+            inputEvents = filterEventsForToday(allUserEvents)
+        case .school:
+            // Only official school events + upcoming school events - today only
+            let filteredOfficial = filterEventsForToday(officialEvents)
+            inputEvents = filteredOfficial + filteredUpcoming
+        case .none:
+            // All events (deduplicated user events) - today only
+            let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
+            let filteredOfficial = filterEventsForToday(officialEvents)
+            let filteredUser = filterEventsForToday(allUserEvents)
+            inputEvents = filteredOfficial + filteredUser + filteredUpcoming
         }
         return EventClusteringService.clusterEvents(inputEvents)
     }
@@ -263,8 +295,14 @@ struct CrowdHomeView: View {
         }
         .mapControls { MapCompass() }
         .ignoresSafeArea()
-        .onAppear { snapTo(selectedRegion) }
-        .onChange(of: selectedRegion) { _, new in snapTo(new) }
+        .onAppear {
+            snapTo(selectedRegion)
+            AnalyticsService.shared.trackScreenView("home")
+        }
+        .onChange(of: selectedRegion) { _, new in
+            snapTo(new)
+            AnalyticsService.shared.trackRegionChanged(region: new.rawValue)
+        }
         .onMapCameraChange { ctx in
             handleCameraChange(ctx)
         }
@@ -336,6 +374,81 @@ struct CrowdHomeView: View {
                     showHostSheet = true
                 }
                 .fullScreenCover(isPresented: $showCalendar) { CalenderView() }
+                .fullScreenCover(isPresented: $showNavigationModal) {
+                    if let joinedEvent = appState.currentJoinedEvent {
+                        EventNavigationModal(event: joinedEvent)
+                    }
+                }
+                .onChange(of: appState.currentJoinedEvent) { _, newEvent in
+                    if let event = newEvent {
+                        liveAttendeeCount = event.attendeeCount
+                        startEventListener(for: event)
+                    } else {
+                        eventListener?.remove()
+                        eventListener = nil
+                        liveAttendeeCount = 0
+                    }
+                }
+                .onAppear {
+                    if let joinedEvent = appState.currentJoinedEvent {
+                        liveAttendeeCount = joinedEvent.attendeeCount
+                        startEventListener(for: joinedEvent)
+                    }
+                }
+        }
+    }
+    
+    // MARK: - Event Listener for Joined Event
+    
+    private func startEventListener(for event: CrowdEvent) {
+        let db = FirebaseManager.shared.db
+        eventListener?.remove()
+        
+        // Try events collection first
+        let eventRef = db.collection("events").document(event.id)
+        eventListener = eventRef.addSnapshotListener { [weak self] snapshot, error in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("⚠️ CrowdHomeView: Error listening to event: \(error)")
+                    // Try userEvents collection as fallback
+                    self.tryUserEventsListener(for: event)
+                    return
+                }
+                
+                if let data = snapshot?.data(),
+                   let attendeeCount = data["attendeeCount"] as? Int {
+                    self.liveAttendeeCount = attendeeCount
+                    print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
+                } else if !(snapshot?.exists ?? false) {
+                    // Document doesn't exist in events, try userEvents
+                    self.tryUserEventsListener(for: event)
+                }
+            }
+        }
+    }
+    
+    private func tryUserEventsListener(for event: CrowdEvent) {
+        let db = FirebaseManager.shared.db
+        eventListener?.remove()
+        
+        let eventRef = db.collection("userEvents").document(event.id)
+        eventListener = eventRef.addSnapshotListener { [weak self] snapshot, error in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("⚠️ CrowdHomeView: Error listening to userEvent: \(error)")
+                    return
+                }
+                
+                if let data = snapshot?.data(),
+                   let attendeeCount = data["attendeeCount"] as? Int {
+                    self.liveAttendeeCount = attendeeCount
+                    print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
+                }
+            }
         }
     }
     
@@ -427,8 +540,14 @@ struct CrowdHomeView: View {
 
                         // Small type filter (half height of main pill) centered below
                         Menu {
-                            Button("User Created Events") { sourceFilter = .user }
-                            Button("School Hosted Events") { sourceFilter = .school }
+                            Button("User Created Events") {
+                                sourceFilter = .user
+                                AnalyticsService.shared.trackFilterChanged(filterType: "source", value: "user")
+                            }
+                            Button("School Hosted Events") {
+                                sourceFilter = .school
+                                AnalyticsService.shared.trackFilterChanged(filterType: "source", value: "school")
+                            }
                         } label: {
                             GlassPill(height: 24, horizontalPadding: 14) {
                                 HStack(spacing: 6) {
@@ -453,15 +572,15 @@ struct CrowdHomeView: View {
 
                     // Event Search Bar
                     VStack(spacing: 0) {
-                        GlassPill(height: 48, horizontalPadding: 16) {
-                            HStack(spacing: 12) {
+                        GlassPill(height: 40, horizontalPadding: 12) {
+                            HStack(spacing: 8) {
                                 Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 16, weight: .medium))
+                                    .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(.primary.opacity(0.6))
                                 
                                 TextField("Search by Name…", text: $searchText)
                                     .focused($isSearchFocused)
-                                    .font(.system(size: 16, weight: .medium))
+                                    .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(.primary)
                                     .onChange(of: searchText) { _, newValue in
                                         showSearchResults = !newValue.isEmpty
@@ -479,14 +598,14 @@ struct CrowdHomeView: View {
                                         showSearchResults = false
                                     }) {
                                         Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 18, weight: .medium))
+                                            .font(.system(size: 14, weight: .medium))
                                             .foregroundStyle(.primary.opacity(0.5))
                                     }
                                 }
                             }
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 10)
                         }
-                        .frame(maxWidth: min(geo.size.width * 0.84, 520))
+                        .frame(maxWidth: min(geo.size.width * 0.42, 260))
                         .padding(.bottom, 12)
                         
                         // Search Results Dropdown
@@ -624,6 +743,50 @@ struct CrowdHomeView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 .padding(.trailing, 24)
                 .padding(.bottom, panelHeight + 28)
+                
+                // === JOINED EVENT INDICATOR (right side, aligned with region selector) ===
+                if let joinedEvent = appState.currentJoinedEvent {
+                    VStack(alignment: .trailing, spacing: 0) {
+                        HStack(spacing: 0) {
+                            Spacer()
+                            
+                            ZStack(alignment: .topTrailing) {
+                                // White circle with drop shadow
+                                Circle()
+                                    .fill(Color.white)
+                                    .frame(width: 60, height: 60)
+                                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                                
+                                // Live attendee count
+                                Text("\(liveAttendeeCount)")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.primary)
+                                
+                                // Red X button at top right
+                                Button(action: {
+                                    appState.currentJoinedEvent = nil
+                                    eventListener?.remove()
+                                    eventListener = nil
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 20, weight: .bold))
+                                        .foregroundColor(.red)
+                                        .background(Color.white)
+                                        .clipShape(Circle())
+                                }
+                                .offset(x: 8, y: -8)
+                            }
+                            .onTapGesture {
+                                showNavigationModal = true
+                            }
+                            .padding(.trailing, 16)
+                        }
+                        .padding(.top, 0)
+                        .offset(y: -18)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .zIndex(6)
+                }
             }
 
             // === BOTTOM SHEET OVER MAP ===
@@ -662,6 +825,13 @@ struct CrowdHomeView: View {
                 do {
                     try await env.eventRepo.create(event: event)
                     print("✅ Event created in Firebase: \(event.id)")
+                    
+                    // Track analytics
+                    AnalyticsService.shared.trackEventCreated(
+                        eventId: event.id,
+                        title: event.title,
+                        category: event.category
+                    )
                     
                     await MainActor.run {
                         hostedEvents.append(event)

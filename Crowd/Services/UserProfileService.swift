@@ -111,6 +111,10 @@ final class UserProfileService {
         // Clear cache to force refresh
         profileCache.removeValue(forKey: userId)
         
+        // Track analytics
+        let fieldsChanged = Array(updates.keys)
+        AnalyticsService.shared.trackProfileUpdated(userId: userId, fieldsChanged: fieldsChanged)
+        
         print("✅ Profile updated for user: \(userId)")
     }
     

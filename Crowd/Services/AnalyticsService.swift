@@ -16,25 +16,52 @@ final class AnalyticsService {
     // MARK: - Event Tracking
     
     func track(_ name: String, props: [String: Any] = [:]) {
+        // Automatically include user_id if available
+        var propsWithUserId = props
+        if let userId = FirebaseManager.shared.getCurrentUserId() {
+            propsWithUserId["user_id"] = userId
+        }
+        
         // Log to console for debugging
-        print("📊 Analytics: \(name) | \(props)")
+        print("📊 Analytics: \(name) | \(propsWithUserId)")
         
         // Log to Firebase Analytics
-        Analytics.logEvent(name, parameters: props)
+        Analytics.logEvent(name, parameters: propsWithUserId)
     }
     
     // MARK: - User Events
     
-    func trackUserCreated(userId: String, displayName: String) {
-        track("user_created", props: [
+    func trackUserCreated(userId: String, displayName: String, campus: String? = nil, interestsCount: Int? = nil) {
+        var props: [String: Any] = [
             "user_id": userId,
             "display_name": displayName
+        ]
+        if let campus = campus {
+            props["campus"] = campus
+        }
+        if let interestsCount = interestsCount {
+            props["interests_count"] = interestsCount
+        }
+        track("user_created", props: props)
+    }
+    
+    func trackProfileUpdated(userId: String, fieldsChanged: [String] = []) {
+        track("profile_updated", props: [
+            "user_id": userId,
+            "fields_changed": fieldsChanged.joined(separator: ",")
         ])
     }
     
-    func trackProfileUpdated(userId: String) {
-        track("profile_updated", props: [
+    func trackProfileImageUploaded(userId: String) {
+        track("profile_image_uploaded", props: [
             "user_id": userId
+        ])
+    }
+    
+    func trackInterestsUpdated(userId: String, interestsCount: Int) {
+        track("interests_updated", props: [
+            "user_id": userId,
+            "interests_count": interestsCount
         ])
     }
     
@@ -61,10 +88,11 @@ final class AnalyticsService {
         ])
     }
     
-    func trackSignalBoosted(eventId: String, newStrength: Int) {
+    func trackSignalBoosted(eventId: String, oldStrength: Int, newStrength: Int) {
         track("signal_boosted", props: [
             "event_id": eventId,
-            "strength": newStrength
+            "old_strength": oldStrength,
+            "new_strength": newStrength
         ])
     }
     
@@ -90,9 +118,10 @@ final class AnalyticsService {
         ])
     }
     
-    func trackMessageSent(eventId: String) {
+    func trackMessageSent(eventId: String, messageLength: Int) {
         track("message_sent", props: [
-            "event_id": eventId
+            "event_id": eventId,
+            "message_length": messageLength
         ])
     }
     
@@ -108,5 +137,19 @@ final class AnalyticsService {
         track("map_interaction", props: [
             "action": action
         ])
+    }
+    
+    func trackRegionChanged(region: String) {
+        track("region_changed", props: [
+            "region": region
+        ])
+    }
+    
+    func trackFilterChanged(filterType: String, value: String? = nil) {
+        var props: [String: Any] = ["filter_type": filterType]
+        if let value = value {
+            props["filter_value"] = value
+        }
+        track("filter_changed", props: props)
     }
 }

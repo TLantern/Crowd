@@ -170,7 +170,9 @@ struct EventDetailView: View {
             .padding(.bottom, 20)
         }
         .task {
+            viewModel.setAppState(appState)
             await viewModel.loadHostProfile(hostId: event.hostId)
+            AnalyticsService.shared.trackScreenView("event_detail")
         }
         .alert("Error", isPresented: .constant(viewModel.joinError != nil)) {
             Button("OK") {
