@@ -699,7 +699,7 @@ struct CrowdHomeView: View {
                                      baseSize: 54,
                                      targetSize: 72,
                                      frostOpacity: 0.22,
-                                     iconBaseColor: Color(.sRGB, red: 0, green: 0, blue: 0),
+                                     iconBaseColor: .primary,
                                      highlightColor: Color(red: 0.63, green: 0.82, blue: 1.0)
                                  ) {
                                      route = .profile
@@ -716,7 +716,7 @@ struct CrowdHomeView: View {
                                     baseSize: 54,
                                     targetSize: 72,
                                     frostOpacity: 0.22,
-                                    iconBaseColor: Color(.sRGB, red: 0, green: 0, blue: 0),
+                                    iconBaseColor: .primary,
                                     highlightColor: .blue
                                 ) {
                                     showCalendar = true
