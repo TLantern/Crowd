@@ -134,11 +134,7 @@ struct ArrowPointer: Shape {
 // MARK: - Helper Extension for Event Category Emoji
 extension CrowdEvent {
     var categoryEmoji: String {
-        guard let categoryString = category,
-              let eventCategory = EventCategory(rawValue: categoryString) else {
-            return "🔥"
-        }
-        return eventCategory.emoji
+        TagEmoji.emoji(for: tags, fallbackCategory: category)
     }
 }
 

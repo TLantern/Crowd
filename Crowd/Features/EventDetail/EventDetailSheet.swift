@@ -140,6 +140,7 @@ struct EventDetailView: View {
                 Task {
                     let success = await viewModel.joinEvent(event: event)
                     if success {
+                        appState.currentJoinedEvent = event
                         showNavigationModal = true
                     }
                 }
@@ -170,7 +171,6 @@ struct EventDetailView: View {
             .padding(.bottom, 20)
         }
         .task {
-            viewModel.setAppState(appState)
             await viewModel.loadHostProfile(hostId: event.hostId)
             AnalyticsService.shared.trackScreenView("event_detail")
         }

@@ -406,24 +406,22 @@ struct CrowdHomeView: View {
         
         // Try events collection first
         let eventRef = db.collection("events").document(event.id)
-        eventListener = eventRef.addSnapshotListener { [weak self] snapshot, error in
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                
+        eventListener = eventRef.addSnapshotListener { snapshot, error in
+            Task { @MainActor in
                 if let error = error {
                     print("⚠️ CrowdHomeView: Error listening to event: \(error)")
                     // Try userEvents collection as fallback
-                    self.tryUserEventsListener(for: event)
+                    tryUserEventsListener(for: event)
                     return
                 }
                 
                 if let data = snapshot?.data(),
                    let attendeeCount = data["attendeeCount"] as? Int {
-                    self.liveAttendeeCount = attendeeCount
+                    liveAttendeeCount = attendeeCount
                     print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
                 } else if !(snapshot?.exists ?? false) {
                     // Document doesn't exist in events, try userEvents
-                    self.tryUserEventsListener(for: event)
+                    tryUserEventsListener(for: event)
                 }
             }
         }
@@ -434,10 +432,8 @@ struct CrowdHomeView: View {
         eventListener?.remove()
         
         let eventRef = db.collection("userEvents").document(event.id)
-        eventListener = eventRef.addSnapshotListener { [weak self] snapshot, error in
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                
+        eventListener = eventRef.addSnapshotListener { snapshot, error in
+            Task { @MainActor in
                 if let error = error {
                     print("⚠️ CrowdHomeView: Error listening to userEvent: \(error)")
                     return
@@ -445,7 +441,7 @@ struct CrowdHomeView: View {
                 
                 if let data = snapshot?.data(),
                    let attendeeCount = data["attendeeCount"] as? Int {
-                    self.liveAttendeeCount = attendeeCount
+                    liveAttendeeCount = attendeeCount
                     print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
                 }
             }
@@ -750,17 +746,16 @@ struct CrowdHomeView: View {
                         HStack(spacing: 0) {
                             Spacer()
                             
-                            ZStack(alignment: .topTrailing) {
+                            ZStack {
                                 // White circle with drop shadow
                                 Circle()
                                     .fill(Color.white)
                                     .frame(width: 60, height: 60)
                                     .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
                                 
-                                // Live attendee count
-                                Text("\(liveAttendeeCount)")
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.primary)
+                                // Event emoji
+                                Text(TagEmoji.emoji(for: joinedEvent.tags, fallbackCategory: joinedEvent.category))
+                                    .font(.system(size: 30))
                                 
                                 // Red X button at top right
                                 Button(action: {

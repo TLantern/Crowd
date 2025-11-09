@@ -17,6 +17,7 @@ final class AppState: ObservableObject {
     @Published var camera: MapCameraPosition = .automatic
     @Published var unreadRewardNotice: Bool = false
     @Published var showTutorial: Bool = false
+    @Published var currentJoinedEvent: CrowdEvent?
     
     private var locationUpdateCancellable: AnyCancellable?
     private var lastLocationSaveTime: Date?
