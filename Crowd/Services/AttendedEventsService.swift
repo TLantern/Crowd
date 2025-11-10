@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import FirebaseFirestore
 
 final class AttendedEventsService: ObservableObject {
     static let shared = AttendedEventsService()
@@ -88,23 +89,76 @@ final class AttendedEventsService: ObservableObject {
         let now = Date()
         let originalCount = attendedEvents.count
         
-        // Remove events that have ended more than 1 hour ago
-        let oneHourAgo = Calendar.current.date(byAdding: .hour, value: -1, to: now) ?? now
-        
-        attendedEvents.removeAll { event in
+        // Remove events that have ended (immediately when end time is reached)
+        let expiredEventIds = attendedEvents.filter { event in
             guard let endsAt = event.endsAt else {
                 // If no end time, check if event started more than 4 hours ago
                 guard let startsAt = event.startsAt else { return false }
                 let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
                 return startsAt < fourHoursAgo
             }
-            return endsAt < oneHourAgo
+            return endsAt < now
+        }.map { $0.id }
+        
+        // Remove expired events from local storage
+        attendedEvents.removeAll { event in
+            guard let endsAt = event.endsAt else {
+                guard let startsAt = event.startsAt else { return false }
+                let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+                return startsAt < fourHoursAgo
+            }
+            return endsAt < now
         }
         
         let removedCount = originalCount - attendedEvents.count
         if removedCount > 0 {
             print("🧹 Cleaned up \(removedCount) expired events from attended list")
             saveAttendedEvents()
+            
+            // Remove signals and attendances from Firestore for expired events
+            Task {
+                await removeUsersFromExpiredEvents(eventIds: expiredEventIds)
+            }
+        }
+    }
+    
+    private func removeUsersFromExpiredEvents(eventIds: [String]) async {
+        guard !eventIds.isEmpty else { return }
+        
+        let db = FirebaseManager.shared.db
+        
+        for eventId in eventIds {
+            do {
+                // Delete signals for this event
+                let signalsSnapshot = try await db.collection("signals")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                if !signalsSnapshot.documents.isEmpty {
+                    let batch = db.batch()
+                    signalsSnapshot.documents.forEach { doc in
+                        batch.deleteDocument(doc.reference)
+                    }
+                    try await batch.commit()
+                    print("✅ Removed \(signalsSnapshot.documents.count) signal(s) for expired event \(eventId)")
+                }
+                
+                // Delete attendances for this event
+                let attendancesSnapshot = try await db.collection("userAttendances")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                if !attendancesSnapshot.documents.isEmpty {
+                    let batch = db.batch()
+                    attendancesSnapshot.documents.forEach { doc in
+                        batch.deleteDocument(doc.reference)
+                    }
+                    try await batch.commit()
+                    print("✅ Removed \(attendancesSnapshot.documents.count) attendance(s) for expired event \(eventId)")
+                }
+            } catch {
+                print("❌ Failed to remove users from expired event \(eventId): \(error)")
+            }
         }
     }
 }

@@ -981,6 +981,16 @@ struct CrowdHomeView: View {
     private func removeExpiredEvents() {
         let now = Date()
         
+        // Collect expired event IDs before removing
+        let expiredEventIds = Set(
+            (upcomingEvents + officialEvents + userEventsFromFirebase + hostedEvents)
+                .filter { event in
+                    guard let endsAt = event.endsAt else { return false }
+                    return endsAt < now
+                }
+                .map { $0.id }
+        )
+        
         // Remove events that have ended (immediately when end time is reached)
         upcomingEvents.removeAll { event in
             guard let endsAt = event.endsAt else { return false }
@@ -1000,6 +1010,58 @@ struct CrowdHomeView: View {
         hostedEvents.removeAll { event in
             guard let endsAt = event.endsAt else { return false }
             return endsAt < now
+        }
+        
+        // Remove expired events from attended events service (this will hide the join button)
+        if !expiredEventIds.isEmpty {
+            for eventId in expiredEventIds {
+                AttendedEventsService.shared.removeAttendedEvent(eventId)
+            }
+            
+            // Also remove signals and attendances from Firestore
+            Task {
+                await removeUsersFromExpiredEvents(eventIds: Array(expiredEventIds))
+            }
+        }
+    }
+    
+    private func removeUsersFromExpiredEvents(eventIds: [String]) async {
+        guard !eventIds.isEmpty else { return }
+        
+        let db = FirebaseManager.shared.db
+        
+        for eventId in eventIds {
+            do {
+                // Delete signals for this event
+                let signalsSnapshot = try await db.collection("signals")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                if !signalsSnapshot.documents.isEmpty {
+                    let batch = db.batch()
+                    signalsSnapshot.documents.forEach { doc in
+                        batch.deleteDocument(doc.reference)
+                    }
+                    try await batch.commit()
+                    print("✅ Removed \(signalsSnapshot.documents.count) signal(s) for expired event \(eventId)")
+                }
+                
+                // Delete attendances for this event
+                let attendancesSnapshot = try await db.collection("userAttendances")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                if !attendancesSnapshot.documents.isEmpty {
+                    let batch = db.batch()
+                    attendancesSnapshot.documents.forEach { doc in
+                        batch.deleteDocument(doc.reference)
+                    }
+                    try await batch.commit()
+                    print("✅ Removed \(attendancesSnapshot.documents.count) attendance(s) for expired event \(eventId)")
+                }
+            } catch {
+                print("❌ Failed to remove users from expired event \(eventId): \(error)")
+            }
         }
     }
 
