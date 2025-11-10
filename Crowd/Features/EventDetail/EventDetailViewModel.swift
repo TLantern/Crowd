@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 import Combine
 import FirebaseFirestore
+import CoreLocation
 
 @MainActor
 final class EventDetailViewModel: ObservableObject {
@@ -44,7 +45,9 @@ final class EventDetailViewModel: ObservableObject {
         // Join locally to avoid "Event not found" errors when tapping from map or calendar.
         if event.sourceURL != nil {
             attendedEventsService.addAttendedEvent(event)
-            AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title)
+            let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+            let zone = coordinate.geohash(precision: 4)
+            AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title, zone: zone)
             print("✅ Locally joined live campus event: \(event.id)")
             return true
         }
@@ -58,8 +61,10 @@ final class EventDetailViewModel: ObservableObject {
             // Add to attended events
             attendedEventsService.addAttendedEvent(event)
             
-            // Track analytics
-            AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title)
+            // Track analytics with zone
+            let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+            let zone = coordinate.geohash(precision: 4)
+            AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title, zone: zone)
             
             print("✅ Successfully joined event: \(event.id)")
             return true

@@ -175,6 +175,17 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         print("👆 NotificationService: User tapped notification")
         print("👆 Notification data: \(userInfo)")
         
+        // Track push opened
+        var pushProps: [String: Any] = [:]
+        if let notificationType = userInfo["type"] as? String {
+            pushProps["notification_type"] = notificationType
+        }
+        if let eventId = userInfo["eventId"] as? String {
+            pushProps["event_id"] = eventId
+        }
+        AnalyticsService.shared.track("push_opened", props: pushProps)
+        AnalyticsService.shared.logToFirestore(eventName: "push_opened", properties: pushProps)
+        
         // Parse notification data
         if let notificationType = userInfo["type"] as? String,
            notificationType == "chat_message",

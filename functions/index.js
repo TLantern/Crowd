@@ -1649,3 +1649,106 @@ exports.cleanupExpiredEvents = functions.pubsub
     return null;
   });
 
+// Scheduled: Aggregate Daily Active Users (DAU) metrics
+// Runs daily at midnight UTC to process yesterday's activity logs
+exports.aggregateDailyDAU = functions.pubsub
+  .schedule('0 0 * * *')  // Cron: midnight UTC daily
+  .timeZone('Etc/UTC')
+  .onRun(async (context) => {
+    console.log('📊 Starting DAU aggregation...');
+    
+    // Calculate yesterday's date in YYYY-MM-DD format
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const year = yesterday.getUTCFullYear();
+    const month = String(yesterday.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(yesterday.getUTCDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+    
+    console.log(`📅 Processing date: ${dateString}`);
+    
+    try {
+      // Query all events from yesterday's activity_logs
+      const eventsRef = db.collection('activity_logs')
+        .doc(dateString)
+        .collection('events');
+      
+      const eventsSnapshot = await eventsRef.get();
+      
+      if (eventsSnapshot.empty) {
+        console.log(`⚠️ No events found for ${dateString}`);
+        // Still create a metrics document with zero values
+        await db.collection('metrics').doc('daily').collection('daily').doc(dateString).set({
+          date: dateString,
+          dau: 0,
+          zoneCounts: {},
+          totalEvents: 0,
+          aggregatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        console.log(`✅ Created empty metrics document for ${dateString}`);
+        return null;
+      }
+      
+      console.log(`📊 Found ${eventsSnapshot.size} events to process`);
+      
+      // Aggregate data
+      const uniqueUsers = new Set();
+      const zoneUserMap = new Map(); // zone -> Set of userIds
+      let totalEvents = 0;
+      
+      eventsSnapshot.forEach(doc => {
+        const eventData = doc.data();
+        const userId = eventData.userId;
+        const zone = eventData.zone;
+        
+        // Count unique users
+        if (userId) {
+          uniqueUsers.add(userId);
+          
+          // Count users per zone
+          if (zone) {
+            if (!zoneUserMap.has(zone)) {
+              zoneUserMap.set(zone, new Set());
+            }
+            zoneUserMap.get(zone).add(userId);
+          }
+        }
+        
+        totalEvents++;
+      });
+      
+      // Convert zoneUserMap to zoneCounts object
+      const zoneCounts = {};
+      zoneUserMap.forEach((userSet, zone) => {
+        zoneCounts[zone] = userSet.size;
+      });
+      
+      const dau = uniqueUsers.size;
+      
+      console.log(`📊 Aggregation results:`);
+      console.log(`   - DAU: ${dau}`);
+      console.log(`   - Total events: ${totalEvents}`);
+      console.log(`   - Zones: ${Object.keys(zoneCounts).length}`);
+      
+      // Save to metrics/daily/{date}
+      const metricsData = {
+        date: dateString,
+        dau: dau,
+        zoneCounts: zoneCounts,
+        totalEvents: totalEvents,
+        aggregatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+      
+      await db.collection('metrics').doc('daily').collection('daily').doc(dateString).set(metricsData, { merge: true });
+      
+      console.log(`✅ DAU metrics saved for ${dateString}`);
+      console.log(`   - Unique users: ${dau}`);
+      console.log(`   - Zone breakdown:`, zoneCounts);
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Error aggregating DAU:', error);
+      return null;
+    }
+  });
+

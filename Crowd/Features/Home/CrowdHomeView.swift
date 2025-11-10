@@ -74,10 +74,17 @@ struct CrowdHomeView: View {
     
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
+        let now = Date()
         // Combine all events with deduplication
         // Priority: hostedEvents > userEventsFromFirebase (avoid showing duplicate user events)
         let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
-        return officialEvents + allUserEvents + upcomingEvents
+        let combined = officialEvents + allUserEvents + upcomingEvents
+        
+        // Filter out expired events (events that have ended)
+        return combined.filter { event in
+            guard let endsAt = event.endsAt else { return true }
+            return endsAt >= now
+        }
     }
     
     /// Merge local and firebase user events, removing duplicates (prefer local version)
@@ -298,6 +305,14 @@ struct CrowdHomeView: View {
         .onAppear {
             snapTo(selectedRegion)
             AnalyticsService.shared.trackScreenView("home")
+            AnalyticsService.shared.track("map_viewed", props: [:])
+            if let location = locationService.lastKnown {
+                let coordinate = CLLocationCoordinate2D(latitude: location.latitude, longitude: location.longitude)
+                let zone = coordinate.geohash(precision: 4)
+                AnalyticsService.shared.logToFirestore(eventName: "map_viewed", zone: zone)
+            } else {
+                AnalyticsService.shared.logToFirestore(eventName: "map_viewed")
+            }
         }
         .onChange(of: selectedRegion) { _, new in
             snapTo(new)
@@ -361,7 +376,7 @@ struct CrowdHomeView: View {
                         await loadFirebaseEvents(region: newRegion)
                     }
                 }
-                .onReceive(Timer.publish(every: 300, on: .main, in: .common).autoconnect()) { _ in
+                .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
                     removeExpiredEvents()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { notification in
@@ -809,11 +824,14 @@ struct CrowdHomeView: View {
                     try await env.eventRepo.create(event: event)
                     print("✅ Event created in Firebase: \(event.id)")
                     
-                    // Track analytics
+                    // Track analytics with zone
+                    let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+                    let zone = coordinate.geohash(precision: 4)
                     AnalyticsService.shared.trackEventCreated(
                         eventId: event.id,
                         title: event.title,
-                        category: event.category
+                        category: event.category,
+                        zone: zone
                     )
                     
                     await MainActor.run {
@@ -962,27 +980,26 @@ struct CrowdHomeView: View {
     
     private func removeExpiredEvents() {
         let now = Date()
-        let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
         
-        // Remove events that ended more than 4 hours ago
+        // Remove events that have ended (immediately when end time is reached)
         upcomingEvents.removeAll { event in
             guard let endsAt = event.endsAt else { return false }
-            return endsAt < fourHoursAgo
+            return endsAt < now
         }
         
         officialEvents.removeAll { event in
             guard let endsAt = event.endsAt else { return false }
-            return endsAt < fourHoursAgo
+            return endsAt < now
         }
         
         userEventsFromFirebase.removeAll { event in
             guard let endsAt = event.endsAt else { return false }
-            return endsAt < fourHoursAgo
+            return endsAt < now
         }
         
         hostedEvents.removeAll { event in
             guard let endsAt = event.endsAt else { return false }
-            return endsAt < fourHoursAgo
+            return endsAt < now
         }
     }
 

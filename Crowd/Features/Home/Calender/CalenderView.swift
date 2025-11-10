@@ -372,6 +372,22 @@ struct EventCardView: View {
     }
     
     private func shareEvent() {
+        // Track invite sent
+        AnalyticsService.shared.track("invite_sent", props: [
+            "event_id": event.id,
+            "title": event.title
+        ])
+        let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+        let zone = coordinate.geohash(precision: 4)
+        AnalyticsService.shared.logToFirestore(
+            eventName: "invite_sent",
+            properties: [
+                "event_id": event.id,
+                "title": event.title
+            ],
+            zone: zone
+        )
+        
         var shareItems: [Any] = []
         
         // Add event title

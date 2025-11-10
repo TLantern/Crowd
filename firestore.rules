@@ -110,6 +110,28 @@ service cloud.firestore {
       // No updates allowed (create/delete only)
       allow update: if false;
     }
+    
+    // Activity logs collection (for DAU tracking)
+    match /activity_logs/{date}/events/{eventId} {
+      // Authenticated users can create events (for logging their actions)
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      
+      // Only admins can read activity logs
+      allow read: if isAdmin();
+      
+      // No updates or deletes allowed
+      allow update, delete: if false;
+    }
+    
+    // Metrics collection (for aggregated DAU data)
+    match /metrics/{document=**} {
+      // Only admins can read metrics
+      allow read: if isAdmin();
+      
+      // Only Cloud Functions can write (no auth check allows server-side writes)
+      allow write: if false;
+    }
   }
 }
 

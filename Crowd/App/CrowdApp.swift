@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseCore
+import FirebaseAnalytics
 
 @main
 struct CrowdApp: App {
@@ -30,9 +31,17 @@ struct CrowdApp: App {
                     .environmentObject(appState)
                     .environment(\.appEnvironment, env)
                     .task { await appState.bootstrap() }
+                    .onAppear {
+                        AnalyticsService.shared.track("app_opened", props: [:])
+                        AnalyticsService.shared.logToFirestore(eventName: "app_opened")
+                    }
             } else {
                 OnboardingFlowView {
                     hasSeenOnboarding = true
+                }
+                .onAppear {
+                    AnalyticsService.shared.track("app_opened", props: [:])
+                    AnalyticsService.shared.logToFirestore(eventName: "app_opened")
                 }
             }
         }

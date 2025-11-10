@@ -7,6 +7,7 @@
 
 import Foundation
 import FirebaseAnalytics
+import FirebaseFirestore
 
 final class AnalyticsService {
     static let shared = AnalyticsService()
@@ -27,6 +28,44 @@ final class AnalyticsService {
         
         // Log to Firebase Analytics
         Analytics.logEvent(name, parameters: propsWithUserId)
+    }
+    
+    // MARK: - Firestore Activity Logging
+    
+    func logToFirestore(eventName: String, properties: [String: Any] = [:], zone: String? = nil) {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            print("⚠️ AnalyticsService: Cannot log to Firestore - no user ID")
+            return
+        }
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateString = dateFormatter.string(from: Date())
+        
+        var eventData: [String: Any] = [
+            "eventName": eventName,
+            "userId": userId,
+            "timestamp": FieldValue.serverTimestamp(),
+            "properties": properties
+        ]
+        
+        if let zone = zone {
+            eventData["zone"] = zone
+        }
+        
+        let db = FirebaseManager.shared.db
+        let eventRef = db.collection("activity_logs")
+            .document(dateString)
+            .collection("events")
+            .document()
+        
+        eventRef.setData(eventData) { error in
+            if let error = error {
+                print("❌ AnalyticsService: Failed to log to Firestore - \(error.localizedDescription)")
+            } else {
+                print("✅ AnalyticsService: Logged \(eventName) to Firestore")
+            }
+        }
     }
     
     // MARK: - User Events
@@ -67,19 +106,23 @@ final class AnalyticsService {
     
     // MARK: - Event Events
     
-    func trackEventCreated(eventId: String, title: String, category: String?) {
-        track("event_created", props: [
+    func trackEventCreated(eventId: String, title: String, category: String?, zone: String? = nil) {
+        let props: [String: Any] = [
             "event_id": eventId,
             "title": title,
             "category": category ?? "unknown"
-        ])
+        ]
+        track("event_created", props: props)
+        logToFirestore(eventName: "event_created", properties: props, zone: zone)
     }
     
-    func trackEventJoined(eventId: String, title: String) {
-        track("event_joined", props: [
+    func trackEventJoined(eventId: String, title: String, zone: String? = nil) {
+        let props: [String: Any] = [
             "event_id": eventId,
             "title": title
-        ])
+        ]
+        track("event_joined", props: props)
+        logToFirestore(eventName: "event_joined", properties: props, zone: zone)
     }
     
     func trackEventDeleted(eventId: String) {
