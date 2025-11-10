@@ -437,27 +437,27 @@ final class FirebaseEventRepository: EventRepository {
                 let eventId = document.documentID
                 
                 // Delete associated data
-                    let signalsSnapshot = try await db.collection("signals")
-                        .whereField("eventId", isEqualTo: eventId)
-                        .getDocuments()
-                    
-                    let batch = db.batch()
-                    for signalDoc in signalsSnapshot.documents {
-                        batch.deleteDocument(signalDoc.reference)
-                    }
-                    
-                    let attendancesSnapshot = try await db.collection("userAttendances")
-                        .whereField("eventId", isEqualTo: eventId)
-                        .getDocuments()
-                    
-                    for attendanceDoc in attendancesSnapshot.documents {
-                        batch.deleteDocument(attendanceDoc.reference)
-                    }
-                    
-                    batch.deleteDocument(document.reference)
-                    try await batch.commit()
-                    deletedCount += 1
-                    print("✅ Deleted old event without end time \(eventId) from 'events' collection")
+                let signalsSnapshot = try await db.collection("signals")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                let batch = db.batch()
+                for signalDoc in signalsSnapshot.documents {
+                    batch.deleteDocument(signalDoc.reference)
+                }
+                
+                let attendancesSnapshot = try await db.collection("userAttendances")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                for attendanceDoc in attendancesSnapshot.documents {
+                    batch.deleteDocument(attendanceDoc.reference)
+                }
+                
+                batch.deleteDocument(document.reference)
+                try await batch.commit()
+                deletedCount += 1
+                print("✅ Deleted old event without end time \(eventId) from 'events' collection")
                 }
             }
         } catch {
