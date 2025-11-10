@@ -9,6 +9,7 @@ import SwiftUI
 import Combine
 import MapKit
 import CoreLocation
+import FirebaseFirestore
 
 @MainActor
 final class AppState: ObservableObject {
@@ -44,6 +45,9 @@ final class AppState: ObservableObject {
             let userId = try await FirebaseManager.shared.signInAnonymously()
             print("✅ Authenticated with Firebase: \(userId)")
             
+            // Restore attendance for events user was previously attending
+            await restoreAttendance(userId: userId)
+            
             // Load user profile
             await loadUserProfile(userId: userId)
             
@@ -67,6 +71,45 @@ final class AppState: ObservableObject {
             print("⚠️ Firebase auth failed: \(error.localizedDescription)")
         }
         // preload regions, request location (soft), warm caches
+    }
+    
+    private func restoreAttendance(userId: String) async {
+        let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
+        guard !attendedEvents.isEmpty else {
+            print("📋 No attended events to restore")
+            return
+        }
+        
+        print("📋 Restoring attendance for \(attendedEvents.count) event(s)")
+        
+        let db = FirebaseManager.shared.db
+        let eventRepo = AppEnvironment.current.eventRepo
+        
+        for event in attendedEvents {
+            // Skip calendar/live campus events (they don't have backend signals)
+            if event.sourceURL != nil {
+                continue
+            }
+            
+            // Check if signal already exists
+            do {
+                let signalsSnapshot = try await db.collection("signals")
+                    .whereField("eventId", isEqualTo: event.id)
+                    .whereField("userId", isEqualTo: userId)
+                    .getDocuments()
+                
+                if signalsSnapshot.documents.isEmpty {
+                    // Signal doesn't exist, re-join the event
+                    print("🔄 Restoring signal for event: \(event.title)")
+                    try await eventRepo.join(eventId: event.id, userId: userId)
+                    print("✅ Restored attendance for event: \(event.title)")
+                } else {
+                    print("✅ Signal already exists for event: \(event.title)")
+                }
+            } catch {
+                print("⚠️ Failed to restore attendance for event \(event.id): \(error.localizedDescription)")
+            }
+        }
     }
     
     private func loadUserProfile(userId: String) async {

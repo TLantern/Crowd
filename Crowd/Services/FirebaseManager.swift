@@ -71,6 +71,13 @@ final class FirebaseManager {
         print("   - Auth instance: \(auth)")
         print("   - Current user before sign in: \(auth.currentUser?.uid ?? "nil")")
         
+        // Check if user is already authenticated (preserves user across app restarts)
+        if let currentUser = auth.currentUser {
+            print("✅ FirebaseManager: User already authenticated, preserving existing user")
+            print("   - User ID: \(currentUser.uid)")
+            return currentUser.uid
+        }
+        
         do {
             let result = try await auth.signInAnonymously()
             print("✅ FirebaseManager: Anonymous sign in successful")
