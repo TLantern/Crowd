@@ -458,7 +458,6 @@ final class FirebaseEventRepository: EventRepository {
                 try await batch.commit()
                 deletedCount += 1
                 print("✅ Deleted old event without end time \(eventId) from 'events' collection")
-                }
             }
         } catch {
             print("⚠️ Error deleting old events without end time: \(error.localizedDescription)")
