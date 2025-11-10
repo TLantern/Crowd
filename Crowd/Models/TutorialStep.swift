@@ -50,7 +50,7 @@ extension TutorialStep {
             id: 3,
             title: "Filter Events",
             description: "Use the filter dropdown to see only user-created or school-hosted events.",
-            cardPosition: .custom(x: 0, y: 100), // Will be calculated dynamically in TutorialOverlayView
+            cardPosition: .topCenter,
             arrowDirection: .bottom
         ),
         TutorialStep(
@@ -61,5 +61,32 @@ extension TutorialStep {
             arrowDirection: .none
         )
     ]
+}
+
+#Preview {
+    VStack(spacing: 20) {
+        ForEach(TutorialStep.allSteps) { step in
+            VStack(alignment: .leading, spacing: 8) {
+                Text(step.title)
+                    .font(.headline)
+                Text(step.description)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                HStack {
+                    Text("Position: \(String(describing: step.cardPosition))")
+                        .font(.caption)
+                    Spacer()
+                    Text("Arrow: \(String(describing: step.arrowDirection))")
+                        .font(.caption)
+                }
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(radius: 2)
+        }
+    }
+    .padding()
+    .background(Color(.systemGroupedBackground))
 }
 

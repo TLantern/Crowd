@@ -176,7 +176,8 @@ struct EventNavigationModal: View {
                             ChatTabView(
                                 chatService: chatService,
                                 messageText: $messageText,
-                                sendMessage: sendMessage
+                                sendMessage: sendMessage,
+                                isSendingMessage: $isSendingMessage
                             )
                         }
                     }
@@ -544,6 +545,7 @@ struct ChatTabView: View {
     @ObservedObject var chatService: EventChatService
     @Binding var messageText: String
     let sendMessage: () -> Void
+    @Binding var isSendingMessage: Bool
     
     @FocusState private var isTextFieldFocused: Bool
     @State private var keyboardHeight: CGFloat = 0
