@@ -8,7 +8,11 @@ service cloud.firestore {
     }
 
     function isExpired(ts) {
-      return ts is timestamp && ts < request.time - duration.value(1, 'h');
+      // Event is expired if endsAt timestamp is in the past (no 1-hour buffer needed for cleanup)
+      return ts != null && (
+        (ts is timestamp && ts < request.time) ||
+        (ts is number && ts < request.time.toMillis() / 1000)
+      );
     }
     
     // Official events collection
@@ -67,7 +71,19 @@ service cloud.firestore {
       allow read: if true;
       
       // Authenticated users can create/update/delete their own signals
-      allow create, update, delete: if request.auth != null;
+      // OR delete signals for expired events (for cleanup)
+      allow create, update: if request.auth != null;
+      allow delete: if request.auth != null && (
+        // User's own signal
+        resource.data.userId == request.auth.uid ||
+        // Or signal for an expired event (cleanup)
+        (resource.data.eventId != null && 
+         exists(/databases/$(database)/documents/userEvents/$(resource.data.eventId)) &&
+         isExpired(get(/databases/$(database)/documents/userEvents/$(resource.data.eventId)).data.endsAt)) ||
+        (resource.data.eventId != null && 
+         exists(/databases/$(database)/documents/events/$(resource.data.eventId)) &&
+         isExpired(get(/databases/$(database)/documents/events/$(resource.data.eventId)).data.endsAt))
+      );
     }
     
     // Event chat messages collection
@@ -103,9 +119,19 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && request.resource.data.userId == request.auth.uid;
       
-      // Users can only delete their own attendances
-      allow delete: if request.auth != null
-                    && resource.data.userId == request.auth.uid;
+      // Users can delete their own attendances
+      // OR delete attendances for expired events (for cleanup)
+      allow delete: if request.auth != null && (
+        // User's own attendance
+        resource.data.userId == request.auth.uid ||
+        // Or attendance for an expired event (cleanup)
+        (resource.data.eventId != null && 
+         exists(/databases/$(database)/documents/userEvents/$(resource.data.eventId)) &&
+         isExpired(get(/databases/$(database)/documents/userEvents/$(resource.data.eventId)).data.endsAt)) ||
+        (resource.data.eventId != null && 
+         exists(/databases/$(database)/documents/events/$(resource.data.eventId)) &&
+         isExpired(get(/databases/$(database)/documents/events/$(resource.data.eventId)).data.endsAt))
+      );
       
       // No updates allowed (create/delete only)
       allow update: if false;
