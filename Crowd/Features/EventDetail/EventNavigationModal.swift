@@ -70,6 +70,7 @@ struct EventNavigationModal: View {
     @State private var liveAttendeeCount: Int = 0
     @State private var eventListener: ListenerRegistration?
     @State private var selectedTab: TabSelection = .map
+    @State private var isSendingMessage = false
     
     enum TabSelection {
         case map
@@ -461,29 +462,40 @@ struct EventNavigationModal: View {
     // MARK: - Chat
     
     private func sendMessage() {
+        // Prevent multiple simultaneous sends
+        guard !isSendingMessage else { return }
+        
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         
-        Task {
+        // Clear text immediately for better UX
+        let messageToSend = text
+        messageText = ""
+        
+        isSendingMessage = true
+        
+        Task.detached(priority: .userInitiated) {
             do {
                 try await chatService.sendMessage(
                     eventId: event.id,
-                    text: text,
-                    userId: currentUserId,
-                    userName: currentUserName
+                    text: messageToSend,
+                    userId: await currentUserId,
+                    userName: await currentUserName
                 )
                 
-                // Track analytics
-                AnalyticsService.shared.trackMessageSent(eventId: event.id, messageLength: text.count)
-                
-                // Update last seen timestamp after sending message
-                ChatNotificationService.shared.updateLastSeen(eventId: event.id, timestamp: Date())
-                
+                // Track analytics on main thread
                 await MainActor.run {
-                    messageText = ""
+                    AnalyticsService.shared.trackMessageSent(eventId: event.id, messageLength: messageToSend.count)
+                    ChatNotificationService.shared.updateLastSeen(eventId: event.id, timestamp: Date())
+                    isSendingMessage = false
                 }
             } catch {
-                print("❌ EventNavigationModal: Failed to send message: \(error)")
+                await MainActor.run {
+                    print("❌ EventNavigationModal: Failed to send message: \(error)")
+                    // Restore message text on error
+                    messageText = messageToSend
+                    isSendingMessage = false
+                }
             }
         }
     }
@@ -599,11 +611,16 @@ struct ChatTabView: View {
                         sendMessage()
                         isTextFieldFocused = false
                     }) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : Color(hex: 0x02853E))
+                        if isSendingMessage {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 28))
+                                .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : Color(hex: 0x02853E))
+                        }
                     }
-                    .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSendingMessage)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)

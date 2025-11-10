@@ -295,7 +295,6 @@ final class FirebaseEventRepository: EventRepository {
     /// Delete expired events from both collections
     func deleteExpiredEvents() async throws {
         let now = Date()
-        let nowTimestamp = Timestamp(date: now)
         let nowSeconds = now.timeIntervalSince1970
         
         print("🧹 Starting cleanup of expired events...")
@@ -411,22 +410,33 @@ final class FirebaseEventRepository: EventRepository {
         
         // Also handle events without endsAt that started more than 4 hours ago
         let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
-        let fourHoursAgoTimestamp = Timestamp(date: fourHoursAgo)
+        let fourHoursAgoSeconds = fourHoursAgo.timeIntervalSince1970
         
         // Check events collection for events without endsAt
         do {
-            let eventsWithoutEndTime = try await db.collection("events")
-                .whereField("startsAt", isLessThanOrEqualTo: fourHoursAgoTimestamp)
+            let allEventsWithoutEndTime = try await db.collection("events")
                 .limit(to: 500)
                 .getDocuments()
             
-            for document in eventsWithoutEndTime.documents {
-                let data = document.data()
-                // Only delete if endsAt is missing or null
-                if data["endsAt"] == nil {
-                    let eventId = document.documentID
-                    
-                    // Delete associated data
+            let eventsWithoutEndTime = allEventsWithoutEndTime.documents.filter { doc in
+                let data = doc.data()
+                guard data["endsAt"] == nil else { return false }
+                
+                // Check if startsAt is more than 4 hours ago
+                if let timestamp = data["startsAt"] as? Timestamp {
+                    return timestamp.dateValue() <= fourHoursAgo
+                } else if let seconds = data["startsAt"] as? TimeInterval {
+                    return seconds <= fourHoursAgoSeconds
+                } else if let seconds = data["startsAt"] as? Double {
+                    return seconds <= fourHoursAgoSeconds
+                }
+                return false
+            }
+            
+            for document in eventsWithoutEndTime {
+                let eventId = document.documentID
+                
+                // Delete associated data
                     let signalsSnapshot = try await db.collection("signals")
                         .whereField("eventId", isEqualTo: eventId)
                         .getDocuments()
@@ -456,16 +466,27 @@ final class FirebaseEventRepository: EventRepository {
         
         // Check userEvents collection for events without endsAt
         do {
-            let userEventsWithoutEndTime = try await db.collection("userEvents")
-                .whereField("startsAt", isLessThanOrEqualTo: fourHoursAgoTimestamp)
+            let allUserEventsWithoutEndTime = try await db.collection("userEvents")
                 .limit(to: 500)
                 .getDocuments()
             
-            for document in userEventsWithoutEndTime.documents {
-                let data = document.data()
-                // Only delete if endsAt is missing or null
-                if data["endsAt"] == nil {
-                    let eventId = document.documentID
+            let userEventsWithoutEndTime = allUserEventsWithoutEndTime.documents.filter { doc in
+                let data = doc.data()
+                guard data["endsAt"] == nil else { return false }
+                
+                // Check if startsAt is more than 4 hours ago
+                if let timestamp = data["startsAt"] as? Timestamp {
+                    return timestamp.dateValue() <= fourHoursAgo
+                } else if let seconds = data["startsAt"] as? TimeInterval {
+                    return seconds <= fourHoursAgoSeconds
+                } else if let seconds = data["startsAt"] as? Double {
+                    return seconds <= fourHoursAgoSeconds
+                }
+                return false
+            }
+            
+            for document in userEventsWithoutEndTime {
+                let eventId = document.documentID
                     
                     // Delete associated data
                     let signalsSnapshot = try await db.collection("signals")
