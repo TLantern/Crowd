@@ -802,6 +802,9 @@ struct CrowdHomeView: View {
     private var hostEventSheet: some View {
         HostEventSheet(defaultRegion: selectedRegion, initialTitle: initialEventTitle) { event in
             Task {
+                // Check if this is the first event creation
+                let isFirstEvent = hostedEvents.isEmpty
+                
                 do {
                     try await env.eventRepo.create(event: event)
                     print("✅ Event created in Firebase: \(event.id)")
@@ -817,6 +820,11 @@ struct CrowdHomeView: View {
                         hostedEvents.append(event)
                         showConfetti = true
                         Haptics.light()
+                        
+                        // Request app rating if this is the first event
+                        if isFirstEvent {
+                            AppRatingService.shared.requestRatingIfNeeded(isFirstEvent: true)
+                        }
                         
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                             showConfetti = false

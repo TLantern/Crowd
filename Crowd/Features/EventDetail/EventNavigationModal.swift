@@ -11,6 +11,7 @@ import CoreLocation
 import CoreMotion
 import Combine
 import FirebaseFirestore
+import UIKit
 
 // MARK: - Motion Manager for device heading
 @MainActor
@@ -532,55 +533,94 @@ struct ChatTabView: View {
     @Binding var messageText: String
     let sendMessage: () -> Void
     
+    @FocusState private var isTextFieldFocused: Bool
+    @State private var keyboardHeight: CGFloat = 0
+    
     var body: some View {
-        VStack(spacing: 0) {
-            // Messages list
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(chatService.messages) { message in
-                            ChatMessageBubble(
-                                message: message.text,
-                                author: message.userName,
-                                isCurrentUser: message.isCurrentUser
-                            )
-                            .id(message.id)
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                // Messages list
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(chatService.messages) { message in
+                                ChatMessageBubble(
+                                    message: message.text,
+                                    author: message.userName,
+                                    isCurrentUser: message.isCurrentUser
+                                )
+                                .id(message.id)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .padding(.bottom, keyboardHeight > 0 ? keyboardHeight + 60 : 0)
+                    }
+                    .onChange(of: chatService.messages.count) { _, _ in
+                        if let lastMessage = chatService.messages.last {
+                            withAnimation {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-                .onChange(of: chatService.messages.count) { _, _ in
-                    if let lastMessage = chatService.messages.last {
-                        withAnimation {
-                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                    .onChange(of: isTextFieldFocused) { _, focused in
+                        if focused, let lastMessage = chatService.messages.last {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                withAnimation {
+                                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                }
+                            }
                         }
                     }
                 }
-            }
-            .background(Color(uiColor: .systemBackground))
-            
-            Divider()
-            
-            // Message input
-            HStack(spacing: 12) {
-                TextField("Type a message...", text: $messageText)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .cornerRadius(20)
+                .background(Color(uiColor: .systemBackground))
+                .onTapGesture {
+                    isTextFieldFocused = false
+                }
                 
-                Button(action: sendMessage) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : Color(hex: 0x02853E))
+                Divider()
+                
+                // Message input
+                HStack(spacing: 12) {
+                    TextField("Type a message...", text: $messageText)
+                        .textFieldStyle(.plain)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        .cornerRadius(20)
+                        .focused($isTextFieldFocused)
+                        .onSubmit {
+                            sendMessage()
+                            isTextFieldFocused = false
+                        }
+                    
+                    Button(action: {
+                        sendMessage()
+                        isTextFieldFocused = false
+                    }) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : Color(hex: 0x02853E))
+                    }
+                    .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(uiColor: .systemBackground))
+                .offset(y: keyboardHeight > 0 ? -keyboardHeight : 0)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color(uiColor: .systemBackground))
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+            if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    keyboardHeight = keyboardFrame.height
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.25)) {
+                keyboardHeight = 0
+            }
         }
     }
 }
@@ -599,11 +639,14 @@ struct MarqueeTitle: View {
     let text: String
     private let speed: Double = 20 // points per second
     private let spacing: CGFloat = 40
+    private let baseFontSize: CGFloat = 22
+    private let padding: CGFloat = 8 // 4px on each side
 
-    @State private var contentWidth: CGFloat = 0
+    @State private var baseContentWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
     @State private var offset: CGFloat = 0
     @State private var shouldAnimate: Bool = false
+    @State private var calculatedFontSize: CGFloat = 22
 
     var body: some View {
         GeometryReader { proxy in
@@ -620,32 +663,72 @@ struct MarqueeTitle: View {
                     HStack { Spacer(); title; Spacer() }
                 }
             }
-            .onAppear { containerWidth = w }
+            .onAppear { 
+                containerWidth = w
+                updateFontSize()
+            }
+            .onChange(of: w) { _, newWidth in
+                containerWidth = newWidth
+                updateFontSize()
+            }
         }
         .frame(height: 28)
     }
 
     private var title: some View {
         Text(text)
-            .font(.custom("Lato-Bold", size: 22))
+            .font(.custom("Lato-Bold", size: calculatedFontSize))
             .foregroundColor(.white)
             .lineLimit(1)
             .background(
-                GeometryReader { g in
-                    Color.clear
-                        .onAppear {
-                            contentWidth = g.size.width
-                            shouldAnimate = contentWidth > containerWidth
+                // Measure at base font size
+                Text(text)
+                    .font(.custom("Lato-Bold", size: baseFontSize))
+                    .lineLimit(1)
+                    .background(
+                        GeometryReader { g in
+                            Color.clear
+                                .onAppear {
+                                    baseContentWidth = g.size.width
+                                    updateFontSize()
+                                }
+                                .onChange(of: g.size.width) { _, newWidth in
+                                    baseContentWidth = newWidth
+                                    updateFontSize()
+                                }
                         }
-                }
+                    )
+                    .hidden()
             )
+    }
+    
+    private func updateFontSize() {
+        guard containerWidth > 0, baseContentWidth > 0 else { return }
+        let availableWidth = containerWidth - padding
+        
+        if baseContentWidth <= availableWidth {
+            calculatedFontSize = baseFontSize
+            shouldAnimate = false
+        } else {
+            // Scale down font size proportionally to fit
+            let scaleFactor = availableWidth / baseContentWidth
+            let minFontSize: CGFloat = 12
+            calculatedFontSize = max(minFontSize, baseFontSize * scaleFactor)
+            
+            // Calculate actual width at the scaled font size
+            let scaledWidth = baseContentWidth * (calculatedFontSize / baseFontSize)
+            // Only animate if it still doesn't fit even at minimum size
+            shouldAnimate = scaledWidth > availableWidth
+        }
     }
 
     private func startAnimation(container: CGFloat) {
-        guard contentWidth > container else { return }
-        let cycle = (contentWidth + spacing) / speed
+        let availableWidth = container - padding
+        let scaledWidth = baseContentWidth * (calculatedFontSize / baseFontSize)
+        guard scaledWidth > availableWidth else { return }
+        let cycle = (scaledWidth + spacing) / speed
         withAnimation(.linear(duration: cycle).repeatForever(autoreverses: false)) {
-            offset = -(contentWidth + spacing)
+            offset = -(scaledWidth + spacing)
         }
     }
 }

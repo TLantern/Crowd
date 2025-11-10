@@ -24,6 +24,8 @@ struct EventDetailView: View {
     @State private var showNavigationModal = false
     @State private var showLeaveConfirmation = false
     @ObservedObject private var attendedEventsService = AttendedEventsService.shared
+    @State private var liveAttendeeCount: Int = 0
+    @State private var eventListener: ListenerRegistration?
     
     var currentUserName: String {
         appState.sessionUser?.displayName ?? "You"
@@ -106,7 +108,7 @@ struct EventDetailView: View {
                             Text("Crowd Size")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.secondary)
-                            Text("\(event.attendeeCount)")
+                            Text("\(liveAttendeeCount)")
                                 .font(.system(size: 32, weight: .bold))
                                 .foregroundColor(.primary)
                         }
@@ -146,48 +148,75 @@ struct EventDetailView: View {
             }
             
             
-            // Action button
-            Button {
+            // Action buttons
+            VStack(spacing: 12) {
                 if hasJoined {
-                    // Already joined - button is disabled
-                } else {
-                    Task {
-                        let success = await viewModel.joinEvent(event: event)
-                        if success {
-                            appState.currentJoinedEvent = event
-                            showNavigationModal = true
+                    // Leave button (red)
+                    Button {
+                        showLeaveConfirmation = true
+                    } label: {
+                        Text("Leave")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.red)
+                            .cornerRadius(16)
+                    }
+                }
+                
+                // Join/Joined button
+                Button {
+                    if hasJoined {
+                        // Already joined - button is disabled
+                    } else {
+                        Task {
+                            // Check if this is the first event join
+                            let isFirstEvent = AttendedEventsService.shared.getAttendedEvents().isEmpty
+                            
+                            let success = await viewModel.joinEvent(event: event)
+                            if success {
+                                appState.currentJoinedEvent = event
+                                
+                                // Request app rating if this is the first event
+                                if isFirstEvent {
+                                    AppRatingService.shared.requestRatingIfNeeded(isFirstEvent: true)
+                                }
+                                
+                                showNavigationModal = true
+                            }
                         }
                     }
-                }
-            } label: {
-                HStack {
-                    if viewModel.isJoining {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .controlSize(.small)
-                    } else if hasJoined {
-                        Text("Joined")
-                            .font(.system(size: 18, weight: .semibold))
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 18, weight: .semibold))
-                    } else {
-                        Text("Join Crowd")
-                            .font(.system(size: 18, weight: .semibold))
+                } label: {
+                    HStack {
+                        if viewModel.isJoining {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .controlSize(.small)
+                        } else if hasJoined {
+                            Text("Joined")
+                                .font(.system(size: 18, weight: .semibold))
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 18, weight: .semibold))
+                        } else {
+                            Text("Join Crowd")
+                                .font(.system(size: 18, weight: .semibold))
+                        }
                     }
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    LinearGradient(
-                        colors: [Color(hex: 0x02853E), Color(hex: 0x03A04E)],
-                        startPoint: .leading,
-                        endPoint: .trailing
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        LinearGradient(
+                            colors: [Color(hex: 0x02853E), Color(hex: 0x03A04E)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
                     )
-                )
-                .cornerRadius(16)
+                    .cornerRadius(16)
+                }
+                .disabled(viewModel.isJoining || hasJoined)
             }
-            .disabled(viewModel.isJoining || hasJoined)
             .padding(.horizontal)
             .padding(.bottom, 20)
             }
@@ -195,6 +224,15 @@ struct EventDetailView: View {
         .task {
             await viewModel.loadHostProfile(hostId: event.hostId)
             AnalyticsService.shared.trackScreenView("event_detail")
+        }
+        .onAppear {
+            // Initialize with current event count
+            liveAttendeeCount = event.attendeeCount
+            startEventListener()
+        }
+        .onDisappear {
+            eventListener?.remove()
+            eventListener = nil
         }
         .alert("Error", isPresented: .constant(viewModel.joinError != nil)) {
             Button("OK") {
@@ -293,6 +331,55 @@ struct EventDetailView: View {
             } catch {
                 print("❌ Failed to delete event: \(error)")
                 // TODO: Show user-friendly error message
+            }
+        }
+    }
+    
+    // MARK: - Event Listener
+    
+    private func startEventListener() {
+        let db = FirebaseManager.shared.db
+        
+        // Try events collection first
+        let eventRef = db.collection("events").document(event.id)
+        eventListener = eventRef.addSnapshotListener { snapshot, error in
+            Task { @MainActor in
+                if let error = error {
+                    print("⚠️ EventDetailSheet: Error listening to event: \(error)")
+                    // Try userEvents collection as fallback
+                    tryUserEventsListener()
+                    return
+                }
+                
+                if let data = snapshot?.data(),
+                   let attendeeCount = data["attendeeCount"] as? Int {
+                    liveAttendeeCount = attendeeCount
+                    print("📊 EventDetailSheet: Updated attendee count to \(attendeeCount)")
+                } else if !(snapshot?.exists ?? false) {
+                    // Document doesn't exist in events, try userEvents
+                    tryUserEventsListener()
+                }
+            }
+        }
+    }
+    
+    private func tryUserEventsListener() {
+        let db = FirebaseManager.shared.db
+        eventListener?.remove()
+        
+        let eventRef = db.collection("userEvents").document(event.id)
+        eventListener = eventRef.addSnapshotListener { snapshot, error in
+            Task { @MainActor in
+                if let error = error {
+                    print("⚠️ EventDetailSheet: Error listening to userEvent: \(error)")
+                    return
+                }
+                
+                if let data = snapshot?.data(),
+                   let attendeeCount = data["attendeeCount"] as? Int {
+                    liveAttendeeCount = attendeeCount
+                    print("📊 EventDetailSheet: Updated attendee count to \(attendeeCount)")
+                }
             }
         }
     }

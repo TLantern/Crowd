@@ -102,7 +102,7 @@ struct LocationSearchField: View {
                 return
             }
             
-            coordinate = item.location.coordinate
+            coordinate = item.placemark.coordinate
             locationName = result.title
             isShowingSuggestions = false
             isFocused = false

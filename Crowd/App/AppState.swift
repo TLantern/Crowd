@@ -17,14 +17,27 @@ final class AppState: ObservableObject {
     @Published var camera: MapCameraPosition = .automatic
     @Published var unreadRewardNotice: Bool = false
     @Published var showTutorial: Bool = false
-    @Published var currentJoinedEvent: CrowdEvent?
+    @Published var currentJoinedEvent: CrowdEvent? {
+        didSet {
+            saveCurrentJoinedEvent()
+        }
+    }
     
     private var locationUpdateCancellable: AnyCancellable?
     private var lastLocationSaveTime: Date?
+    private let userDefaults = UserDefaults.standard
+    private let currentJoinedEventKey = "current_joined_event"
+    private var attendedEventsCancellable: AnyCancellable?
 
     func bootstrap() async {
         // Clean up expired attended events first
         AttendedEventsService.shared.refreshAttendedEvents()
+        
+        // Restore and validate current joined event
+        restoreCurrentJoinedEvent()
+        
+        // Observe attended events changes to clear currentJoinedEvent if event is removed
+        setupAttendedEventsObserver()
         
         // Authenticate anonymously with Firebase
         do {
@@ -99,6 +112,68 @@ final class AppState: ObservableObject {
                 userId: userId,
                 coordinate: coordinate
             )
+        }
+    }
+    
+    // MARK: - Current Joined Event Persistence
+    
+    private func setupAttendedEventsObserver() {
+        attendedEventsCancellable = AttendedEventsService.shared.$attendedEvents
+            .sink { [weak self] events in
+                guard let self = self else { return }
+                // If currentJoinedEvent is not in attended events, clear it
+                if let currentEvent = self.currentJoinedEvent,
+                   !events.contains(where: { $0.id == currentEvent.id }) {
+                    self.currentJoinedEvent = nil
+                    print("🧹 Cleared currentJoinedEvent - event no longer in attended list")
+                }
+            }
+    }
+    
+    private func saveCurrentJoinedEvent() {
+        if let event = currentJoinedEvent,
+           let data = try? JSONEncoder().encode(event) {
+            userDefaults.set(data, forKey: currentJoinedEventKey)
+            print("💾 Saved current joined event: \(event.title)")
+        } else {
+            userDefaults.removeObject(forKey: currentJoinedEventKey)
+            print("💾 Cleared current joined event")
+        }
+    }
+    
+    private func restoreCurrentJoinedEvent() {
+        guard let data = userDefaults.data(forKey: currentJoinedEventKey),
+              let event = try? JSONDecoder().decode(CrowdEvent.self, from: data) else {
+            currentJoinedEvent = nil
+            return
+        }
+        
+        // Check if event has finished
+        let now = Date()
+        let oneHourAgo = Calendar.current.date(byAdding: .hour, value: -1, to: now) ?? now
+        
+        let eventHasFinished: Bool
+        if let endsAt = event.endsAt {
+            eventHasFinished = endsAt < oneHourAgo
+        } else if let startsAt = event.startsAt {
+            // If no end time, check if event started more than 4 hours ago
+            let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+            eventHasFinished = startsAt < fourHoursAgo
+        } else {
+            eventHasFinished = false
+        }
+        
+        // Check if user is still attending
+        let isStillAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
+        
+        if eventHasFinished || !isStillAttending {
+            // Event finished or user left, clear it
+            currentJoinedEvent = nil
+            print("🧹 Cleared current joined event - finished: \(eventHasFinished), still attending: \(isStillAttending)")
+        } else {
+            // Restore the event
+            currentJoinedEvent = event
+            print("✅ Restored current joined event: \(event.title)")
         }
     }
 }
