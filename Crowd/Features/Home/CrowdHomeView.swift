@@ -1018,6 +1018,12 @@ struct CrowdHomeView: View {
                 AttendedEventsService.shared.removeAttendedEvent(eventId)
             }
             
+            // Clear currentJoinedEvent if it's one of the expired events (this will hide the white circle button)
+            if let currentEvent = appState.currentJoinedEvent,
+               expiredEventIds.contains(currentEvent.id) {
+                appState.currentJoinedEvent = nil
+            }
+            
             // Also remove signals and attendances from Firestore
             Task {
                 await removeUsersFromExpiredEvents(eventIds: Array(expiredEventIds))

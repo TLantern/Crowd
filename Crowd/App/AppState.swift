@@ -191,13 +191,12 @@ final class AppState: ObservableObject {
             return
         }
         
-        // Check if event has finished
+        // Check if event has finished (immediately when end time is reached)
         let now = Date()
-        let oneHourAgo = Calendar.current.date(byAdding: .hour, value: -1, to: now) ?? now
         
         let eventHasFinished: Bool
         if let endsAt = event.endsAt {
-            eventHasFinished = endsAt < oneHourAgo
+            eventHasFinished = endsAt < now
         } else if let startsAt = event.startsAt {
             // If no end time, check if event started more than 4 hours ago
             let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
