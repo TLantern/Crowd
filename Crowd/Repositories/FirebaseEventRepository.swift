@@ -306,7 +306,7 @@ final class FirebaseEventRepository: EventRepository {
         // Get all events and filter by endsAt (handles both Timestamp and TimeInterval formats)
         do {
             let allEvents = try await db.collection("events")
-                .limit(500)
+                .limit(to: 500)
                 .getDocuments()
             
             let expiredEvents = allEvents.documents.filter { doc in
@@ -359,7 +359,7 @@ final class FirebaseEventRepository: EventRepository {
         // Delete expired events from 'userEvents' collection
         do {
             let allUserEvents = try await db.collection("userEvents")
-                .limit(500)
+                .limit(to: 500)
                 .getDocuments()
             
             let expiredUserEvents = allUserEvents.documents.filter { doc in
@@ -417,7 +417,7 @@ final class FirebaseEventRepository: EventRepository {
         do {
             let eventsWithoutEndTime = try await db.collection("events")
                 .whereField("startsAt", isLessThanOrEqualTo: fourHoursAgoTimestamp)
-                .limit(500)
+                .limit(to: 500)
                 .getDocuments()
             
             for document in eventsWithoutEndTime.documents {
@@ -458,7 +458,7 @@ final class FirebaseEventRepository: EventRepository {
         do {
             let userEventsWithoutEndTime = try await db.collection("userEvents")
                 .whereField("startsAt", isLessThanOrEqualTo: fourHoursAgoTimestamp)
-                .limit(500)
+                .limit(to: 500)
                 .getDocuments()
             
             for document in userEventsWithoutEndTime.documents {
