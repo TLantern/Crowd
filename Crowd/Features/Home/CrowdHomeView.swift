@@ -370,6 +370,15 @@ struct CrowdHomeView: View {
                 .task {
                     await loadFirebaseEvents()
                     await loadUpcomingEvents()
+                    
+                    // Clean up expired events from database on app start
+                    if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
+                        do {
+                            try await firebaseRepo.deleteExpiredEvents()
+                        } catch {
+                            print("❌ Failed to delete expired events on app start: \(error.localizedDescription)")
+                        }
+                    }
                 }
                 .onChange(of: selectedRegion) { _, newRegion in
                     Task {
@@ -594,7 +603,13 @@ struct CrowdHomeView: View {
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(.primary)
                                     .onChange(of: searchText) { _, newValue in
-                                        showSearchResults = !newValue.isEmpty
+                                        // Debounce search results update
+                                        Task { @MainActor in
+                                            try? await Task.sleep(nanoseconds: 200_000_000)
+                                            if searchText == newValue {
+                                                showSearchResults = !newValue.isEmpty
+                                            }
+                                        }
                                     }
                                     .onSubmit {
                                         if let firstEvent = filteredEvents.first {
@@ -1024,9 +1039,18 @@ struct CrowdHomeView: View {
                 appState.currentJoinedEvent = nil
             }
             
-            // Also remove signals and attendances from Firestore
+            // Also remove signals and attendances from Firestore and delete expired events from database
             Task {
                 await removeUsersFromExpiredEvents(eventIds: Array(expiredEventIds))
+                
+                // Delete expired events from database
+                if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
+                    do {
+                        try await firebaseRepo.deleteExpiredEvents()
+                    } catch {
+                        print("❌ Failed to delete expired events from database: \(error.localizedDescription)")
+                    }
+                }
             }
         }
     }
@@ -1140,10 +1164,19 @@ struct CrowdHomeView: View {
     }
 }
 
-// MARK: - Tiny haptics helper
+// MARK: - Tiny haptics helper (optimized for performance)
 enum Haptics {
-    static func light() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-    static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+    private static let lightGenerator = UIImpactFeedbackGenerator(style: .light)
+    private static let successGenerator = UINotificationFeedbackGenerator()
+    
+    static func light() {
+        lightGenerator.prepare()
+        lightGenerator.impactOccurred()
+    }
+    static func success() {
+        successGenerator.prepare()
+        successGenerator.notificationOccurred(.success)
+    }
 }
 
 // MARK: - Reusable Bottom Overlay

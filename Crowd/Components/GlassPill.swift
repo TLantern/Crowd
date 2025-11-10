@@ -28,7 +28,7 @@ struct GlassButton: View {
                 .onChanged { _ in if !pressed { pressed = true } }
                 .onEnded { _ in pressed = false }
         )
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: pressed)
+        .animation(.easeOut(duration: 0.15), value: pressed)
     }
 }
 

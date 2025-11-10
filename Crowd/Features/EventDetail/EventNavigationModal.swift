@@ -565,8 +565,9 @@ struct ChatTabView: View {
                     }
                     .onChange(of: isTextFieldFocused) { _, focused in
                         if focused, let lastMessage = chatService.messages.last {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation {
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 100_000_000)
+                                withAnimation(.easeOut(duration: 0.2)) {
                                     proxy.scrollTo(lastMessage.id, anchor: .bottom)
                                 }
                             }

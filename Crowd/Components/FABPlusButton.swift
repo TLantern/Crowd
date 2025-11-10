@@ -21,8 +21,10 @@ struct FABPlusButton: View {
 
     var body: some View {
         Button(action: {
-            // subtle haptic for delight
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            // Haptic feedback (prepared for instant response)
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.prepare()
+            generator.impactOccurred()
             action()
         }) {
             ZStack {

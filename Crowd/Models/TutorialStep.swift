@@ -50,7 +50,7 @@ extension TutorialStep {
             id: 3,
             title: "Filter Events",
             description: "Use the filter dropdown to see only user-created or school-hosted events.",
-            cardPosition: .topCenter,
+            cardPosition: .custom(x: 0, y: 0), // Will be calculated dynamically in TutorialOverlayView
             arrowDirection: .bottom
         ),
         TutorialStep(

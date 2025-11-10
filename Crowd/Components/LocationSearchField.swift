@@ -135,7 +135,7 @@ class LocationSearchCompleter: NSObject, ObservableObject, MKLocalSearchComplete
 
         $queryFragment
             .removeDuplicates()
-            .debounce(for: .milliseconds(350), scheduler: DispatchQueue.main)
+            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] text in
                 guard let self = self else { return }
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 {

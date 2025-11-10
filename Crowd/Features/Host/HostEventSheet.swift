@@ -183,33 +183,37 @@ struct HostEventSheet: View {
     }
     
     private func reverseGeocodeLocation(_ coordinate: CLLocationCoordinate2D) {
-        // Create MKLocalSearch request to reverse geocode the coordinate
-        let searchRequest = MKLocalSearch.Request()
-        searchRequest.naturalLanguageQuery = "\(coordinate.latitude),\(coordinate.longitude)"
-        searchRequest.region = MKCoordinateRegion(
-            center: coordinate,
-            latitudinalMeters: 100,
-            longitudinalMeters: 100
-        )
-        
-        let search = MKLocalSearch(request: searchRequest)
-        search.start { response, error in
-            guard let response = response,
-                  let item = response.mapItems.first,
-                  let placemark = item.placemark as MKPlacemark? else {
-                locationName = "Current Location"
-                return
-            }
+        // Move reverse geocoding to background queue
+        Task.detached(priority: .userInitiated) {
+            let searchRequest = MKLocalSearch.Request()
+            searchRequest.naturalLanguageQuery = "\(coordinate.latitude),\(coordinate.longitude)"
+            searchRequest.region = MKCoordinateRegion(
+                center: coordinate,
+                latitudinalMeters: 100,
+                longitudinalMeters: 100
+            )
             
-            // Build location name from placemark
-            if let name = placemark.name {
-                locationName = name
-            } else if let thoroughfare = placemark.thoroughfare {
-                locationName = thoroughfare
-            } else if let locality = placemark.locality {
-                locationName = locality
-            } else {
-                locationName = "Current Location"
+            let search = MKLocalSearch(request: searchRequest)
+            search.start { response, error in
+                Task { @MainActor in
+                    guard let response = response,
+                          let item = response.mapItems.first,
+                          let placemark = item.placemark as MKPlacemark? else {
+                        locationName = "Current Location"
+                        return
+                    }
+                    
+                    // Build location name from placemark
+                    if let name = placemark.name {
+                        locationName = name
+                    } else if let thoroughfare = placemark.thoroughfare {
+                        locationName = thoroughfare
+                    } else if let locality = placemark.locality {
+                        locationName = locality
+                    } else {
+                        locationName = "Current Location"
+                    }
+                }
             }
         }
     }
@@ -257,9 +261,9 @@ struct HostEventSheet: View {
         // Cancel previous task
         typewriterTask?.cancel()
         
-        // Wait 500ms before regenerating
+        // Wait 500ms before regenerating (increased debounce for better performance)
         typewriterTask = Task {
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(nanoseconds: 600_000_000)
             if !Task.isCancelled {
                 await MainActor.run {
                     generateDescription()
@@ -270,15 +274,22 @@ struct HostEventSheet: View {
     
     private func animateTypewriter() async {
         let characters = Array(aiDescription)
-        for (index, _) in characters.enumerated() {
-            if Task.isCancelled { break }
+        // Batch updates: update every 3 characters instead of every character for better performance
+        let batchSize = 3
+        var currentIndex = 0
+        
+        while currentIndex < characters.count && !Task.isCancelled {
+            let endIndex = min(currentIndex + batchSize, characters.count)
+            let text = String(characters[0..<endIndex])
             
             await MainActor.run {
-                displayedDescription = String(characters[0...index])
+                displayedDescription = text
             }
             
-            // Randomize typing speed slightly for more natural feel
-            let delay = UInt64.random(in: 20_000_000...40_000_000) // 20-40ms
+            currentIndex = endIndex
+            
+            // Slightly faster batch updates (30-50ms per batch)
+            let delay = UInt64.random(in: 30_000_000...50_000_000)
             try? await Task.sleep(nanoseconds: delay)
         }
     }

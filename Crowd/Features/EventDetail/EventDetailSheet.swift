@@ -170,20 +170,27 @@ struct EventDetailView: View {
                     if hasJoined {
                         // Already joined - button is disabled
                     } else {
+                        // Prepare haptic for instant feedback
+                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        generator.prepare()
+                        generator.impactOccurred()
+                        
                         Task {
                             // Check if this is the first event join
                             let isFirstEvent = AttendedEventsService.shared.getAttendedEvents().isEmpty
                             
                             let success = await viewModel.joinEvent(event: event)
                             if success {
-                                appState.currentJoinedEvent = event
-                                
-                                // Request app rating if this is the first event
-                                if isFirstEvent {
-                                    AppRatingService.shared.requestRatingIfNeeded(isFirstEvent: true)
+                                await MainActor.run {
+                                    appState.currentJoinedEvent = event
+                                    
+                                    // Request app rating if this is the first event
+                                    if isFirstEvent {
+                                        AppRatingService.shared.requestRatingIfNeeded(isFirstEvent: true)
+                                    }
+                                    
+                                    showNavigationModal = true
                                 }
-                                
-                                showNavigationModal = true
                             }
                         }
                     }

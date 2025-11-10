@@ -81,6 +81,15 @@ struct TutorialOverlayView: View {
                 y: height / 2
             )
         case .custom(let x, let y):
+            // Special handling for step 3 (Filter Events) - position directly under filter button
+            if currentStep.id == 3 {
+                // Filter button is below region picker: region (48pt) + spacing (8pt) + filter (24pt) + offset (-18pt) = ~62pt from safeTop
+                // Position tutorial card directly under filter button with some spacing
+                return CGPoint(
+                    x: width / 2,
+                    y: safeTop + 180  // Positioned directly under the filter button
+                )
+            }
             return CGPoint(x: x, y: y)
         }
     }

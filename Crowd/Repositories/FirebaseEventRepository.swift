@@ -292,6 +292,212 @@ final class FirebaseEventRepository: EventRepository {
         print("✅ Event deleted from userEvents: \(eventId) (and \(signalsSnapshot.documents.count) signals)")
     }
     
+    /// Delete expired events from both collections
+    func deleteExpiredEvents() async throws {
+        let now = Date()
+        let nowTimestamp = Timestamp(date: now)
+        let nowSeconds = now.timeIntervalSince1970
+        
+        print("🧹 Starting cleanup of expired events...")
+        
+        var deletedCount = 0
+        
+        // Delete expired events from 'events' collection
+        // Get all events and filter by endsAt (handles both Timestamp and TimeInterval formats)
+        do {
+            let allEvents = try await db.collection("events")
+                .limit(500)
+                .getDocuments()
+            
+            let expiredEvents = allEvents.documents.filter { doc in
+                let data = doc.data()
+                guard let endsAtValue = data["endsAt"] else { return false }
+                
+                if let timestamp = endsAtValue as? Timestamp {
+                    return timestamp.dateValue() <= now
+                } else if let seconds = endsAtValue as? TimeInterval {
+                    return seconds <= nowSeconds
+                } else if let seconds = endsAtValue as? Double {
+                    return seconds <= nowSeconds
+                }
+                return false
+            }
+            
+            for document in expiredEvents {
+                let eventId = document.documentID
+                
+                // Delete all signals for this event first
+                let signalsSnapshot = try await db.collection("signals")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                let batch = db.batch()
+                for signalDoc in signalsSnapshot.documents {
+                    batch.deleteDocument(signalDoc.reference)
+                }
+                
+                // Delete all attendances for this event
+                let attendancesSnapshot = try await db.collection("userAttendances")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                for attendanceDoc in attendancesSnapshot.documents {
+                    batch.deleteDocument(attendanceDoc.reference)
+                }
+                
+                // Delete the event document
+                batch.deleteDocument(document.reference)
+                
+                try await batch.commit()
+                deletedCount += 1
+                print("✅ Deleted expired event \(eventId) from 'events' collection")
+            }
+        } catch {
+            print("⚠️ Error deleting expired events from 'events' collection: \(error.localizedDescription)")
+        }
+        
+        // Delete expired events from 'userEvents' collection
+        do {
+            let allUserEvents = try await db.collection("userEvents")
+                .limit(500)
+                .getDocuments()
+            
+            let expiredUserEvents = allUserEvents.documents.filter { doc in
+                let data = doc.data()
+                guard let endsAtValue = data["endsAt"] else { return false }
+                
+                if let timestamp = endsAtValue as? Timestamp {
+                    return timestamp.dateValue() <= now
+                } else if let seconds = endsAtValue as? TimeInterval {
+                    return seconds <= nowSeconds
+                } else if let seconds = endsAtValue as? Double {
+                    return seconds <= nowSeconds
+                }
+                return false
+            }
+            
+            for document in expiredUserEvents {
+                let eventId = document.documentID
+                
+                // Delete all signals for this event first
+                let signalsSnapshot = try await db.collection("signals")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                let batch = db.batch()
+                for signalDoc in signalsSnapshot.documents {
+                    batch.deleteDocument(signalDoc.reference)
+                }
+                
+                // Delete all attendances for this event
+                let attendancesSnapshot = try await db.collection("userAttendances")
+                    .whereField("eventId", isEqualTo: eventId)
+                    .getDocuments()
+                
+                for attendanceDoc in attendancesSnapshot.documents {
+                    batch.deleteDocument(attendanceDoc.reference)
+                }
+                
+                // Delete the event document
+                batch.deleteDocument(document.reference)
+                
+                try await batch.commit()
+                deletedCount += 1
+                print("✅ Deleted expired event \(eventId) from 'userEvents' collection")
+            }
+        } catch {
+            print("⚠️ Error deleting expired events from 'userEvents' collection: \(error.localizedDescription)")
+        }
+        
+        // Also handle events without endsAt that started more than 4 hours ago
+        let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+        let fourHoursAgoTimestamp = Timestamp(date: fourHoursAgo)
+        
+        // Check events collection for events without endsAt
+        do {
+            let eventsWithoutEndTime = try await db.collection("events")
+                .whereField("startsAt", isLessThanOrEqualTo: fourHoursAgoTimestamp)
+                .limit(500)
+                .getDocuments()
+            
+            for document in eventsWithoutEndTime.documents {
+                let data = document.data()
+                // Only delete if endsAt is missing or null
+                if data["endsAt"] == nil {
+                    let eventId = document.documentID
+                    
+                    // Delete associated data
+                    let signalsSnapshot = try await db.collection("signals")
+                        .whereField("eventId", isEqualTo: eventId)
+                        .getDocuments()
+                    
+                    let batch = db.batch()
+                    for signalDoc in signalsSnapshot.documents {
+                        batch.deleteDocument(signalDoc.reference)
+                    }
+                    
+                    let attendancesSnapshot = try await db.collection("userAttendances")
+                        .whereField("eventId", isEqualTo: eventId)
+                        .getDocuments()
+                    
+                    for attendanceDoc in attendancesSnapshot.documents {
+                        batch.deleteDocument(attendanceDoc.reference)
+                    }
+                    
+                    batch.deleteDocument(document.reference)
+                    try await batch.commit()
+                    deletedCount += 1
+                    print("✅ Deleted old event without end time \(eventId) from 'events' collection")
+                }
+            }
+        } catch {
+            print("⚠️ Error deleting old events without end time: \(error.localizedDescription)")
+        }
+        
+        // Check userEvents collection for events without endsAt
+        do {
+            let userEventsWithoutEndTime = try await db.collection("userEvents")
+                .whereField("startsAt", isLessThanOrEqualTo: fourHoursAgoTimestamp)
+                .limit(500)
+                .getDocuments()
+            
+            for document in userEventsWithoutEndTime.documents {
+                let data = document.data()
+                // Only delete if endsAt is missing or null
+                if data["endsAt"] == nil {
+                    let eventId = document.documentID
+                    
+                    // Delete associated data
+                    let signalsSnapshot = try await db.collection("signals")
+                        .whereField("eventId", isEqualTo: eventId)
+                        .getDocuments()
+                    
+                    let batch = db.batch()
+                    for signalDoc in signalsSnapshot.documents {
+                        batch.deleteDocument(signalDoc.reference)
+                    }
+                    
+                    let attendancesSnapshot = try await db.collection("userAttendances")
+                        .whereField("eventId", isEqualTo: eventId)
+                        .getDocuments()
+                    
+                    for attendanceDoc in attendancesSnapshot.documents {
+                        batch.deleteDocument(attendanceDoc.reference)
+                    }
+                    
+                    batch.deleteDocument(document.reference)
+                    try await batch.commit()
+                    deletedCount += 1
+                    print("✅ Deleted old event without end time \(eventId) from 'userEvents' collection")
+                }
+            }
+        } catch {
+            print("⚠️ Error deleting old user events without end time: \(error.localizedDescription)")
+        }
+        
+        print("✅ Cleanup complete: Deleted \(deletedCount) expired events from database")
+    }
+    
     func boostSignal(eventId: String, delta: Int) async throws {
         // Get current user's signal for this event
         let signalsSnapshot = try await db.collection("signals")

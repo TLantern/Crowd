@@ -20,16 +20,16 @@ struct GlassIconButton: View {
     
     var body: some View {
         Button(action: {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            // Haptic feedback (must be on main thread but non-blocking)
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.prepare()
+            generator.impactOccurred()
             
-            // Trigger glow effect
-            withAnimation(.spring(response: 0.12, dampingFraction: 0.7)) {
-                isGlowing = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
-                    isGlowing = false
-                }
+            // Trigger glow effect with lighter animation
+            isGlowing = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                isGlowing = false
             }
             
             action()
@@ -51,17 +51,19 @@ struct GlassIconButton: View {
                 Image(systemName: systemName)
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundStyle(isGlowing ? .yellow : .black.opacity(0.78))
-                    .animation(.spring(response: 0.12, dampingFraction: 0.8), value: isGlowing)
+                    .animation(.easeOut(duration: 0.15), value: isGlowing)
             }
         }
         .frame(width: 56, height: 56)
         .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
-        .scaleEffect(isPressed ? 0.92 : 1.0)
-        .animation(.spring(response: 0.18, dampingFraction: 0.7), value: isPressed)
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.easeOut(duration: 0.1), value: isPressed)
         .buttonStyle(.plain)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
+                .onChanged { _ in 
+                    if !isPressed { isPressed = true }
+                }
                 .onEnded { _ in isPressed = false }
         )
     }

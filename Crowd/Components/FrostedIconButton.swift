@@ -36,7 +36,7 @@ struct FrostedIconButton: View {
             Image(systemName: systemName)
                 .font(.system(size: iconSize, weight: .semibold))
                 .foregroundStyle(isActive ? highlightColor : iconBaseColor)
-                .animation(.spring(response: 0.12, dampingFraction: 0.8), value: isActive)
+                .animation(.easeOut(duration: 0.12), value: isActive)
         }
         .frame(width: currentSize, height: currentSize)
         .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 6)
@@ -44,10 +44,15 @@ struct FrostedIconButton: View {
 
         // Fast pop on tap (no hover)
         .onTapGesture {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            withAnimation(.spring(response: 0.12, dampingFraction: 0.7)) { isActive = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) { isActive = false }
+            // Haptic feedback (prepared for instant response)
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.prepare()
+            generator.impactOccurred()
+            
+            isActive = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                isActive = false
             }
             action()
         }
@@ -55,9 +60,7 @@ struct FrostedIconButton: View {
         // Hold keeps it enlarged; release returns to base
         .onLongPressGesture(minimumDuration: 0.15, maximumDistance: .infinity,
                             pressing: { pressing in
-                                withAnimation(.spring(response: 0.12, dampingFraction: 0.8)) {
-                                    isActive = pressing
-                                }
+                                isActive = pressing
                             }, perform: {})
     }
 }
