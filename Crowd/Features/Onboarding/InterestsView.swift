@@ -6,12 +6,14 @@
 //
 
 import SwiftUI
+import ComponentsKit
 
 struct InterestsView: View {
     @State private var selectedInterests: Set<String> = []
     @State private var currentRow = 0
     @State private var autoScrollTimer: Timer?
     
+    let progress: CGFloat
     let onNext: ([String]) -> Void
     let onBack: (() -> Void)?
     
@@ -126,6 +128,21 @@ struct InterestsView: View {
                                 .scrollTargetBehavior(.paging)
                                 .frame(height: 350)
                                 .onAppear {
+                                    // Trigger tiny scroll to make indicator visible from start
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                        // Scroll down slightly to show indicator
+                                        if interests.count > 3 {
+                                            withAnimation(.linear(duration: 0.1)) {
+                                                proxy.scrollTo("interest-3", anchor: .top)
+                                            }
+                                            // Scroll back to top immediately
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                                withAnimation(.linear(duration: 0.1)) {
+                                                    proxy.scrollTo("interest-0", anchor: .top)
+                                                }
+                                            }
+                                        }
+                                    }
                                     startAutoScroll(proxy: proxy)
                                 }
                                 .onDisappear {
@@ -173,6 +190,18 @@ struct InterestsView: View {
                     )
                     .padding(.horizontal, 24)
                     .frame(maxHeight: 600)
+                    .padding(.bottom, 16)
+                
+                // Progress bar outside under the card
+                SUProgressBar(model: ProgressBarVM {
+                    $0.currentValue = progress
+                    $0.maxValue = 100
+                    $0.cornerRadius = .large
+                    $0.style = .striped
+                    $0.color = .accent
+                })
+                .frame(width: UIScreen.main.bounds.width - 80)
+                .padding(.bottom, 20)
                 
                 Spacer()
             }

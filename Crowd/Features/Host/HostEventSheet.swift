@@ -8,6 +8,8 @@
 import SwiftUI
 import CoreLocation
 import MapKit
+import ComponentsKit
+import UIKit
 
 enum TimeMode: String, CaseIterable, Identifiable {
     case now = "Now"
@@ -25,6 +27,8 @@ struct PredefinedLocation: Identifiable {
 
 let untLocations: [PredefinedLocation] = [
     PredefinedLocation(name: "University Union", coordinate: CLLocationCoordinate2D(latitude: 33.2098926, longitude: -97.1514762), searchOverride: nil),
+    PredefinedLocation(name: "University Union – Main Floor", coordinate: CLLocationCoordinate2D(latitude: 33.2098926, longitude: -97.1514762), searchOverride: nil),
+    PredefinedLocation(name: "Union Main Floor", coordinate: CLLocationCoordinate2D(latitude: 33.2106138, longitude: -97.1473253), searchOverride: nil),
     PredefinedLocation(name: "Willis Library", coordinate: CLLocationCoordinate2D(latitude: 33.210113, longitude: -97.1489542), searchOverride: nil),
     PredefinedLocation(name: "Business Leadership Building", coordinate: CLLocationCoordinate2D(latitude: 33.2088579, longitude: -97.147729), searchOverride: nil),
     PredefinedLocation(name: "Sage Hall", coordinate: CLLocationCoordinate2D(latitude: 33.212014, longitude: -97.1467232), searchOverride: nil),
@@ -36,6 +40,7 @@ let untLocations: [PredefinedLocation] = [
     PredefinedLocation(name: "Denton Square", coordinate: CLLocationCoordinate2D(latitude: 33.2150434, longitude: -97.1330684), searchOverride: nil),
     // PredefinedLocation(name: "Clark Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20779, longitude: -97.15143), searchOverride: "Clark Hall"),
     PredefinedLocation(name: "Pohl Recreation Center", coordinate: CLLocationCoordinate2D(latitude: 33.21207, longitude: -97.15404), searchOverride: nil),
+    PredefinedLocation(name: "Eagle Landing Dining Hall", coordinate: CLLocationCoordinate2D(latitude: 33.208596, longitude: -97.146741), searchOverride: nil),
     PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.2106644, longitude: -97.1501177), searchOverride: nil),
     PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.2131446, longitude: -97.1454504), searchOverride: nil),
     PredefinedLocation(name: "Chestnut Hall", coordinate: CLLocationCoordinate2D(latitude: 33.21222, longitude: -97.15255), searchOverride: nil),
@@ -55,6 +60,7 @@ struct HostEventSheet: View {
     @State private var title: String = ""
     @State private var coord: CLLocationCoordinate2D
     @State private var locationName: String = ""
+    @State private var selectedLocationId: String? = "Current Location"
     @State private var category: EventCategory = .other
     @State private var timeMode: TimeMode = .now
     @State private var startDate: Date = Date()
@@ -83,14 +89,20 @@ struct HostEventSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                hostSection
-                titleSection
-                locationSection
-                timeAndTypeSection
-                descriptionSection
+            ScrollView {
+                VStack(spacing: 16) {
+                    hostCard
+                    titleCard
+                    locationCard
+                    timeAndTypeCard
+                    descriptionCard
+                }
+                .frame(maxWidth: 700)
+                .frame(maxWidth: .infinity)
+                .padding()
             }
             .navigationTitle("Start a Crowd")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -106,6 +118,11 @@ struct HostEventSheet: View {
                 // Only initialize location if user hasn't selected one yet
                 if locationName.isEmpty {
                     initializeLocation()
+                    selectedLocationId = nil // No dropdown selection, will show "Current Location" text
+                } else if !locationName.isEmpty {
+                    selectedLocationId = locationName
+                } else {
+                    selectedLocationId = nil // No dropdown selection, will show "Current Location" text
                 }
             }
             .onChange(of: title) { _, _ in
@@ -125,6 +142,12 @@ struct HostEventSheet: View {
             .onChange(of: locationName) { oldValue, newValue in
                 print("📝 locationName changed from '\(oldValue)' to '\(newValue)'")
                 print("📝 Current coord: lat=\(coord.latitude), lon=\(coord.longitude)")
+                // Sync dropdown selection
+                if !newValue.isEmpty && newValue != "Current Location" {
+                    selectedLocationId = newValue
+                } else if newValue.isEmpty {
+                    selectedLocationId = nil // Show "Current Location" text below
+                }
                 generateDescription()
             }
         }
@@ -313,6 +336,9 @@ struct HostEventSheet: View {
         print("🔍 BEFORE createEvent - locationName: '\(locationName)'")
         print("🔍 BEFORE createEvent - sessionUser: \(appState.sessionUser?.displayName ?? "nil"), id: \(appState.sessionUser?.id ?? "nil")")
         
+        // Generate tags from category (ensures emoji is preserved)
+        let tags = [category.defaultTag]
+        
         let event = CrowdEvent.newDraft(
             at: coord,
             title: title.isEmpty ? "Crowd" : title,
@@ -321,17 +347,35 @@ struct HostEventSheet: View {
             category: category.rawValue,
             description: displayedDescription,
             startsAt: finalStartsAt,
-            endsAt: finalEndsAt
+            endsAt: finalEndsAt,
+            tags: tags
         )
         
         // Debug: Print event details
         print("🎯 Creating event '\(event.title)' at location: \(locationName)")
         print("🎯 Event coordinates: lat=\(event.latitude), lon=\(event.longitude)")
+        print("🎯 Event tags: \(event.tags), category: \(event.category ?? "nil")")
         print("🎯 Expected (The Syndicate): lat=33.209850, lon=-97.151470")
         
         // Trigger celebration effects immediately
         showConfetti = true
-        Haptics.light() // Light haptic buzz
+        
+        // Strong haptic representing people screaming and yelling
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(.success)
+        
+        // Additional strong impact haptic for extra intensity
+        let impactGenerator = UIImpactFeedbackGenerator(style: .heavy)
+        impactGenerator.prepare()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            impactGenerator.impactOccurred()
+        }
+        
+        // Second impact for layered effect
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            impactGenerator.impactOccurred(intensity: 0.8)
+        }
         
         // Hide confetti after short duration
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -347,112 +391,193 @@ struct HostEventSheet: View {
         }
     }
     
-    // MARK: - Form Sections
+    // MARK: - Card Sections
     
-    private var hostSection: some View {
-        Section("Host") {
-            HStack(spacing: 12) {
-                if let user = appState.sessionUser {
-                    // Debug logging
-                    let _ = print("🔍 HostEventSheet - sessionUser: \(user.displayName), id: \(user.id), isAnonymous: \(user.id == "anon")")
-                    // Profile image or avatar
-                    Group {
-                        if let profileImageURL = user.profileImageURL, !profileImageURL.isEmpty {
-                            AsyncImage(url: URL(string: profileImageURL)) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            } placeholder: {
+    private var cardModel: CardVM {
+        CardVM {
+            $0.cornerRadius = .medium
+            $0.shadow = .medium
+            $0.backgroundColor = .background
+            $0.borderWidth = .medium
+        }
+    }
+    
+    private var hostCard: some View {
+        SUCard(model: cardModel) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Host")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                
+                HStack(spacing: 12) {
+                    if let user = appState.sessionUser {
+                        let _ = print("🔍 HostEventSheet - sessionUser: \(user.displayName), id: \(user.id), isAnonymous: \(user.id == "anon")")
+                        Group {
+                            if let profileImageURL = user.profileImageURL, !profileImageURL.isEmpty {
+                                AsyncImage(url: URL(string: profileImageURL)) { image in
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                } placeholder: {
+                                    AvatarView(
+                                        name: user.displayName,
+                                        color: user.avatarColor,
+                                        size: 50
+                                    )
+                                }
+                            } else {
                                 AvatarView(
                                     name: user.displayName,
                                     color: user.avatarColor,
                                     size: 50
                                 )
                             }
-                        } else {
-                            AvatarView(
-                                name: user.displayName,
-                                color: user.avatarColor,
-                                size: 50
-                            )
                         }
-                    }
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(user.displayName)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
+                        .frame(width: 50, height: 50)
+                        .clipShape(Circle())
                         
-                        if let handle = user.handle, !handle.isEmpty {
-                            Text(handle)
-                                .font(.system(size: 14, weight: .regular))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(user.displayName)
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.primary)
+                            
+                            if let handle = user.handle, !handle.isEmpty {
+                                Text(handle)
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            if let campus = user.campus, !campus.isEmpty {
+                                Text(campus)
+                                    .font(.system(size: 12, weight: .regular))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Spacer()
+                    } else {
+                        HStack(spacing: 12) {
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(width: 50, height: 50)
+                                .overlay(
+                                    Image(systemName: "person.fill")
+                                        .foregroundColor(.gray)
+                                )
+                            
+                            Text("Loading...")
+                                .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.secondary)
                         }
-                        
-                        if let campus = user.campus, !campus.isEmpty {
-                            Text(campus)
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundColor(.secondary)
-                        }
                     }
-                    
-                    Spacer()
-                } else {
-                    // Fallback for when user is not loaded
-                    HStack(spacing: 12) {
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 50, height: 50)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .foregroundColor(.gray)
-                            )
-                        
-                        Text("Loading...")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-    
-    private var titleSection: some View {
-        Section("Title") {
-            TextField("What's the vibe?", text: $title)
-                .font(.system(size: 18, weight: .medium))
-        }
-    }
-    
-    private var locationSection: some View {
-        Section("Choose a location 📍") {
-            NavigationLink {
-                LocationPickerView(
-                    locationName: $locationName,
-                    coordinate: $coord,
-                    searchText: $searchText,
-                    onUseCurrentLocation: useCurrentLocation
-                )
-            } label: {
-                HStack {
-                    Text(locationName.isEmpty ? "Current Location" : locationName)
-                        .foregroundStyle(locationName.isEmpty ? .secondary : .primary)
-                    Spacer()
                 }
             }
         }
     }
     
-    private var timeAndTypeSection: some View {
-        Section {
-            HStack(spacing: 16) {
-                // Left: Time Mode
-                VStack(alignment: .leading, spacing: 4) {
+    private var titleCard: some View {
+        SUCard(model: cardModel) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Title")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                
+                TextField("What's the vibe?", text: $title)
+                    .font(.system(size: 18, weight: .medium))
+            }
+        }
+    }
+    
+    private var locationCard: some View {
+        SUCard(model: cardModel) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Choose a location 📍")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                
+                Menu {
+                    Button {
+                        selectedLocationId = nil
+                        locationName = ""
+                        useCurrentLocation()
+                    } label: {
+                        Text("📍 Current Location")
+                    }
+                    
+                    ForEach(untLocations, id: \.name) { location in
+                        Button {
+                            selectedLocationId = location.name
+                            locationName = location.name
+                            coord = location.coordinate
+                            Task {
+                                let query = location.searchOverride ?? location.name
+                                if let coord = await searchLocationOnAppleMaps(locationName: query) {
+                                    self.coord = coord
+                                }
+                            }
+                        } label: {
+                            Text(location.name)
+                        }
+                    }
+                } label: {
+                    HStack {
+                        // Placeholder/selected location text
+                        if locationName.isEmpty || selectedLocationId == nil {
+                            Text("📍 Current Location")
+                                .font(.system(size: 16))
+                                .foregroundColor(.secondary)
+                        } else if let locationId = selectedLocationId, let selectedLocation = untLocations.first(where: { $0.name == locationId }) {
+                            Text(selectedLocation.name)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                        } else if !locationName.isEmpty {
+                            Text(locationName)
+                                .font(.system(size: 16))
+                                .foregroundColor(.primary)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: 0x02853E))
+                    }
+                }
+            }
+        }
+    }
+    
+    private func searchLocationOnAppleMaps(locationName: String) async -> CLLocationCoordinate2D? {
+        let searchRequest = MKLocalSearch.Request()
+        let query = locationName.contains("DATCU") || locationName.contains("Stadium") || locationName.contains("Square")
+            ? "\(locationName), Denton, TX"
+            : "\(locationName), UNT, Denton, TX 76203"
+        searchRequest.naturalLanguageQuery = query
+        searchRequest.region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 33.210081, longitude: -97.147700),
+            latitudinalMeters: 3000,
+            longitudinalMeters: 3000
+        )
+        
+        let search = MKLocalSearch(request: searchRequest)
+        
+        do {
+            let response = try await search.start()
+            guard let mapItem = response.mapItems.first else {
+                return nil
+            }
+            return mapItem.placemark.coordinate
+        } catch {
+            return nil
+        }
+    }
+    
+    private var timeAndTypeCard: some View {
+        SUCard(model: cardModel) {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("When")
-                        .font(.caption)
+                        .font(.headline)
                         .foregroundStyle(.secondary)
                     Picker("", selection: $timeMode) {
                         ForEach(TimeMode.allCases) { mode in
@@ -461,46 +586,46 @@ struct HostEventSheet: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                .frame(maxWidth: .infinity)
                 
-                // Right: Category
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Event Type")
-                        .font(.caption)
+                        .font(.headline)
                         .foregroundStyle(.secondary)
+                    
                     Picker("", selection: $category) {
                         ForEach(EventCategory.allCases) { cat in
                             Text(cat.displayName).tag(cat)
                         }
                     }
                     .pickerStyle(.menu)
+                    .foregroundColor(Color(hex: 0x02853E))
                 }
-                .frame(maxWidth: .infinity)
-            }
-            
-            // Show date pickers if planning ahead
-            if timeMode == .planAhead {
-                DatePicker("Start Time", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
-                DatePicker("End Time", selection: $endDate, displayedComponents: [.date, .hourAndMinute])
-            } else {
-                Text("Starting immediately")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                
+                if timeMode == .planAhead {
+                    DatePicker("Start Time", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
+                    DatePicker("End Time", selection: $endDate, displayedComponents: [.date, .hourAndMinute])
+                } else {
+                    Text("Starting immediately")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
     
-    private var descriptionSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
+    private var descriptionCard: some View {
+        SUCard(model: cardModel) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Crowd is generating a description...")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                
                 TextEditor(text: $displayedDescription)
                     .frame(minHeight: 80)
-                    .font(.system(size: 15))
+                    .font(.system(size: 13))
                     .scrollContentBackground(.hidden)
                     .foregroundStyle(.primary)
             }
-        } header: {
-            Text("Crowd is generating a description...")
         }
     }
 }

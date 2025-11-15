@@ -47,18 +47,29 @@ enum TagEmoji {
     ]
 
     static func emoji(for tags: [String], fallbackCategory: String?) -> String {
+        // First, try to match tags directly
         for tag in tags {
             let key = tag.lowercased()
             if let e = tagEmojis[key] { return e }
         }
+        // Then try partial matches in tags
         if let first = tags.first?.lowercased() {
             for (keyword, e) in tagEmojis where first.contains(keyword) { return e }
         }
+        // Fallback to category emoji if category exists
         if let cat = fallbackCategory, let ec = EventCategory(rawValue: cat) {
+            // Try to get emoji from category's default tag first
+            let defaultTag = ec.defaultTag
+            if let e = tagEmojis[defaultTag.lowercased()] {
+                return e
+            }
+            // Otherwise use category's emoji directly
             return ec.emoji
         }
-        return "📅"
+        // Last resort: use "Just Vibing" category emoji instead of calendar
+        return EventCategory.other.emoji
     }
 }
+
 
 

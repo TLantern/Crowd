@@ -48,6 +48,25 @@ enum EventCategory: String, CaseIterable, Identifiable {
         "\(emoji) \(rawValue)"
     }
     
+    // Get a default tag keyword for this category (used when creating events)
+    var defaultTag: String {
+        switch self {
+        case .musicEntertainment: return "music"
+        case .foodDining: return "food"
+        case .sportsFitness: return "sports"
+        case .academicEducation: return "academic"
+        case .artsCulture: return "art"
+        case .socialNetworking: return "networking"
+        case .healthWellness: return "health"
+        case .outdoorNature: return "outdoor"
+        case .gamingEntertainment: return "gaming"
+        case .lifestyleHobbies: return "social"
+        case .politicsActivism: return "politics"
+        case .specialEvents: return "celebration"
+        case .other: return "social"
+        }
+    }
+    
     // Tag mapping for each category
     private var tagKeywords: [String] {
         switch self {

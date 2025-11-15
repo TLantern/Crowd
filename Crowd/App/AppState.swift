@@ -10,6 +10,7 @@ import Combine
 import MapKit
 import CoreLocation
 import FirebaseFirestore
+import SuperwallKit
 
 @MainActor
 final class AppState: ObservableObject {
@@ -118,6 +119,12 @@ final class AppState: ObservableObject {
             await MainActor.run {
                 self.sessionUser = profile
                 print("✅ Loaded user profile: \(profile.displayName)")
+            }
+            
+            // Identify user in Superwall if profile exists (not anonymous)
+            if profile.id != UserProfile.anonymous.id {
+                Superwall.shared.identify(userId: userId)
+                print("✅ Superwall: Identified existing user: \(userId)")
             }
         } catch {
             print("⚠️ Failed to load user profile: \(error.localizedDescription)")

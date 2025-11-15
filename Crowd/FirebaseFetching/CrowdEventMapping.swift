@@ -25,13 +25,21 @@ func matchUNTLocationCoordinate(for raw: String?) -> CLLocationCoordinate2D? {
     // Simple aliases for common variations
     let aliasToCanonical: [String: String] = [
         "union": "university union",
+        "union main floor": "union main floor",
+        "union – main floor": "union main floor",
+        "university union – main floor": "union main floor",
         "super pit": "super pit (unt coliseum)",
         "coliseum": "super pit (unt coliseum)",
         "library": "willis library",
+        "willis library, floor": "willis library",
+        "willis library floor": "willis library",
+        "eagle landing": "eagle landing dining hall",
         "b.l.b": "business leadership building",
         "blb": "business leadership building",
         "stadium": "datcu stadium",
         "rec": "pohl recreation center",
+        "pohl rec center": "pohl recreation center",
+        "basketball courts": "pohl recreation center",
         "music": "unt music building",
         "art": "art building",
         "square": "denton square"
@@ -54,6 +62,30 @@ func matchUNTLocationCoordinate(for raw: String?) -> CLLocationCoordinate2D? {
     return nil
 }
 
+// Find closest known location based on coordinates
+func findClosestLocationName(for coordinate: CLLocationCoordinate2D) -> String? {
+    let eventLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    var closestLocation: PredefinedLocation?
+    var closestDistance: CLLocationDistance = Double.infinity
+    
+    for location in untLocations {
+        let locationPoint = CLLocation(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
+        let distance = eventLocation.distance(from: locationPoint)
+        
+        if distance < closestDistance {
+            closestDistance = distance
+            closestLocation = location
+        }
+    }
+    
+    // Only return if within reasonable distance (500 meters)
+    if let closest = closestLocation, closestDistance <= 500 {
+        return closest.name
+    }
+    
+    return nil
+}
+
 func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     let rawTitle = live.title.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !rawTitle.isEmpty else { return nil }
@@ -73,8 +105,6 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     if let loc = live.locationName, !loc.isEmpty { descPieces.append(loc) }
     if live.sourceType == "instagram" {
         descPieces.append("Posted by @\(live.sourceOrg)")
-    } else {
-        descPieces.append("Hosted by \(live.sourceOrg)")
     }
     var description = descPieces.joined(separator: " • ")
 

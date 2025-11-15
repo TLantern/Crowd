@@ -69,12 +69,19 @@ struct EventNavigationModal: View {
     @State private var messageText: String = ""
     @State private var liveAttendeeCount: Int = 0
     @State private var eventListener: ListenerRegistration?
-    @State private var selectedTab: TabSelection = .map
+    @State private var selectedTab: TabSelection = .chat
     @State private var isSendingMessage = false
+    @State private var showOnboarding = false
+    @State private var onboardingStep: OnboardingStep = .chat
     
     enum TabSelection {
         case map
         case chat
+    }
+    
+    enum OnboardingStep {
+        case chat
+        case map
     }
     
     // MARK: - Body
@@ -111,29 +118,26 @@ struct EventNavigationModal: View {
                                 .padding(.trailing, 12)
                             }
                         }
+                        .padding(.bottom, 4)
                         
                         // Tab switcher
                         HStack(spacing: 0) {
                             TabButton(
-                                title: "Map",
-                                isSelected: selectedTab == .map,
-                                action: { selectedTab = .map }
-                            )
-                            
-                            TabButton(
-                                title: "Chat",
+                                title: "Chat 💬",
                                 isSelected: selectedTab == .chat,
                                 action: { selectedTab = .chat }
                             )
+                            
+                            TabButton(
+                                title: "Map 📍",
+                                isSelected: selectedTab == .map,
+                                action: { selectedTab = .map }
+                            )
                         }
+                        .frame(height: 48)
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
                         .background(Color(hex: 0x02853E))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                        )
                         
                         // Joined status row - centered
                         HStack {
@@ -159,6 +163,7 @@ struct EventNavigationModal: View {
                             }
                             Spacer()
                         }
+                        .frame(height: 48)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(Color(hex: 0x02853E))
@@ -185,10 +190,48 @@ struct EventNavigationModal: View {
                     .ignoresSafeArea(edges: .bottom)
                 }
                 .navigationBarHidden(true)
+                
+                // Onboarding overlay
+                if showOnboarding {
+                    ZStack {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                dismissOnboarding()
+                            }
+                        
+                        if onboardingStep == .chat {
+                            EventNavigationOnboardingCard(
+                                title: "Welcome to Chat 💬",
+                                description: "Chat with people before they arrive at your crowd, or before you head to theirs.",
+                                buttonText: "Next",
+                                onAction: {
+                                    onboardingStep = .map
+                                    selectedTab = .map
+                                }
+                            )
+                        } else {
+                            EventNavigationOnboardingCard(
+                                title: "Welcome to Map 📍",
+                                description: "Use the map to see directions and navigate to the crowd.",
+                                buttonText: "Got it!",
+                                onAction: {
+                                    dismissOnboarding()
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
         // MARK: lifecycle / listeners
         .onAppear {
+            // Check if onboarding should be shown
+            if TutorialManager.shared.shouldShowEventNavigationOnboarding() {
+                showOnboarding = true
+                onboardingStep = .chat
+            }
+            
             // Track screen view
             AnalyticsService.shared.trackScreenView("event_navigation")
             
@@ -460,6 +503,13 @@ struct EventNavigationModal: View {
         }
     }
     
+    // MARK: - Onboarding
+    
+    private func dismissOnboarding() {
+        TutorialManager.shared.markEventNavigationOnboardingComplete()
+        showOnboarding = false
+    }
+    
     // MARK: - Chat
     
     private func sendMessage() {
@@ -513,12 +563,11 @@ struct TabButton: View {
             Text(title)
                 .font(.system(size: 16, weight: isSelected ? .bold : .medium))
                 .foregroundColor(isSelected ? .white : .white.opacity(0.6))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(
                     isSelected
-                    ? Color.white.opacity(0.2)
-                    : Color.black
+                    ? Color.white.opacity(0.3)
+                    : Color.black.opacity(0.2)
                 )
                 .cornerRadius(8)
         }
@@ -556,18 +605,54 @@ struct ChatTabView: View {
                 // Messages list
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(chatService.messages) { message in
-                                ChatMessageBubble(
-                                    message: message.text,
-                                    author: message.userName,
-                                    isCurrentUser: message.isCurrentUser
-                                )
-                                .id(message.id)
+                        VStack(spacing: 12) {
+                            // Show options list when there are no messages
+                            if chatService.messages.isEmpty {
+                                VStack(spacing: 20) {
+                                    Spacer()
+                                        .frame(height: UIScreen.main.bounds.height * 0.25)
+                                    
+                                    OptionsListView(
+                                        optionsString: "What's the vibe right now?, Anyone trying to pull up together? , Who's there already, Is it packed or chill right now?",
+                                        onOptionSelected: { option in
+                                            messageText = option
+                                            sendMessage()
+                                        }
+                                    )
+                                    
+                                    // Emoji bubbles row - centered
+                                    HStack(spacing: 12) {
+                                        Spacer()
+                                        ForEach(["🔥", "👀", "😈", "🤝", "😂"], id: \.self) { emoji in
+                                            BadgeView(
+                                                title: emoji,
+                                                onTap: {
+                                                    messageText = emoji
+                                                    sendMessage()
+                                                }
+                                            )
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 16)
+                                    
+                                    Spacer()
+                                }
                             }
+                            
+                            LazyVStack(spacing: 12) {
+                                ForEach(chatService.messages) { message in
+                                    ChatMessageBubble(
+                                        message: message.text,
+                                        author: message.userName,
+                                        isCurrentUser: message.isCurrentUser
+                                    )
+                                    .id(message.id)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
                         .padding(.bottom, keyboardHeight > 0 ? keyboardHeight + 60 : 0)
                     }
                     .onChange(of: chatService.messages.count) { _, _ in
@@ -625,7 +710,8 @@ struct ChatTabView: View {
                     .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSendingMessage)
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 32)
                 .background(Color(uiColor: .systemBackground))
                 .offset(y: keyboardHeight > 0 ? -keyboardHeight : 0)
             }
@@ -809,5 +895,57 @@ struct LiveIndicatorView: View {
                     pulseScale = 2.0
                 }
             }
+    }
+}
+
+// MARK: - Event Navigation Onboarding Card
+struct EventNavigationOnboardingCard: View {
+    let title: String
+    let description: String
+    let buttonText: String
+    let onAction: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Title
+            Text(title)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+            
+            // Description
+            Text(description)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(.primary.opacity(0.8))
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            
+            // Action button
+            Button(action: onAction) {
+                Text(buttonText)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(hex: 0x02853E))
+                    )
+                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+            }
+            .padding(.top, 4)
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                )
+        )
+        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+        .frame(maxWidth: 340)
     }
 }

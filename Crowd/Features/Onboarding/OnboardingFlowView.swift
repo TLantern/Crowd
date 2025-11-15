@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import SuperwallKit
+import ComponentsKit
 
 struct OnboardingFlowView: View {
     @State private var currentStep: OnboardingStep = .welcome
@@ -26,6 +28,14 @@ struct OnboardingFlowView: View {
         case interests
     }
     
+    var progressValue: CGFloat {
+        switch currentStep {
+        case .welcome: return 0 // No progress bar on welcome page
+        case .profile: return 0 // Start at 0% on "Almost done" page
+        case .interests: return 50 // 50% on interests page
+        }
+    }
+    
     var body: some View {
         ZStack {
             // Welcome Screen
@@ -44,7 +54,8 @@ struct OnboardingFlowView: View {
                 OnboardingProfileView(
                     username: $username,
                     selectedCampus: $selectedCampus,
-                    selectedProfileImage: $selectedProfileImage
+                    selectedProfileImage: $selectedProfileImage,
+                    progress: progressValue
                 ) {
                     withAnimation(.easeInOut(duration: 0.6)) {
                         currentStep = .interests
@@ -55,7 +66,7 @@ struct OnboardingFlowView: View {
             
             // Interests Selection Screen
             if currentStep == .interests {
-                InterestsView(onNext: { interests in
+                InterestsView(progress: progressValue, onNext: { interests in
                     selectedInterests = interests
                     Task {
                         await saveProfileToFirebase()
@@ -123,6 +134,14 @@ struct OnboardingFlowView: View {
                 campus: selectedCampus.isEmpty ? nil : selectedCampus,
                 interestsCount: selectedInterests.count
             )
+            
+            // Identify user in Superwall
+            Superwall.shared.identify(userId: userId)
+            print("✅ Superwall: Identified new user: \(userId)")
+            
+            // Register onboarding completion event (for analytics, paywall only if configured in dashboard)
+            Superwall.shared.register(placement: "onboarding_complete")
+            print("✅ Superwall: Registered onboarding_complete event")
             
             // Save FCM token if available (for verified users)
             if let fcmToken = FirebaseManager.shared.getFCMToken() {

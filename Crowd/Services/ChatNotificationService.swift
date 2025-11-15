@@ -18,6 +18,8 @@ final class ChatNotificationService: ObservableObject {
     private let attendedEventsService = AttendedEventsService.shared
     private var eventListeners: [String: ListenerRegistration] = [:]
     private var lastSeenTimestamps: [String: Date] = [:]
+    private var latestMessageTimestamps: [String: Date] = [:]
+    @Published private(set) var unreadEventIds: Set<String> = []
     private var cancellables = Set<AnyCancellable>()
     private var currentUserId: String?
     
@@ -125,10 +127,15 @@ final class ChatNotificationService: ObservableObject {
                     
                     let messageDate = timestamp.dateValue()
                     
+                    // Track latest message timestamp
+                    self.latestMessageTimestamps[event.id] = messageDate
+                    
                     // Don't notify for own messages
                     if messageUserId == userId {
                         // Update last seen timestamp to current message
                         self.lastSeenTimestamps[event.id] = messageDate
+                        // Mark as read since it's our own message
+                        self.unreadEventIds.remove(event.id)
                         return
                     }
                     
@@ -145,6 +152,14 @@ final class ChatNotificationService: ObservableObject {
                         
                         // Update last seen timestamp
                         self.lastSeenTimestamps[event.id] = messageDate
+                    }
+                    
+                    // Update unread status - check if latest message is newer than last seen
+                    if let lastSeen = self.lastSeenTimestamps[event.id],
+                       messageDate > lastSeen {
+                        self.unreadEventIds.insert(event.id)
+                    } else {
+                        self.unreadEventIds.remove(event.id)
                     }
                 }
             }
@@ -206,10 +221,115 @@ final class ChatNotificationService: ObservableObject {
     
     func markAsRead(eventId: String) {
         lastSeenTimestamps[eventId] = Date()
+        // If there's a latest message, compare with it; otherwise mark as read
+        if let latestMessage = latestMessageTimestamps[eventId] {
+            if Date() >= latestMessage {
+                unreadEventIds.remove(eventId)
+            }
+        } else {
+            unreadEventIds.remove(eventId)
+        }
     }
     
     func updateLastSeen(eventId: String, timestamp: Date) {
         lastSeenTimestamps[eventId] = timestamp
+        // Update unread status based on latest message
+        if let latestMessage = latestMessageTimestamps[eventId],
+           latestMessage > timestamp {
+            unreadEventIds.insert(eventId)
+        } else {
+            unreadEventIds.remove(eventId)
+        }
+    }
+    
+    func hasUnreadMessages(eventId: String) -> Bool {
+        return unreadEventIds.contains(eventId)
+    }
+    
+    // MARK: - Anchor Chat Tracking
+    
+    func startListeningToAnchor(anchorId: String, anchorName: String) {
+        guard let userId = currentUserId else { return }
+        
+        // Don't start duplicate listeners
+        guard eventListeners[anchorId] == nil else {
+            return
+        }
+        
+        print("🔔 ChatNotificationService: Starting listener for anchor \(anchorId) - \(anchorName)")
+        
+        // Initialize last seen timestamp if not exists
+        if lastSeenTimestamps[anchorId] == nil {
+            lastSeenTimestamps[anchorId] = Date()
+        }
+        
+        let listener = db.collection("eventChats")
+            .document(anchorId)
+            .collection("messages")
+            .order(by: "timestamp", descending: true)
+            .limit(to: 1)
+            .addSnapshotListener { [weak self] snapshot, error in
+                Task { @MainActor in
+                    guard let self = self else { return }
+                    
+                    if let error = error {
+                        print("❌ ChatNotificationService: Error listening to anchor messages \(anchorId) - \(error.localizedDescription)")
+                        return
+                    }
+                    
+                    guard let documents = snapshot?.documents,
+                          let latestDoc = documents.first,
+                          let data = latestDoc.data() as? [String: Any],
+                          let messageUserId = data["userId"] as? String,
+                          let userName = data["userName"] as? String,
+                          let text = data["text"] as? String,
+                          let timestamp = data["timestamp"] as? Timestamp else {
+                        return
+                    }
+                    
+                    let messageDate = timestamp.dateValue()
+                    
+                    // Track latest message timestamp
+                    self.latestMessageTimestamps[anchorId] = messageDate
+                    
+                    // Don't notify for own messages
+                    if messageUserId == userId {
+                        self.lastSeenTimestamps[anchorId] = messageDate
+                        self.unreadEventIds.remove(anchorId)
+                        return
+                    }
+                    
+                    // Update unread status - check if latest message is newer than last seen
+                    if let lastSeen = self.lastSeenTimestamps[anchorId],
+                       messageDate > lastSeen {
+                        self.unreadEventIds.insert(anchorId)
+                    } else {
+                        self.unreadEventIds.remove(anchorId)
+                    }
+                }
+            }
+        
+        eventListeners[anchorId] = listener
+    }
+    
+    func stopListeningToAnchor(anchorId: String) {
+        stopListening(to: anchorId)
+    }
+    
+    // MARK: - Mock/Testing
+    
+    func addMockUnreadMessages(eventIds: [String]) {
+        // Add mock unread messages for testing
+        let now = Date()
+        for eventId in eventIds {
+            // Set last seen to past
+            lastSeenTimestamps[eventId] = now.addingTimeInterval(-3600) // 1 hour ago
+            // Set latest message to now (newer than last seen)
+            latestMessageTimestamps[eventId] = now
+            // Mark as unread
+            unreadEventIds.insert(eventId)
+        }
+        print("🧪 ChatNotificationService: Added mock unread messages for \(eventIds.count) events")
     }
 }
 

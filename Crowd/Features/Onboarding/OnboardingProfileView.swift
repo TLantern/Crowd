@@ -7,6 +7,7 @@
 
 import SwiftUI
 import PhotosUI
+import ComponentsKit
 
 struct OnboardingProfileView: View {
     @Binding var username: String
@@ -18,17 +19,19 @@ struct OnboardingProfileView: View {
     @State private var isCheckingHandle = false
     @State private var usernameError: String?
     
+    let progress: CGFloat
     let onNext: () -> Void
     
-    init(username: Binding<String> = .constant(""), selectedCampus: Binding<String> = .constant("UNT"), selectedProfileImage: Binding<UIImage?> = .constant(nil), onNext: @escaping () -> Void) {
+    init(username: Binding<String> = .constant(""), selectedCampus: Binding<String> = .constant("UNT"), selectedProfileImage: Binding<UIImage?> = .constant(nil), progress: CGFloat = 0, onNext: @escaping () -> Void) {
         self._username = username
         self._selectedCampus = selectedCampus
         self._selectedProfileImage = selectedProfileImage
+        self.progress = progress
         self.onNext = onNext
         
-        // Set default if empty
-        if self.selectedCampus.isEmpty {
-            self.selectedCampus = "UNT"
+        // Set default if empty (after all properties are initialized)
+        if selectedCampus.wrappedValue.isEmpty {
+            selectedCampus.wrappedValue = "UNT"
         }
     }
     
@@ -188,6 +191,18 @@ struct OnboardingProfileView: View {
                     )
                     .padding(.horizontal, 24)
                     .frame(maxHeight: 600)
+                    .padding(.bottom, 16)
+                
+                // Progress bar outside under the card
+                SUProgressBar(model: ProgressBarVM {
+                    $0.currentValue = progress
+                    $0.maxValue = 100
+                    $0.cornerRadius = .large
+                    $0.style = .striped
+                    $0.color = .accent
+                })
+                .frame(width: UIScreen.main.bounds.width - 80)
+                .padding(.bottom, 20)
                 
                 Spacer()
             }
@@ -271,7 +286,7 @@ struct ImagePicker: UIViewControllerRepresentable {
 }
 
 #Preview {
-    OnboardingProfileView {
+    OnboardingProfileView(progress: 33.33) {
         print("Next tapped")
     }
 }

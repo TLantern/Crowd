@@ -48,7 +48,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "331"
             endingLineNumber = "331"
-            landmarkName = "handleCameraChange(_:)"
+            landmarkName = "collapsedClusterAnnotation(cluster:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

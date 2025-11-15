@@ -1466,6 +1466,164 @@ exports.sendSocialLinkReminder = functions.pubsub
     } catch (error) {
       console.error('❌ Error in sendSocialLinkReminder:', error);
       return null;
+  }
+});
+
+// Scheduled: Anchor Notifications
+// Runs every minute to check for anchors that need notifications sent
+exports.sendAnchorNotifications = functions.pubsub
+  .schedule('* * * * *')  // Every minute
+  .timeZone('America/Chicago')
+  .onRun(async (context) => {
+    console.log('🔔 Anchor notification check triggered');
+    
+    try {
+      const now = new Date();
+      const chicagoTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+      const currentHour = chicagoTime.getHours();
+      const currentMinute = chicagoTime.getMinutes();
+      const currentDay = chicagoTime.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      
+      // Map day number to abbreviation
+      const dayAbbrevs = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const currentDayAbbrev = dayAbbrevs[currentDay];
+      
+      // Get all anchors that should send notifications
+      const anchorsSnapshot = await db.collection('anchors')
+        .where('send_notification', '==', true)
+        .get();
+      
+      if (anchorsSnapshot.empty) {
+        console.log('📭 No anchors with notifications enabled');
+        return null;
+      }
+      
+      const notificationsToSend = [];
+      
+      anchorsSnapshot.forEach(doc => {
+        const anchor = doc.data();
+        const anchorId = anchor.id || doc.id;
+        
+        // Check if anchor is active today
+        const daysActive = anchor.days_active || [];
+        if (!daysActive.includes(currentDayAbbrev)) {
+          return; // Skip if not active today
+        }
+        
+        // Check notification time
+        const notificationTime = anchor.notification_time_local;
+        if (!notificationTime) {
+          return; // Skip if no notification time
+        }
+        
+        const [hour, minute] = notificationTime.split(':').map(Number);
+        if (hour === currentHour && minute === currentMinute) {
+          // Check if notification was already sent today
+          const dateString = chicagoTime.toISOString().split('T')[0];
+          const logId = `${anchorId}_${dateString}_${currentDay}`;
+          
+          notificationsToSend.push({
+            anchorId,
+            anchorName: anchor.name || 'Unknown Anchor',
+            notificationMessage: anchor.notification_message || '',
+            location: anchor.location || '',
+            logId
+          });
+        }
+      });
+      
+      if (notificationsToSend.length === 0) {
+        console.log('📭 No anchor notifications to send at this time');
+        return null;
+      }
+      
+      // Check for duplicates and send notifications
+      for (const notification of notificationsToSend) {
+        // Check if already logged
+        const logDoc = await db.collection('anchor_notification_logs').doc(notification.logId).get();
+        if (logDoc.exists) {
+          console.log(`⏭️ Skipping duplicate notification for anchor ${notification.anchorId}`);
+          continue;
+        }
+        
+        // Get all users with FCM tokens
+        const usersSnapshot = await db.collection('users')
+          .where('fcmToken', '!=', null)
+          .get();
+        
+        if (usersSnapshot.empty) {
+          console.log('📭 No users with FCM tokens found');
+          continue;
+        }
+        
+        const tokens = [];
+        usersSnapshot.forEach(userDoc => {
+          const user = userDoc.data();
+          if (user.fcmToken) {
+            tokens.push(user.fcmToken);
+          }
+        });
+        
+        console.log(`📬 Sending anchor notification for ${notification.anchorName} to ${tokens.length} user(s)`);
+        
+        const message = {
+          tokens: tokens,
+          notification: {
+            title: notification.anchorName,
+            body: notification.notificationMessage,
+          },
+          data: {
+            type: 'anchor_notification',
+            anchorId: notification.anchorId,
+            anchorName: notification.anchorName,
+            location: notification.location,
+          },
+          apns: {
+            headers: {
+              'apns-priority': '5',
+              'apns-push-type': 'alert',
+            },
+            payload: {
+              aps: {
+                alert: {
+                  title: notification.anchorName,
+                  body: notification.notificationMessage,
+                },
+                sound: 'default',
+              },
+            },
+          },
+          android: {
+            priority: 'normal',
+            notification: {
+              sound: 'default',
+              channelId: 'anchor_notifications',
+            },
+          },
+        };
+        
+        const response = await admin.messaging().sendMulticast(message);
+        
+        console.log(`✅ Successfully sent: ${response.successCount} notification(s) for anchor ${notification.anchorId}`);
+        console.log(`❌ Failed to send: ${response.failureCount} notification(s)`);
+        
+        // Log to Firestore to prevent duplicates
+        await db.collection('anchor_notification_logs').doc(notification.logId).set({
+          anchorId: notification.anchorId,
+          anchorName: notification.anchorName,
+          notificationTime: `${currentHour}:${currentMinute.toString().padStart(2, '0')}`,
+          date: chicagoTime.toISOString().split('T')[0],
+          weekday: currentDay,
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          successCount: response.successCount,
+          failureCount: response.failureCount
+        });
+      }
+      
+      return { success: true, sent: notificationsToSend.length };
+    } catch (error) {
+      console.error('❌ Error in sendAnchorNotifications:', error);
+      return null;
     }
   });
 

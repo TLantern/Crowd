@@ -109,6 +109,17 @@ final class FirebaseEventRepository: EventRepository {
         let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
         let geohash = coordinate.geohash(precision: 6)
         
+        // Ensure tags and category are never missing before saving
+        let finalCategory = event.category ?? EventCategory.other.rawValue
+        var finalTags = event.tags
+        if finalTags.isEmpty {
+            if let cat = EventCategory(rawValue: finalCategory) {
+                finalTags = [cat.defaultTag]
+            } else {
+                finalTags = [EventCategory.other.defaultTag]
+            }
+        }
+        
         let data: [String: Any] = [
             "id": event.id,
             "title": event.title,
@@ -117,8 +128,8 @@ final class FirebaseEventRepository: EventRepository {
             "radiusMeters": event.radiusMeters,
             "startsAt": event.startsAt?.timeIntervalSince1970 ?? Date().timeIntervalSince1970,
             "endsAt": event.endsAt?.timeIntervalSince1970,
-            "tags": event.tags,
-            "category": event.category ?? EventCategory.other.rawValue,
+            "tags": finalTags,
+            "category": finalCategory,
             "geohash": geohash,
             "hostId": event.hostId,
             "hostName": event.hostName,
@@ -666,8 +677,21 @@ final class FirebaseEventRepository: EventRepository {
             endsAt = Date(timeIntervalSince1970: seconds)
         }
         
-        // Parse tags
-        let tags = data["tags"] as? [String] ?? []
+        // Parse tags - ensure never empty
+        var tags = data["tags"] as? [String] ?? []
+        
+        // Parse category - ensure never nil
+        var category = data["category"] as? String ?? EventCategory.other.rawValue
+        
+        // If tags are empty but category exists, generate tags from category
+        if tags.isEmpty {
+            if let cat = EventCategory(rawValue: category) {
+                tags = [cat.defaultTag]
+            } else {
+                tags = [EventCategory.other.defaultTag]
+                category = EventCategory.other.rawValue
+            }
+        }
         
         // Parse createdAt
         var createdAt = Date()
@@ -690,7 +714,8 @@ final class FirebaseEventRepository: EventRepository {
             createdAt: createdAt,
             signalStrength: signalStrength,
             attendeeCount: attendeeCount,
-            tags: tags
+            tags: tags,
+            category: category
         )
     }
 }

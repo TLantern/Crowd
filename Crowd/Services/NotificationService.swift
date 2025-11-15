@@ -187,39 +187,63 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         AnalyticsService.shared.logToFirestore(eventName: "push_opened", properties: pushProps)
         
         // Parse notification data
-        if let notificationType = userInfo["type"] as? String,
-           notificationType == "chat_message",
-           let eventId = userInfo["eventId"] as? String {
-            print("📲 Navigate to event chat: \(eventId)")
-            
-            // Mark chat as read
-            ChatNotificationService.shared.markAsRead(eventId: eventId)
-            
-            // Post notification to trigger navigation in app
-            NotificationCenter.default.post(
-                name: .navigateToEventFromNotification,
-                object: nil,
-                userInfo: ["eventId": eventId]
-            )
-        } else if let eventId = userInfo["eventId"] as? String {
-            print("📲 Navigate to event: \(eventId)")
-            
-            // Post notification to trigger navigation in app
-            NotificationCenter.default.post(
-                name: .navigateToEventFromNotification,
-                object: nil,
-                userInfo: ["eventId": eventId]
-            )
-        } else if let notificationType = userInfo["type"] as? String {
-            print("📲 Notification type: \(notificationType)")
-            
-            // Handle promotional notifications differently if needed
-            if notificationType == "promotional" {
-                // Could navigate to create event screen or just stay on home
+        if let notificationType = userInfo["type"] as? String {
+            if notificationType == "anchor_notification",
+               let anchorId = userInfo["anchorId"] as? String,
+               let anchorName = userInfo["anchorName"] as? String {
+                print("📲 Anchor notification tapped: \(anchorName)")
+                
+                // Get notification time from anchor data or use current time
+                let notificationTime = userInfo["notificationTime"] as? String ?? {
+                    let formatter = DateFormatter()
+                    formatter.dateFormat = "HH:mm"
+                    formatter.timeZone = TimeZone(identifier: "America/Chicago")
+                    return formatter.string(from: Date())
+                }()
+                
+                // Mark notification as sent
+                Task {
+                    await AnchorNotificationService.shared.markNotificationSent(
+                        anchorId: anchorId,
+                        anchorName: anchorName,
+                        notificationTime: notificationTime
+                    )
+                }
+                
+                // Could navigate to anchor location on map in the future
+            } else if notificationType == "chat_message",
+                      let eventId = userInfo["eventId"] as? String {
+                print("📲 Navigate to event chat: \(eventId)")
+                
+                // Mark chat as read
+                ChatNotificationService.shared.markAsRead(eventId: eventId)
+                
+                // Post notification to trigger navigation in app
                 NotificationCenter.default.post(
-                    name: .showHostSheetFromNotification,
-                    object: nil
+                    name: .navigateToEventFromNotification,
+                    object: nil,
+                    userInfo: ["eventId": eventId]
                 )
+            } else if let eventId = userInfo["eventId"] as? String {
+                print("📲 Navigate to event: \(eventId)")
+                
+                // Post notification to trigger navigation in app
+                NotificationCenter.default.post(
+                    name: .navigateToEventFromNotification,
+                    object: nil,
+                    userInfo: ["eventId": eventId]
+                )
+            } else {
+                print("📲 Notification type: \(notificationType)")
+                
+                // Handle promotional notifications differently if needed
+                if notificationType == "promotional" {
+                    // Could navigate to create event screen or just stay on home
+                    NotificationCenter.default.post(
+                        name: .showHostSheetFromNotification,
+                        object: nil
+                    )
+                }
             }
         }
         

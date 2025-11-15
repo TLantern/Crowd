@@ -8,6 +8,7 @@
 import UIKit
 import FirebaseCore
 import FirebaseMessaging
+import SuperwallKit
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     
@@ -20,6 +21,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Firebase is already configured in FirebaseManager.shared
         // Just ensure it's initialized
         _ = FirebaseManager.shared
+        
+        // Configure Superwall
+        // Note: StoreKit "No active account" errors are expected when no Apple ID is signed in
+        // These are harmless and won't affect app functionality
+        let config = Config.build()
+        Superwall.configure(apiKey: config.superwallAPIKey)
+        print("✅ Superwall configured")
         
         return true
     }

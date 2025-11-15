@@ -22,10 +22,11 @@ struct EventDetailView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showCancelConfirmation = false
     @State private var showNavigationModal = false
-    @State private var showLeaveConfirmation = false
     @ObservedObject private var attendedEventsService = AttendedEventsService.shared
     @State private var liveAttendeeCount: Int = 0
     @State private var eventListener: ListenerRegistration?
+    @State private var displayDescription: String?
+    @State private var isGeneratingDescription = false
     
     var currentUserName: String {
         appState.sessionUser?.displayName ?? "You"
@@ -55,7 +56,7 @@ struct EventDetailView: View {
                             if isHost {
                                 showCancelConfirmation = true
                             } else {
-                                showLeaveConfirmation = true
+                                leaveEvent()
                             }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
@@ -130,15 +131,49 @@ struct EventDetailView: View {
                             Text("Location")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.secondary)
-                            if event.radiusMeters > 0 {
-                                Text("Within \(Int(event.radiusMeters))m")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.primary)
+                            
+                            Group {
+                                if let raw = event.rawLocationName, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text(raw)
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.primary)
+                                } else if let closestName = findClosestLocationName(for: event.coordinates) {
+                                    Text(closestName)
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.primary)
+                                }
                             }
-                            if let raw = event.rawLocationName, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Text(raw)
-                                    .font(.system(size: 14))
+                        }
+                        
+                        // Description
+                        if let description = displayDescription, !description.isEmpty {
+                            VStack(spacing: 8) {
+                                Text("Description")
+                                    .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                
+                                Text(description)
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.primary)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.horizontal, 5)
+                            }
+                        } else if isGeneratingDescription {
+                            VStack(spacing: 8) {
+                                Text("Description")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                
+                                HStack {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text("Generating description...")
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
                     }
@@ -153,7 +188,7 @@ struct EventDetailView: View {
                 if hasJoined {
                     // Leave button (red)
                     Button {
-                        showLeaveConfirmation = true
+                        leaveEvent()
                     } label: {
                         Text("Leave")
                             .font(.system(size: 18, weight: .semibold))
@@ -176,8 +211,22 @@ struct EventDetailView: View {
                         generator.impactOccurred()
                         
                         Task {
-                            // Check if this is the first event join
-                            let isFirstEvent = AttendedEventsService.shared.getAttendedEvents().isEmpty
+                            // Check if this is the first event join (before leaving any previous event)
+                            let wasFirstEvent = AttendedEventsService.shared.getAttendedEvents().isEmpty
+                            
+                            // Leave previous event if user is already in one
+                            let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
+                            if let previousEvent = attendedEvents.first(where: { $0.id != event.id }) {
+                                print("🔄 Leaving previous event before joining new one: \(previousEvent.id)")
+                                await viewModel.leaveEvent(event: previousEvent)
+                                
+                                // Clear currentJoinedEvent if it matches
+                                await MainActor.run {
+                                    if appState.currentJoinedEvent?.id == previousEvent.id {
+                                        appState.currentJoinedEvent = nil
+                                    }
+                                }
+                            }
                             
                             let success = await viewModel.joinEvent(event: event)
                             if success {
@@ -185,7 +234,7 @@ struct EventDetailView: View {
                                     appState.currentJoinedEvent = event
                                     
                                     // Request app rating if this is the first event
-                                    if isFirstEvent {
+                                    if wasFirstEvent {
                                         AppRatingService.shared.requestRatingIfNeeded(isFirstEvent: true)
                                     }
                                     
@@ -236,6 +285,15 @@ struct EventDetailView: View {
             // Initialize with current event count
             liveAttendeeCount = event.attendeeCount
             startEventListener()
+            
+            // Always prioritize event's description field (from HostEventSheet or other sources)
+            // Only generate a new description if the event doesn't have one
+            if let existingDescription = event.description, !existingDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                displayDescription = existingDescription
+            } else {
+                // Only generate if no description exists
+                generateDescription()
+            }
         }
         .onDisappear {
             eventListener?.remove()
@@ -263,14 +321,6 @@ struct EventDetailView: View {
         } message: {
             Text("Are you sure you want to cancel this crowd? This action cannot be undone.")
         }
-        .confirmationDialog("Leave Crowd", isPresented: $showLeaveConfirmation, titleVisibility: .visible) {
-            Button("Leave Crowd", role: .destructive) {
-                leaveEvent()
-            }
-            Button("Stay", role: .cancel) {}
-        } message: {
-            Text("Are you sure you want to leave this crowd?")
-        }
         .fullScreenCover(isPresented: $showNavigationModal) {
             EventNavigationModal(event: event)
         }
@@ -280,6 +330,91 @@ struct EventDetailView: View {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+    }
+    
+    private func generateDescription() {
+        isGeneratingDescription = true
+        
+        Task {
+            let description = await createEventDescription(for: event)
+            await MainActor.run {
+                displayDescription = description
+                isGeneratingDescription = false
+            }
+        }
+    }
+    
+    private func createEventDescription(for event: CrowdEvent) async -> String {
+        var parts: [String] = []
+        
+        // Add location context
+        let locationName: String = {
+            if let raw = event.rawLocationName, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return raw
+            } else if let closest = findClosestLocationName(for: event.coordinates) {
+                return closest
+            } else {
+                return "this awesome spot"
+            }
+        }()
+        
+        // Build description based on event info
+        let emoji = TagEmoji.emoji(for: event.tags, fallbackCategory: event.category)
+        
+        // Fun opening phrases
+        let funOpenings = [
+            "Get ready to vibe",
+            "Come hang out",
+            "Let's make it happen",
+            "Time to connect",
+            "Join the fun",
+            "Don't miss out"
+        ]
+        let opening = funOpenings.randomElement() ?? "Join us"
+        
+        // Start with a fun, contextual sentence about the event
+        parts.append("\(emoji) \(opening) for \(event.title) at \(locationName)!")
+        
+        // Add time context if available with fun phrasing
+        if let start = event.startsAt {
+            let calendar = Calendar.current
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            
+            if calendar.isDateInToday(start) {
+                parts.append("Kicking off today at \(formatter.string(from: start)) - see you there! 🎉")
+            } else if calendar.isDateInTomorrow(start) {
+                parts.append("Mark your calendar for tomorrow at \(formatter.string(from: start)) - it's going to be epic! ⭐")
+            } else {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateStyle = .medium
+                dateFormatter.timeStyle = .short
+                parts.append("Save the date: \(dateFormatter.string(from: start)) - you won't want to miss this! 📅")
+            }
+        }
+        
+        // Add category/tag context with fun phrasing
+        if let category = event.category, let cat = EventCategory(rawValue: category) {
+            let categoryContext = cat.rawValue.lowercased()
+            let funEndings = [
+                "Perfect for \(categoryContext) enthusiasts!",
+                "A \(categoryContext) experience you'll love!",
+                "Calling all \(categoryContext) fans!",
+                "The ultimate \(categoryContext) gathering!"
+            ]
+            parts.append(funEndings.randomElement() ?? "A \(categoryContext) event you'll love!")
+        } else if !event.tags.isEmpty {
+            let tagContext = event.tags.prefix(2).joined(separator: " and ")
+            let funTagEndings = [
+                "Perfect for anyone into \(tagContext)!",
+                "If you love \(tagContext), this is for you!",
+                "Calling all \(tagContext) enthusiasts!",
+                "A must-attend for \(tagContext) fans!"
+            ]
+            parts.append(funTagEndings.randomElement() ?? "Perfect for anyone interested in \(tagContext)!")
+        }
+        
+        return parts.joined(separator: " ")
     }
     
     

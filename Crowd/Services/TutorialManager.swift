@@ -11,6 +11,7 @@ final class TutorialManager {
     static let shared = TutorialManager()
     
     private let hasCompletedTutorialKey = "hasCompletedTutorial"
+    private let hasSeenEventNavigationOnboardingKey = "hasSeenEventNavigationOnboarding"
     
     private init() {}
     
@@ -29,6 +30,17 @@ final class TutorialManager {
     func resetTutorial() {
         UserDefaults.standard.set(false, forKey: hasCompletedTutorialKey)
         print("🔄 Tutorial reset - will show again")
+    }
+    
+    /// Check if EventNavigationModal onboarding should be shown
+    func shouldShowEventNavigationOnboarding() -> Bool {
+        return !UserDefaults.standard.bool(forKey: hasSeenEventNavigationOnboardingKey)
+    }
+    
+    /// Mark EventNavigationModal onboarding as completed
+    func markEventNavigationOnboardingComplete() {
+        UserDefaults.standard.set(true, forKey: hasSeenEventNavigationOnboardingKey)
+        print("✅ EventNavigationModal onboarding marked as completed")
     }
 }
 

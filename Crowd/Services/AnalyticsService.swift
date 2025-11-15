@@ -195,4 +195,36 @@ final class AnalyticsService {
         }
         track("filter_changed", props: props)
     }
+    
+    // MARK: - Anchor Tracking
+    
+    func trackAnchorActivated(anchorId: String, anchorName: String, location: String, zone: String? = nil) {
+        let props: [String: Any] = [
+            "anchor_id": anchorId,
+            "anchor_name": anchorName,
+            "location": location
+        ]
+        track("anchor_activated", props: props)
+        logToFirestore(eventName: "anchor_activated", properties: props, zone: zone)
+    }
+    
+    func trackAnchorNotificationSent(anchorId: String, anchorName: String, notificationTime: String) {
+        let props: [String: Any] = [
+            "anchor_id": anchorId,
+            "anchor_name": anchorName,
+            "notification_time": notificationTime
+        ]
+        track("anchor_notification_sent", props: props)
+        logToFirestore(eventName: "anchor_notification_sent", properties: props)
+    }
+    
+    func trackAnchorPinTapped(anchorId: String, anchorName: String, location: String) {
+        let props: [String: Any] = [
+            "anchor_id": anchorId,
+            "anchor_name": anchorName,
+            "location": location
+        ]
+        track("anchor_pin_tapped", props: props)
+        logToFirestore(eventName: "anchor_pin_tapped", properties: props)
+    }
 }

@@ -14,6 +14,7 @@ struct CrowdHomeView: View {
     @Environment(\.appEnvironment) var env
     @EnvironmentObject private var appState: AppState
     @ObservedObject private var locationService = AppEnvironment.current.location
+    @ObservedObject private var chatNotificationService = ChatNotificationService.shared
     
     // MARK: - Region & camera
     @State private var selectedRegion: CampusRegion = .mainCampus
@@ -71,6 +72,100 @@ struct CrowdHomeView: View {
     @State private var liveAttendeeCount: Int = 0
     @State private var eventListener: ListenerRegistration?
     @State private var showNavigationModal = false
+    
+    // MARK: - Anchors
+    @StateObject private var anchorService = AnchorService.shared
+    @State private var selectedAnchor: Anchor?
+    @State private var showAnchorNavigationModal = false
+    @State private var expandedAnchorGroupId: String? = nil // Track which anchor group is expanded
+    
+    private var anchorsToDisplay: [Anchor] {
+        anchorService.activeAnchors
+    }
+    
+    // Group anchors by location (same coordinates)
+    private func groupAnchorsByLocation(_ anchors: [Anchor]) -> [[Anchor]] {
+        var groups: [[Anchor]] = []
+        var processedIds = Set<String>()
+        
+        for anchor in anchors {
+            guard let coord = anchor.coordinates, !processedIds.contains(anchor.id) else { continue }
+            
+            // Find all anchors at the same location (within 5 meters)
+            var group: [Anchor] = [anchor]
+            processedIds.insert(anchor.id)
+            
+            for otherAnchor in anchors {
+                guard let otherCoord = otherAnchor.coordinates,
+                      !processedIds.contains(otherAnchor.id) else { continue }
+                
+                let location1 = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+                let location2 = CLLocation(latitude: otherCoord.latitude, longitude: otherCoord.longitude)
+                let distance = location1.distance(from: location2)
+                
+                if distance <= 5.0 { // Same location threshold
+                    group.append(otherAnchor)
+                    processedIds.insert(otherAnchor.id)
+                }
+            }
+            
+            groups.append(group)
+        }
+        
+        return groups
+    }
+    
+    // Generate a unique ID for an anchor group based on its center coordinates
+    private func anchorGroupId(for group: [Anchor]) -> String {
+        guard let firstAnchor = group.first,
+              let coord = firstAnchor.coordinates else {
+            return UUID().uuidString
+        }
+        // Use coordinates rounded to 6 decimal places as group ID
+        return "\(String(format: "%.6f", coord.latitude))_\(String(format: "%.6f", coord.longitude))"
+    }
+    
+    // Calculate expanded coordinate for anchor in a group
+    private func expandedAnchorCoordinate(
+        anchor: Anchor,
+        group: [Anchor],
+        center: CLLocationCoordinate2D,
+        groupId: String
+    ) -> CLLocationCoordinate2D {
+        // Only expand if this group is selected/expanded
+        guard group.count > 1, expandedAnchorGroupId == groupId else {
+            return center
+        }
+        
+        guard let index = group.firstIndex(where: { $0.id == anchor.id }) else {
+            return center
+        }
+        
+        // Fixed spacing when expanded (250 meters between anchors)
+        let spacingMeters: Double = 250.0
+        
+        let totalWidth = Double(group.count - 1) * spacingMeters
+        let startOffset = -totalWidth / 2.0
+        let anchorOffset = startOffset + (Double(index) * spacingMeters)
+        
+        // Convert meters to degrees (longitude offset)
+        let lonOffset = anchorOffset / (111000.0 * cos(center.latitude * .pi / 180.0))
+        
+        return CLLocationCoordinate2D(
+            latitude: center.latitude,
+            longitude: center.longitude + lonOffset
+        )
+    }
+    
+    // Calculate scale factor for anchor pins based on zoom (similar to event annotations)
+    private func anchorScaleFactor(cameraDistance: Double) -> CGFloat {
+        // Scale inversely with distance to maintain constant screen size
+        // Base reference distance (1000m) = scale 1.0
+        let referenceDistance: Double = 1000.0
+        let scale = referenceDistance / max(cameraDistance, 100.0) // Minimum scale at very close zoom
+        // Clamp between 0.3x and 3.0x, similar to how event annotations scale
+        return CGFloat(min(max(scale, 0.3), 3.0))
+    }
     
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
@@ -274,6 +369,7 @@ struct CrowdHomeView: View {
     // MARK: - Map View
     private var mapView: some View {
         Map(position: $cameraPosition) {
+            // Event clusters (rendered first)
             ForEach(currentEventsClusters) { cluster in
                 if expandedClusterId == cluster.id && cluster.eventCount > 1 {
                     expandedClusterAnnotations(cluster: cluster)
@@ -282,24 +378,78 @@ struct CrowdHomeView: View {
                 }
             }
             
+            // Anchor annotations (only show on user-created events view, not school-hosted)
+            if sourceFilter == .user {
+                let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
+                ForEach(Array(anchorGroups.enumerated()), id: \.offset) { index, group in
+                    if let firstAnchor = group.first,
+                       let centerCoord = firstAnchor.coordinates {
+                        let groupId = anchorGroupId(for: group)
+                        let isExpanded = expandedAnchorGroupId == groupId
+                        
+                        if isExpanded && group.count > 1 {
+                            // Show all anchors spread out when expanded
+                            ForEach(group, id: \.id) { anchor in
+                                let displayCoord = expandedAnchorCoordinate(
+                                    anchor: anchor,
+                                    group: group,
+                                    center: centerCoord,
+                                    groupId: groupId
+                                )
+                                
+                                Annotation("", coordinate: displayCoord) {
+                                    AnchorAnnotationView(anchor: anchor) {
+                                        handleAnchorTap(anchor)
+                                    }
+                                    .scaleEffect(anchorScaleFactor(cameraDistance: currentCameraDistance))
+                                }
+                                .annotationTitles(.hidden)
+                            }
+                        } else {
+                            // Show single pin representing the group
+                            Annotation("", coordinate: centerCoord) {
+                                AnchorAnnotationView(
+                                    anchor: firstAnchor,
+                                    count: group.count > 1 ? group.count : nil
+                                ) {
+                                    handleAnchorGroupTap(group: group, groupId: groupId)
+                                }
+                                .scaleEffect(anchorScaleFactor(cameraDistance: currentCameraDistance))
+                            }
+                            .annotationTitles(.hidden)
+                        }
+                    }
+                }
+            }
+            
+            // User location annotation (rendered last to ensure it's always on top)
             if let userLocation = locationService.lastKnown {
                 userLocationAnnotation(coordinate: userLocation)
             }
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            if showClusterDropdown {
-                dismissClusterDropdown()
-            } else if showSearchResults {
-                isSearchFocused = false
-                showSearchResults = false
-            } else if expandedClusterId != nil {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    expandedClusterId = nil
+        .simultaneousGesture(
+            TapGesture()
+                .onEnded { _ in
+                    // Only handle map taps if no dropdown/search is active
+                    if showClusterDropdown {
+                        dismissClusterDropdown()
+                    } else if showSearchResults {
+                        isSearchFocused = false
+                        showSearchResults = false
+                    } else if expandedAnchorGroupId != nil {
+                        // Collapse expanded anchor groups when tapping on map
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            expandedAnchorGroupId = nil
+                        }
+                    } else if expandedClusterId != nil {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            expandedClusterId = nil
+                        }
+                        print("📍 Collapsed cluster via background tap")
+                    }
                 }
-                print("📍 Collapsed cluster via background tap")
-            }
-        }
+        )
         .mapControls { MapCompass() }
         .ignoresSafeArea()
         .onAppear {
@@ -351,7 +501,7 @@ struct CrowdHomeView: View {
     var body: some View {
         NavigationStack {
             mainContent
-                .sheet(isPresented: $showHostSheet) {
+                .fullScreenCover(isPresented: $showHostSheet) {
                     hostEventSheet
                 }
                 .overlay(confettiOverlay)
@@ -371,6 +521,14 @@ struct CrowdHomeView: View {
                     await loadFirebaseEvents()
                     await loadUpcomingEvents()
                     
+                    // Load anchors
+                    await anchorService.loadAnchors()
+                    anchorService.startPeriodicUpdates()
+                    
+                    // Debug: Print anchor status
+                    print("📍 CrowdHomeView: Loaded \(anchorService.anchors.count) total anchors")
+                    print("📍 CrowdHomeView: \(anchorService.activeAnchors.count) active anchors")
+                    
                     // Clean up expired events from database on app start
                     if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
                         do {
@@ -378,6 +536,14 @@ struct CrowdHomeView: View {
                         } catch {
                             print("❌ Failed to delete expired events on app start: \(error.localizedDescription)")
                         }
+                    }
+                    
+                    // Mock unread messages for testing - add to first few events and anchors
+                    await MainActor.run {
+                        let allEvents = self.allEvents
+                        let eventIds = Array(allEvents.prefix(2)).map { $0.id }
+                        let anchorIds = Array(anchorService.activeAnchors.prefix(2)).map { $0.id }
+                        chatNotificationService.addMockUnreadMessages(eventIds: eventIds + anchorIds)
                     }
                 }
                 .onChange(of: selectedRegion) { _, newRegion in
@@ -387,6 +553,21 @@ struct CrowdHomeView: View {
                 }
                 .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
                     removeExpiredEvents()
+                    Task {
+                        await anchorService.updateActiveAnchors()
+                        // Track anchor activations for analytics
+                        for anchor in anchorService.activeAnchors {
+                            if let coordinate = anchor.coordinates {
+                                let zone = coordinate.geohash(precision: 4)
+                                AnalyticsService.shared.trackAnchorActivated(
+                                    anchorId: anchor.id,
+                                    anchorName: anchor.name,
+                                    location: anchor.location,
+                                    zone: zone
+                                )
+                            }
+                        }
+                    }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { notification in
                     handleEventDeleted(notification)
@@ -401,6 +582,11 @@ struct CrowdHomeView: View {
                 .fullScreenCover(isPresented: $showNavigationModal) {
                     if let joinedEvent = appState.currentJoinedEvent {
                         EventNavigationModal(event: joinedEvent)
+                    }
+                }
+                .fullScreenCover(isPresented: $showAnchorNavigationModal) {
+                    if let anchor = selectedAnchor {
+                        AnchorNavigationModal(anchor: anchor)
                     }
                 }
                 .onChange(of: appState.currentJoinedEvent) { _, newEvent in
@@ -786,6 +972,21 @@ struct CrowdHomeView: View {
                                     Text(TagEmoji.emoji(for: joinedEvent.tags, fallbackCategory: joinedEvent.category))
                                         .font(.system(size: 30))
                                 )
+                                .overlay(
+                                    // Red dot indicator for unread messages (top-left corner)
+                                    Group {
+                                        if chatNotificationService.hasUnreadMessages(eventId: joinedEvent.id) {
+                                            Circle()
+                                                .fill(Color.red)
+                                                .frame(width: 14, height: 14)
+                                                .overlay(
+                                                    Circle()
+                                                        .stroke(Color.white, lineWidth: 2)
+                                                )
+                                                .offset(x: -20, y: -20)
+                                        }
+                                    }
+                                )
                             .onTapGesture {
                                 showNavigationModal = true
                             }
@@ -849,10 +1050,40 @@ struct CrowdHomeView: View {
                         zone: zone
                     )
                     
+                    // Automatically join the user to the event they created
+                    if let userId = FirebaseManager.shared.getCurrentUserId() {
+                        do {
+                            try await env.eventRepo.join(eventId: event.id, userId: userId)
+                            
+                            // Create attendance record
+                            let db = FirebaseManager.shared.db
+                            let attendanceData: [String: Any] = [
+                                "userId": userId,
+                                "eventId": event.id,
+                                "joinedAt": FieldValue.serverTimestamp()
+                            ]
+                            try await db.collection("userAttendances").addDocument(data: attendanceData)
+                            
+                            // Add to attended events
+                            AttendedEventsService.shared.addAttendedEvent(event)
+                            
+                            // Track analytics
+                            AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title, zone: zone)
+                            
+                            print("✅ Automatically joined created event: \(event.id)")
+                        } catch {
+                            print("⚠️ Failed to auto-join created event: \(error)")
+                        }
+                    }
+                    
                     await MainActor.run {
                         hostedEvents.append(event)
                         showConfetti = true
                         Haptics.light()
+                        
+                        // Set current joined event and show navigation modal
+                        appState.currentJoinedEvent = event
+                        showNavigationModal = true
                         
                         // Request app rating if this is the first event
                         if isFirstEvent {
@@ -871,8 +1102,6 @@ struct CrowdHomeView: View {
                 }
             }
         }
-        .presentationDetents([.fraction(0.75), .large])
-        .presentationDragIndicator(.visible)
         .onDisappear {
             // Clear initialEventTitle after sheet is dismissed
             initialEventTitle = nil
@@ -1135,6 +1364,50 @@ struct CrowdHomeView: View {
     private func handleEventTap(_ event: CrowdEvent) {
         print("✅ handleEventTap called for: \(event.title)")
         selectedEvent = event
+    }
+    
+    // MARK: - Anchor Handlers
+    
+    private func handleAnchorGroupTap(group: [Anchor], groupId: String) {
+        // If single anchor, open modal directly
+        if group.count == 1, let anchor = group.first {
+            handleAnchorTap(anchor)
+            return
+        }
+        
+        // If group is already expanded, open the first anchor's modal
+        if expandedAnchorGroupId == groupId {
+            if let firstAnchor = group.first {
+                handleAnchorTap(firstAnchor)
+            }
+        } else {
+            // Expand the group
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                expandedAnchorGroupId = groupId
+            }
+        }
+    }
+    
+    private func handleAnchorTap(_ anchor: Anchor) {
+        print("📍 Anchor tapped: \(anchor.name)")
+        
+        // Start chat listening immediately (before modal opens) if user ID is available
+        if let userId = FirebaseManager.shared.getCurrentUserId() {
+            EventChatService.shared.startListening(eventId: anchor.id, currentUserId: userId)
+            ChatNotificationService.shared.startListeningToAnchor(anchorId: anchor.id, anchorName: anchor.name)
+            ChatNotificationService.shared.markAsRead(eventId: anchor.id)
+        }
+        
+        // Open modal immediately (don't wait for analytics)
+        selectedAnchor = anchor
+        showAnchorNavigationModal = true
+        
+        // Collapse any expanded group first (if needed)
+        if expandedAnchorGroupId != nil {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                expandedAnchorGroupId = nil
+            }
+        }
     }
     
     // MARK: - Event Search Navigation

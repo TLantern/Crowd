@@ -158,6 +158,24 @@ service cloud.firestore {
       // Only Cloud Functions can write (no auth check allows server-side writes)
       allow write: if false;
     }
+    
+    // Anchors collection (location-based map pins)
+    match /anchors/{anchorId} {
+      // Anyone can read anchors (public data)
+      allow read: if true;
+      
+      // Authenticated users can write anchors (for syncing geocoded coordinates)
+      allow write: if request.auth != null;
+    }
+    
+    // Anchor notification logs collection (for deduplication)
+    match /anchor_notification_logs/{logId} {
+      // Authenticated users can read logs (to check for duplicates)
+      allow read: if request.auth != null;
+      
+      // Authenticated users can write logs (to mark notifications as sent)
+      allow write: if request.auth != null;
+    }
   }
 }
 

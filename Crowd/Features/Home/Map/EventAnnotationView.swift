@@ -11,6 +11,8 @@ struct EventAnnotationView: View {
     let event: CrowdEvent
     var isInExpandedCluster: Bool = false
     var currentUserId: String? = nil
+    @ObservedObject private var chatNotificationService = ChatNotificationService.shared
+    @ObservedObject private var attendedEventsService = AttendedEventsService.shared
     
     var emoji: String { TagEmoji.emoji(for: event.tags, fallbackCategory: event.category) }
     
@@ -22,6 +24,10 @@ struct EventAnnotationView: View {
     var isUserOwned: Bool {
         guard let userId = currentUserId else { return false }
         return event.hostId == userId
+    }
+    
+    var hasUnread: Bool {
+        attendedEventsService.isAttendingEvent(event.id) && chatNotificationService.hasUnreadMessages(eventId: event.id)
     }
     
     var scaleMultiplier: CGFloat {
@@ -66,6 +72,21 @@ struct EventAnnotationView: View {
                 .overlay(
                     Text(emoji)
                         .font(.system(size: 40))
+                )
+                .overlay(
+                    // Red dot indicator for unread messages (top-left corner)
+                    Group {
+                        if hasUnread {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 24, height: 24)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white, lineWidth: 2)
+                                )
+                                .offset(x: -30, y: -30)
+                        }
+                    }
                 )
         }
         .frame(minWidth: 44, minHeight: 44)
