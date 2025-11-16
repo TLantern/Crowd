@@ -21,29 +21,29 @@ struct AnchorAnnotationView: View {
         VStack(spacing: 0) {
             // Rounded square pin head (distinct from circular event pins)
             ZStack {
-                RoundedRectangle(cornerRadius: 36)
+                RoundedRectangle(cornerRadius: 10)
                     .fill(Color.white)
-                    .frame(width: 240, height: 240)
+                    .frame(width: 75, height: 75)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 36)
-                            .stroke(Color.blue.opacity(0.6), lineWidth: 9)
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.blue.opacity(0.6), lineWidth: 2)
                     )
-                    .shadow(color: .black.opacity(0.2), radius: 24, y: 12)
+                    .shadow(color: .black.opacity(0.15), radius: 6, y: 4)
                 
                 // Emoji centered
                 Text(anchor.emoji)
-                    .font(.system(size: 120))
+                    .font(.system(size: 34))
                 
                 // Red dot indicator for unread messages (top-left corner)
                 if hasUnread {
                     Circle()
                         .fill(Color.red)
-                        .frame(width: 60, height: 60)
+                        .frame(width: 20, height: 20)
                         .overlay(
                             Circle()
-                                .stroke(Color.white, lineWidth: 3)
+                                .stroke(Color.white, lineWidth: 2)
                         )
-                        .offset(x: -100, y: -100)
+                        .offset(x: -27.5, y: -27.5)
                 }
                 
                 // Count badge for grouped anchors - positioned at top-right corner
@@ -52,20 +52,20 @@ struct AnchorAnnotationView: View {
                         HStack {
                             Spacer()
                             Text("\(count)")
-                                .font(.system(size: 40, weight: .bold))
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 20)
+                                    RoundedRectangle(cornerRadius: 8)
                                         .fill(Color.blue)
                                 )
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(Color.white, lineWidth: 4)
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.white, lineWidth: 1.5)
                                 )
-                                .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
-                                .offset(x: 10, y: -10)
+                                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                                .offset(x: 4, y: -4)
                         }
                         Spacer()
                     }
@@ -74,23 +74,23 @@ struct AnchorAnnotationView: View {
             
             // Name label below pin
             Text(anchor.name)
-                .font(.system(size: 33, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.primary)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 9)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
                 .background(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: 6)
                         .fill(.ultraThinMaterial)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(.white.opacity(0.2), lineWidth: 3)
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(.white.opacity(0.2), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
-                .offset(y: -12)
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                .offset(y: -5)
         }
         .contentShape(Rectangle())
-        .frame(width: 240, height: 280) // Explicit frame to ensure full hit area
+        .frame(width: 75, height: 91) // Explicit frame to ensure full hit area
         .highPriorityGesture(
             TapGesture()
                 .onEnded { _ in

@@ -12,6 +12,7 @@ extension Notification.Name {
     static let eventDeleted = Notification.Name("eventDeleted")
     static let navigateToEventFromNotification = Notification.Name("navigateToEventFromNotification")
     static let showHostSheetFromNotification = Notification.Name("showHostSheetFromNotification")
+    static let testNewEventBanner = Notification.Name("testNewEventBanner")
 }
 
 

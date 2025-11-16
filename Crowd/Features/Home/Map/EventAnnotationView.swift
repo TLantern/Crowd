@@ -88,10 +88,27 @@ struct EventAnnotationView: View {
                 )
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
                 .overlay(
-                    Text(displayText)
-                        .font(.system(size: (isSchoolHosted || !showAttendeeCount) ? 40 : 32))
-                        .fontWeight((isSchoolHosted || !showAttendeeCount) ? .regular : .bold)
-                        .animation(isSchoolHosted ? nil : .easeInOut(duration: 0.5), value: showAttendeeCount)
+                    ZStack {
+                        if !isSchoolHosted {
+                            // Count view
+                            Text("\(liveAttendeeCount)")
+                                .font(.system(size: 32, weight: .bold))
+                                .foregroundColor(.black)
+                                .opacity(showAttendeeCount ? 1 : 0)
+                                .scaleEffect(showAttendeeCount ? 1 : 0.8)
+                            
+                            // Emoji view
+                            Text(emoji)
+                                .font(.system(size: 40, weight: .regular))
+                                .opacity(showAttendeeCount ? 0 : 1)
+                                .scaleEffect(showAttendeeCount ? 0.8 : 1)
+                        } else {
+                            // School-hosted always shows emoji
+                            Text(emoji)
+                                .font(.system(size: 40, weight: .regular))
+                        }
+                    }
+                    .animation(isSchoolHosted ? nil : .easeInOut(duration: 0.5), value: showAttendeeCount)
                 )
                 .overlay(
                     // Red dot indicator for unread messages (top-left corner)

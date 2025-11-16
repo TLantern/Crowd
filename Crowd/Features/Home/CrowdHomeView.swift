@@ -303,8 +303,7 @@ struct CrowdHomeView: View {
                 EventAnnotationView(
                     event: event,
                     isInExpandedCluster: true,
-                    currentUserId: FirebaseManager.shared.getCurrentUserId(),
-                    isOnMainCampus: selectedRegion == .mainCampus
+                    currentUserId: FirebaseManager.shared.getCurrentUserId()
                 )
                 .scaleEffect(expandedClusterId == cluster.id ? 1.0 : 0.001)
                 .opacity(expandedClusterId == cluster.id ? 1.0 : 0.0)
@@ -334,8 +333,7 @@ struct CrowdHomeView: View {
                 onEventTap: { event in
                     handleEventTap(event)
                 },
-                currentUserId: FirebaseManager.shared.getCurrentUserId(),
-                isOnMainCampus: selectedRegion == .mainCampus
+                currentUserId: FirebaseManager.shared.getCurrentUserId()
             )
         }
         .annotationTitles(.hidden)
@@ -366,7 +364,7 @@ struct CrowdHomeView: View {
     }
     
     private func expandedAnchorAnnotations(group: [Anchor], center: CLLocationCoordinate2D, groupId: String) -> some MapContent {
-        ForEach(group, id: \.id) { anchor in
+        ForEach(Array(group), id: \.id) { anchor in
             let displayCoord = expandedAnchorCoordinate(
                 anchor: anchor,
                 group: group,
@@ -379,9 +377,7 @@ struct CrowdHomeView: View {
                     anchor: anchor,
                     onTap: {
                         handleAnchorTap(anchor)
-                    },
-                    isInExpandedCluster: true,
-                    isOnMainCampus: selectedRegion == .mainCampus
+                    }
                 )
             }
             .annotationTitles(.hidden)
@@ -395,9 +391,7 @@ struct CrowdHomeView: View {
                 count: count,
                 onTap: {
                     handleAnchorGroupTap(group: group, groupId: groupId)
-                },
-                isInExpandedCluster: false,
-                isOnMainCampus: selectedRegion == .mainCampus
+                }
             )
         }
         .annotationTitles(.hidden)
