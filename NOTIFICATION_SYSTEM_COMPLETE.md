@@ -33,7 +33,7 @@ Enhanced existing `notifyNearbyUsers` function with:
 - **Dynamic filtering**: Only sends if user hasn't received notification in last 3 hours
 
 **Key Features**:
-- 400m radius filtering
+- 1km radius filtering
 - Interest + tag matching
 - 3-hour cooldown enforcement
 - Emoji-based interest display
@@ -43,7 +43,7 @@ Enhanced existing `notifyNearbyUsers` function with:
 
 Created new `notifyPopularEvent` function:
 - **Trigger**: When event reaches exactly 5 attendees
-- **Target**: Users within 400m who haven't joined yet
+- **Target**: Users within 1km who haven't joined yet
 - **Message**: "This Crowd is poppin off! Drop everything and pull up 🔥"
 - **Smart filtering**: Excludes current attendees from notifications
 
@@ -89,7 +89,7 @@ Both use Firebase Pub/Sub scheduled functions with cron syntax and Chicago timez
 
 | Type | Trigger | Cooldown | Message Format |
 |------|---------|----------|----------------|
-| **Proximity** | Event created within 400m | 3 hours | "{Interest} Crowd has spawned nearby 📍🎉" |
+| **Proximity** | Event created within 1km | 3 hours | "{Interest} Crowd has spawned nearby 📍🎉" |
 | **Engagement** | Event reaches 5 attendees | None | "This Crowd is poppin off! Drop everything and pull up 🔥" |
 | **Study** | 12pm & 3pm daily | N/A | "Turn your study session into a vibe 📚" |
 | **Social** | 7:30pm & 10pm daily | N/A | "Start a crowd 👩‍❤️‍💋‍👨💋" |
@@ -111,7 +111,7 @@ firebase deploy --only firestore:rules
 ## Testing Checklist
 
 ### Proximity Notifications
-- [ ] Create event within 400m of user
+- [ ] Create event within 1km of user
 - [ ] Verify 3-hour cooldown works
 - [ ] Verify interest/tag matching
 - [ ] Verify emoji appears in notification
@@ -120,7 +120,7 @@ firebase deploy --only firestore:rules
 - [ ] Create event with 4 attendees
 - [ ] Add 5th attendee (trigger notification)
 - [ ] Verify only non-attendees receive notification
-- [ ] Verify 400m radius filtering
+- [ ] Verify 1km radius filtering
 
 ### Scheduled Notifications
 - [ ] Test study reminder (12pm/3pm)
@@ -148,7 +148,7 @@ firebase deploy --only firestore:rules
 
 1. **Smart Cooldown**: Prevents notification spam with 3-hour cooldown per user
 2. **Dual Matching**: Interests AND tags for better relevance
-3. **Proximity Filtering**: 400m radius for location-based targeting
+3. **Proximity Filtering**: 1km radius for location-based targeting
 4. **Attendee Exclusion**: Engagement notifications only go to non-attendees
 5. **Deep Linking**: Tap notification → Navigate directly to event
 6. **Promotional Nudges**: Time-based reminders to encourage event creation

@@ -7,6 +7,8 @@
 
 import SwiftUI
 import FirebaseFunctions
+import ComponentsKit
+import CoreLocation
 
 // MARK: - Entry
 struct RootView: View {
@@ -42,11 +44,14 @@ private struct Presentation75Detent: ViewModifier {
 struct ProfileView: View {
     @ObservedObject var viewModel: ProfileViewModel
     @StateObject private var statsService = UserStatsService.shared
+    @ObservedObject private var locationService = AppEnvironment.current.location
     @State private var showInterestPicker = false
     @State private var showImagePicker = false
     @State private var isLoading = true
     @State private var showToast = false
     @State private var toastMessage = ""
+    @State private var carouselOffset: CGFloat = 0
+    @State private var interestCarouselTimer: Timer?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -54,12 +59,11 @@ struct ProfileView: View {
                 ProgressView("Loading profile...")
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        identityBlock
-                        tagsSection
-                        statsRow
-                        attendedEventsSection
-
+                    VStack(alignment: .leading, spacing: 16) {
+                        identityCard
+                        tagsCard
+                        statsCard
+                        debugTestBannerCard
                     }
                     .padding(16)
                 }
@@ -92,6 +96,7 @@ struct ProfileView: View {
         }
         .onDisappear {
             statsService.stopListening()
+            stopInterestCarousel()
         }
         .sheet(isPresented: $showImagePicker) {
             ProfileImagePicker(selectedImage: $viewModel.profileImage)
@@ -130,63 +135,123 @@ struct ProfileView: View {
         guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
         await viewModel.saveChanges(userId: userId)
     }
-
-    // MARK: - Identity Block (Header)
-    private var identityBlock: some View {
-        VStack(spacing: 10) {
-            ZStack(alignment: .bottom) {
-                if let profileImage = viewModel.profileImage {
-                    Image(uiImage: profileImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 90, height: 90)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 2))
-                } else {
-                    AvatarView(
-                        name: viewModel.displayName,
-                        color: viewModel.avatarColor,
-                        size: 90,
-                        showOnlineStatus: viewModel.isActiveNow
-                    )
-                }
-
-                if viewModel.isEditMode {
-                    Button(action: { showImagePicker = true }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "camera.fill").font(.system(size: 10))
-                            Text("Edit").font(.system(size: 11, weight: .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(.black.opacity(0.7), in: Capsule())
-                    }
-                    .offset(y: 8)
-                }
-            }
-
-            Text(viewModel.handle)
-                .font(.system(size: 18, weight: .bold))
-
-            // bio removed
-
-            Text(viewModel.affiliation)
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
+    
+    // MARK: - Card Model
+    private var cardModel: CardVM {
+        CardVM {
+            $0.cornerRadius = .medium
+            $0.shadow = .medium
+            $0.backgroundColor = .background
+            $0.borderWidth = .medium
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
     }
 
-    // MARK: - Stats Row
-    private var statsRow: some View {
-        HStack(spacing: 12) {
-            statCard(title: "Hosted", value: "\(statsService.hostedCount)")
-            statCard(title: "Joined", value: "\(statsService.joinedCount)")
-            statCard(title: "Upcoming", value: "\(statsService.upcomingCount)")
+    // MARK: - Identity Card
+    private var identityCard: some View {
+        SUCard(model: cardModel) {
+            VStack(spacing: 10) {
+                ZStack(alignment: .bottom) {
+                    if let profileImage = viewModel.profileImage {
+                        Image(uiImage: profileImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 90, height: 90)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 2))
+                    } else {
+                        AvatarView(
+                            name: viewModel.displayName,
+                            color: viewModel.avatarColor,
+                            size: 90,
+                            showOnlineStatus: viewModel.isActiveNow
+                        )
+                    }
+
+                    if viewModel.isEditMode {
+                        Button(action: { showImagePicker = true }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "camera.fill").font(.system(size: 10))
+                                Text("Edit").font(.system(size: 11, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(.black.opacity(0.7), in: Capsule())
+                        }
+                        .offset(y: 8)
+                    }
+                }
+
+                Text(viewModel.handle)
+                    .font(.system(size: 18, weight: .bold))
+
+                // bio removed
+
+                Text(viewModel.affiliation)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: 200)
+            .padding(.vertical, 12)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Stats Card
+    private var statsCard: some View {
+        let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
+        
+        return SUCard(model: cardModel) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Event Status")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                
+                HStack(spacing: 12) {
+                    statCard(title: "Hosted", value: "\(statsService.hostedCount)")
+                    statCard(title: "Joined", value: "\(statsService.joinedCount)")
+                    statCard(title: "Upcoming", value: "\(statsService.upcomingCount)")
+                }
+                .frame(maxWidth: .infinity)
+                
+                VStack(spacing: 12) {
+                    if attendedEvents.isEmpty {
+                        VStack(spacing: 8) {
+                            Image(systemName: "calendar.badge.checkmark")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.gray.opacity(0.6))
+                            
+                            Text("No events attending yet")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                            
+                            Text("Join events from the calendar to see them here")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                    } else {
+                        LazyVStack(spacing: 8) {
+                            ForEach(attendedEvents.prefix(5)) { event in
+                                AttendedEventRow(event: event)
+                            }
+                            
+                            if attendedEvents.count > 5 {
+                                Text("+ \(attendedEvents.count - 5) more events")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, 4)
+                            }
+                        }
+                    }
+                }
+                .padding(.top, 8)
+            }
+        }
     }
 
     private func statCard(title: String, value: String) -> some View {
@@ -197,85 +262,231 @@ struct ProfileView: View {
         .frame(minWidth: 80)
         .padding(.vertical, 14)
         .padding(.horizontal, 12)
-        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.24), lineWidth: 1))
     }
 
-    // MARK: - Tags Section
-    private var tagsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Interests")
-                .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
+    // MARK: - Tags Card
+    private var tagsCard: some View {
+        SUCard(model: cardModel) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Interests")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(viewModel.interests) { interest in
-                        TagPillView(
-                            interest: interest,
-                            isEditMode: viewModel.isEditMode,
-                            onDelete: { viewModel.removeInterest(interest) }
-                        )
-                    }
+                if viewModel.isEditMode {
+                    // Show all interests in edit mode
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(viewModel.interests) { interest in
+                                TagPillView(
+                                    interest: interest,
+                                    isEditMode: viewModel.isEditMode,
+                                    onDelete: { viewModel.removeInterest(interest) }
+                                )
+                            }
 
-                    if viewModel.isEditMode {
-                        AddInterestPillView { showInterestPicker = true }
+                            AddInterestPillView { showInterestPicker = true }
+                        }
                     }
+                } else {
+                    // Carousel mode - show one at a time with auto-rotation
+                    interestCarouselView
                 }
             }
         }
-        .padding(.bottom, 12)
+        .onAppear {
+            if !viewModel.isEditMode && !viewModel.interests.isEmpty {
+                startInterestCarousel()
+            }
+        }
+        .onChange(of: viewModel.isEditMode) { _, isEditMode in
+            if isEditMode {
+                stopInterestCarousel()
+            } else if !viewModel.interests.isEmpty {
+                startInterestCarousel()
+            }
+        }
+        .onChange(of: viewModel.interests.count) { _, count in
+            if count == 0 {
+                stopInterestCarousel()
+                carouselOffset = 0
+            } else if !viewModel.isEditMode {
+                startInterestCarousel()
+            }
+        }
     }
     
-    // MARK: - Attending Events Section
-    private var attendedEventsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Attending")
-                .font(.subheadline.bold())
-                .foregroundStyle(.secondary)
-            
-            let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
-            
-            VStack(spacing: 12) {
-                if attendedEvents.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "calendar.badge.checkmark")
-                            .font(.system(size: 24))
-                            .foregroundStyle(.gray.opacity(0.6))
-                        
-                        Text("No events attending yet")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                        
-                        Text("Join events from the calendar to see them here")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
+    // MARK: - Interest Carousel
+    private var interestCarouselView: some View {
+        Group {
+            if viewModel.interests.isEmpty {
+                Text("No interests yet")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
-                } else {
-                    LazyVStack(spacing: 8) {
-                        ForEach(attendedEvents.prefix(5)) { event in
-                            AttendedEventRow(event: event)
+            } else {
+                GeometryReader { geometry in
+                    let spacing: CGFloat = 8
+                    
+                    // Create duplicated array for seamless looping (3 copies)
+                    let duplicatedInterests = viewModel.interests + viewModel.interests + viewModel.interests
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: spacing) {
+                            ForEach(Array(duplicatedInterests.enumerated()), id: \.offset) { index, interest in
+                                TagPillView(
+                                    interest: interest,
+                                    isEditMode: false,
+                                    onDelete: {}
+                                )
+                                .background(
+                                    GeometryReader { pillGeometry in
+                                        Color.clear
+                                            .preference(
+                                                key: PillWidthPreferenceKey.self,
+                                                value: pillGeometry.size.width
+                                            )
+                                    }
+                                )
+                            }
                         }
-                        
-                        if attendedEvents.count > 5 {
-                            Text("+ \(attendedEvents.count - 5) more events")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .padding(.top, 4)
+                        .offset(x: carouselOffset)
+                        .onPreferenceChange(PillWidthPreferenceKey.self) { widths in
+                            // Could use this for dynamic width calculation if needed
                         }
                     }
+                    .scrollDisabled(true)
+                    .onAppear {
+                        // Calculate single set width based on actual pill sizes
+                        let estimatedWidth = estimateSingleSetWidth(interests: viewModel.interests, spacing: spacing)
+                        carouselOffset = -estimatedWidth // Start at middle set
+                        startContinuousCarousel(singleSetWidth: estimatedWidth)
+                    }
                 }
+                .frame(height: 50)
+                .clipped()
             }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 12)
-            .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.24), lineWidth: 1))
         }
     }
     
+    private func estimateSingleSetWidth(interests: [Interest], spacing: CGFloat) -> CGFloat {
+        // Estimate: each pill is roughly 80-120px wide depending on text length
+        // Use average of 100px per pill
+        let averagePillWidth: CGFloat = 100
+        let totalSpacing = CGFloat(max(0, interests.count - 1)) * spacing
+        return CGFloat(interests.count) * averagePillWidth + totalSpacing
+    }
+    
+    // MARK: - Interest Carousel Timer
+    private func startInterestCarousel() {
+        stopInterestCarousel()
+        
+        guard viewModel.interests.count > 1 else { return }
+        
+        let singleSetWidth = estimateSingleSetWidth(interests: viewModel.interests, spacing: 8)
+        startContinuousCarousel(singleSetWidth: singleSetWidth)
+    }
+    
+    private func startContinuousCarousel(singleSetWidth: CGFloat) {
+        stopInterestCarousel()
+        
+        guard viewModel.interests.count > 1 else { return }
+        
+        // Initialize offset to middle set if not already set
+        if carouselOffset == 0 {
+            carouselOffset = -singleSetWidth
+        }
+        
+        // Continuous smooth scrolling - slower and smoother animation
+        interestCarouselTimer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { timer in
+            DispatchQueue.main.async {
+                // Check if we need to reset before animating
+                if carouselOffset <= -singleSetWidth * 2 {
+                    // Jump back without animation for seamless loop
+                    carouselOffset = -singleSetWidth
+                } else {
+                    // Smooth continuous scroll - slower speed with easeInOut for smoother feel
+                    withAnimation(.easeInOut(duration: 0.03)) {
+                        carouselOffset -= 0.2
+                    }
+                }
+            }
+        }
+        
+        // Add timer to common run loop modes so it continues during scrolling
+        if let timer = interestCarouselTimer {
+            RunLoop.current.add(timer, forMode: .common)
+        }
+    }
+    
+    private func stopInterestCarousel() {
+        interestCarouselTimer?.invalidate()
+        interestCarouselTimer = nil
+    }
+    
+    // MARK: - Debug Test Banner Card
+    @ViewBuilder
+    private var debugTestBannerCard: some View {
+        #if DEBUG
+        SUCard(model: cardModel) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Debug")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.secondary)
+                
+                Button(action: {
+                    // Create mock event for testing
+                    let mockEvent = CrowdEvent(
+                        id: UUID().uuidString,
+                        title: "Test Event",
+                        hostId: FirebaseManager.shared.getCurrentUserId() ?? "test",
+                        hostName: "Test Host",
+                        latitude: locationService.lastKnown?.latitude ?? 33.2100,
+                        longitude: locationService.lastKnown?.longitude ?? -97.1500,
+                        radiusMeters: 60,
+                        startsAt: Date(),
+                        endsAt: Date().addingTimeInterval(3600),
+                        createdAt: Date(),
+                        signalStrength: 3,
+                        attendeeCount: 0,
+                        tags: ["party"],
+                        category: "party"
+                    )
+                    
+                    // Post notification to trigger banner
+                    NotificationCenter.default.post(
+                        name: .testNewEventBanner,
+                        object: mockEvent
+                    )
+                }) {
+                    HStack {
+                        Image(systemName: "bell.badge")
+                        Text("Test New Event Banner")
+                    }
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.blue)
+                    .cornerRadius(8)
+                }
+            }
+        }
+        #else
+        EmptyView()
+        #endif
+    }
+    
+}
+
+// MARK: - Preference Key for Pill Width
+private struct PillWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
 }
 
 // MARK: - Attended Event Row

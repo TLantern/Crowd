@@ -225,9 +225,9 @@ exports.notifyNearbyUsers = functions.firestore
 
         console.log(`📏 ${user.displayName}: ${Math.round(distance)}m away`);
 
-        // Filter 1: Distance check (400m radius)
-        if (distance > 400) {
-          console.log(`⏭️ ${user.displayName}: Too far (${Math.round(distance)}m > 400m)`);
+        // Filter 1: Distance check (1km radius)
+        if (distance > 1000) {
+          console.log(`⏭️ ${user.displayName}: Too far (${Math.round(distance)}m > 1000m)`);
           return;
         }
 
@@ -1239,8 +1239,8 @@ exports.notifyPopularEvent = functions.firestore
           user.location.longitude
         );
         
-        // Filter by 400m radius
-        if (distance > 400) {
+        // Filter by 1km radius
+        if (distance > 1000) {
           return;
         }
         

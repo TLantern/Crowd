@@ -6,18 +6,24 @@
 //
 
 import SwiftUI
+import FirebaseFirestore
 
 struct EventAnnotationView: View {
     let event: CrowdEvent
     var isInExpandedCluster: Bool = false
     var currentUserId: String? = nil
+    var isOnMainCampus: Bool = false
     @ObservedObject private var chatNotificationService = ChatNotificationService.shared
     @ObservedObject private var attendedEventsService = AttendedEventsService.shared
+    @State private var showAttendeeCount = false
+    @State private var timer: Timer?
+    @State private var liveAttendeeCount: Int = 0
+    @State private var eventListener: ListenerRegistration?
     
     var emoji: String { TagEmoji.emoji(for: event.tags, fallbackCategory: event.category) }
     
     var isOnFire: Bool {
-        event.attendeeCount > 5
+        liveAttendeeCount > 2
     }
     
     /// Check if this event belongs to the current user
@@ -33,10 +39,22 @@ struct EventAnnotationView: View {
     var scaleMultiplier: CGFloat {
         isInExpandedCluster ? 0.5 : 0.75  // Shrink to 50% when expanded
     }
+    
+    var isSchoolHosted: Bool {
+        event.sourceURL != nil
+    }
+    
+    var displayText: String {
+        // School-hosted events always show emoji, no animation
+        if isSchoolHosted {
+            return emoji
+        }
+        return showAttendeeCount ? "\(liveAttendeeCount)" : emoji
+    }
 
     var body: some View {
         ZStack {
-            // Fire effect for popular events (>5 people)
+            // Fire effect for popular events (>2 people)
             if isOnFire {
                 FireEffectView()
                     .offset(y: -10)
@@ -70,8 +88,10 @@ struct EventAnnotationView: View {
                 )
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
                 .overlay(
-                    Text(emoji)
-                        .font(.system(size: 40))
+                    Text(displayText)
+                        .font(.system(size: (isSchoolHosted || !showAttendeeCount) ? 40 : 32))
+                        .fontWeight((isSchoolHosted || !showAttendeeCount) ? .regular : .bold)
+                        .animation(isSchoolHosted ? nil : .easeInOut(duration: 0.5), value: showAttendeeCount)
                 )
                 .overlay(
                     // Red dot indicator for unread messages (top-left corner)
@@ -92,9 +112,87 @@ struct EventAnnotationView: View {
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Circle())
         .scaleEffect(scaleMultiplier)
-        .accessibilityLabel("\(emoji) event pin, \(event.attendeeCount) attendees")
+        .onAppear {
+            liveAttendeeCount = event.attendeeCount
+            // Only start timer for user-created events, not school-hosted
+            if !isSchoolHosted {
+                startTimer()
+            }
+            startEventListener()
+        }
+        .onDisappear {
+            stopTimer()
+            stopEventListener()
+        }
+        .accessibilityLabel("\(emoji) event pin, \(liveAttendeeCount) attendees")
         .accessibilityHint("Double tap to view event details")
         .accessibilityAddTraits(.isButton)
+    }
+    
+    private func startTimer() {
+        stopTimer()
+        timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+            withAnimation(.easeInOut(duration: 0.5)) {
+                showAttendeeCount.toggle()
+            }
+        }
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+    
+    // MARK: - Event Listener
+    
+    private func startEventListener() {
+        let db = FirebaseManager.shared.db
+        
+        // Try events collection first
+        let eventRef = db.collection("events").document(event.id)
+        eventListener = eventRef.addSnapshotListener { snapshot, error in
+            Task { @MainActor in
+                if let error = error {
+                    print("⚠️ EventAnnotationView: Error listening to event: \(error)")
+                    // Try userEvents collection as fallback
+                    tryUserEventsListener()
+                    return
+                }
+                
+                if let data = snapshot?.data(),
+                   let attendeeCount = data["attendeeCount"] as? Int {
+                    liveAttendeeCount = attendeeCount
+                } else if !(snapshot?.exists ?? false) {
+                    // Document doesn't exist in events, try userEvents
+                    tryUserEventsListener()
+                }
+            }
+        }
+    }
+    
+    private func tryUserEventsListener() {
+        let db = FirebaseManager.shared.db
+        eventListener?.remove()
+        
+        let eventRef = db.collection("userEvents").document(event.id)
+        eventListener = eventRef.addSnapshotListener { snapshot, error in
+            Task { @MainActor in
+                if let error = error {
+                    print("⚠️ EventAnnotationView: Error listening to userEvent: \(error)")
+                    return
+                }
+                
+                if let data = snapshot?.data(),
+                   let attendeeCount = data["attendeeCount"] as? Int {
+                    liveAttendeeCount = attendeeCount
+                }
+            }
+        }
+    }
+    
+    private func stopEventListener() {
+        eventListener?.remove()
+        eventListener = nil
     }
 }
 

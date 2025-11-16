@@ -79,6 +79,13 @@ struct CrowdHomeView: View {
     @State private var showAnchorNavigationModal = false
     @State private var expandedAnchorGroupId: String? = nil // Track which anchor group is expanded
     
+    // MARK: - New Event Banner
+    @State private var newEventBanner: CrowdEvent? = nil
+    @State private var seenEventIds: Set<String> = []
+    @State private var newEventListeners: [ListenerRegistration] = []
+    @State private var bannerDismissTimer: Timer? = nil
+    @State private var initializedListenerCount = 0
+    
     private var anchorsToDisplay: [Anchor] {
         anchorService.activeAnchors
     }
@@ -155,16 +162,6 @@ struct CrowdHomeView: View {
             latitude: center.latitude,
             longitude: center.longitude + lonOffset
         )
-    }
-    
-    // Calculate scale factor for anchor pins based on zoom (similar to event annotations)
-    private func anchorScaleFactor(cameraDistance: Double) -> CGFloat {
-        // Scale inversely with distance to maintain constant screen size
-        // Base reference distance (1000m) = scale 1.0
-        let referenceDistance: Double = 1000.0
-        let scale = referenceDistance / max(cameraDistance, 100.0) // Minimum scale at very close zoom
-        // Clamp between 0.3x and 3.0x, similar to how event annotations scale
-        return CGFloat(min(max(scale, 0.3), 3.0))
     }
     
     // MARK: - Computed
@@ -306,7 +303,8 @@ struct CrowdHomeView: View {
                 EventAnnotationView(
                     event: event,
                     isInExpandedCluster: true,
-                    currentUserId: FirebaseManager.shared.getCurrentUserId()
+                    currentUserId: FirebaseManager.shared.getCurrentUserId(),
+                    isOnMainCampus: selectedRegion == .mainCampus
                 )
                 .scaleEffect(expandedClusterId == cluster.id ? 1.0 : 0.001)
                 .opacity(expandedClusterId == cluster.id ? 1.0 : 0.0)
@@ -336,7 +334,8 @@ struct CrowdHomeView: View {
                 onEventTap: { event in
                     handleEventTap(event)
                 },
-                currentUserId: FirebaseManager.shared.getCurrentUserId()
+                currentUserId: FirebaseManager.shared.getCurrentUserId(),
+                isOnMainCampus: selectedRegion == .mainCampus
             )
         }
         .annotationTitles(.hidden)
@@ -366,6 +365,75 @@ struct CrowdHomeView: View {
         .annotationTitles(.hidden)
     }
     
+    private func expandedAnchorAnnotations(group: [Anchor], center: CLLocationCoordinate2D, groupId: String) -> some MapContent {
+        ForEach(group, id: \.id) { anchor in
+            let displayCoord = expandedAnchorCoordinate(
+                anchor: anchor,
+                group: group,
+                center: center,
+                groupId: groupId
+            )
+            
+            Annotation("", coordinate: displayCoord) {
+                AnchorAnnotationView(
+                    anchor: anchor,
+                    onTap: {
+                        handleAnchorTap(anchor)
+                    },
+                    isInExpandedCluster: true,
+                    isOnMainCampus: selectedRegion == .mainCampus
+                )
+            }
+            .annotationTitles(.hidden)
+        }
+    }
+    
+    private func collapsedAnchorAnnotation(anchor: Anchor, count: Int?, center: CLLocationCoordinate2D, group: [Anchor], groupId: String) -> some MapContent {
+        Annotation("", coordinate: center) {
+            AnchorAnnotationView(
+                anchor: anchor,
+                count: count,
+                onTap: {
+                    handleAnchorGroupTap(group: group, groupId: groupId)
+                },
+                isInExpandedCluster: false,
+                isOnMainCampus: selectedRegion == .mainCampus
+            )
+        }
+        .annotationTitles(.hidden)
+    }
+    
+    @MapContentBuilder
+    private func anchorGroupAnnotations(group: [Anchor]) -> some MapContent {
+        if let firstAnchor = group.first,
+           let centerCoord = firstAnchor.coordinates {
+            let groupId = anchorGroupId(for: group)
+            let isExpanded = expandedAnchorGroupId == groupId
+            
+            if isExpanded && group.count > 1 {
+                expandedAnchorAnnotations(group: group, center: centerCoord, groupId: groupId)
+            } else {
+                collapsedAnchorAnnotation(
+                    anchor: firstAnchor,
+                    count: group.count > 1 ? group.count : nil,
+                    center: centerCoord,
+                    group: group,
+                    groupId: groupId
+                )
+            }
+        }
+    }
+    
+    @MapContentBuilder
+    private func anchorAnnotations() -> some MapContent {
+        if sourceFilter == .user {
+            let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
+            ForEach(Array(anchorGroups.enumerated()), id: \.offset) { index, group in
+                anchorGroupAnnotations(group: group)
+            }
+        }
+    }
+    
     // MARK: - Map View
     private var mapView: some View {
         Map(position: $cameraPosition) {
@@ -379,48 +447,7 @@ struct CrowdHomeView: View {
             }
             
             // Anchor annotations (only show on user-created events view, not school-hosted)
-            if sourceFilter == .user {
-                let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
-                ForEach(Array(anchorGroups.enumerated()), id: \.offset) { index, group in
-                    if let firstAnchor = group.first,
-                       let centerCoord = firstAnchor.coordinates {
-                        let groupId = anchorGroupId(for: group)
-                        let isExpanded = expandedAnchorGroupId == groupId
-                        
-                        if isExpanded && group.count > 1 {
-                            // Show all anchors spread out when expanded
-                            ForEach(group, id: \.id) { anchor in
-                                let displayCoord = expandedAnchorCoordinate(
-                                    anchor: anchor,
-                                    group: group,
-                                    center: centerCoord,
-                                    groupId: groupId
-                                )
-                                
-                                Annotation("", coordinate: displayCoord) {
-                                    AnchorAnnotationView(anchor: anchor) {
-                                        handleAnchorTap(anchor)
-                                    }
-                                    .scaleEffect(anchorScaleFactor(cameraDistance: currentCameraDistance))
-                                }
-                                .annotationTitles(.hidden)
-                            }
-                        } else {
-                            // Show single pin representing the group
-                            Annotation("", coordinate: centerCoord) {
-                                AnchorAnnotationView(
-                                    anchor: firstAnchor,
-                                    count: group.count > 1 ? group.count : nil
-                                ) {
-                                    handleAnchorGroupTap(group: group, groupId: groupId)
-                                }
-                                .scaleEffect(anchorScaleFactor(cameraDistance: currentCameraDistance))
-                            }
-                            .annotationTitles(.hidden)
-                        }
-                    }
-                }
-            }
+            anchorAnnotations()
             
             // User location annotation (rendered last to ensure it's always on top)
             if let userLocation = locationService.lastKnown {
@@ -538,13 +565,14 @@ struct CrowdHomeView: View {
                         }
                     }
                     
-                    // Mock unread messages for testing - add to first few events and anchors
-                    await MainActor.run {
-                        let allEvents = self.allEvents
-                        let eventIds = Array(allEvents.prefix(2)).map { $0.id }
-                        let anchorIds = Array(anchorService.activeAnchors.prefix(2)).map { $0.id }
-                        chatNotificationService.addMockUnreadMessages(eventIds: eventIds + anchorIds)
-                    }
+                    // Set up listeners for new events
+                    setupNewEventListeners()
+                }
+                .onDisappear {
+                    // Clean up listeners
+                    stopNewEventListeners()
+                    bannerDismissTimer?.invalidate()
+                    bannerDismissTimer = nil
                 }
                 .onChange(of: selectedRegion) { _, newRegion in
                     Task {
@@ -577,6 +605,12 @@ struct CrowdHomeView: View {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .showHostSheetFromNotification)) { _ in
                     showHostSheet = true
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .testNewEventBanner)) { notification in
+                    if let event = notification.object as? CrowdEvent {
+                        newEventBanner = event
+                        startBannerDismissTimer()
+                    }
                 }
                 .fullScreenCover(isPresented: $showCalendar) { CalenderView() }
                 .fullScreenCover(isPresented: $showNavigationModal) {
@@ -653,6 +687,172 @@ struct CrowdHomeView: View {
                    let attendeeCount = data["attendeeCount"] as? Int {
                     liveAttendeeCount = attendeeCount
                     print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
+                }
+            }
+        }
+    }
+    
+    // MARK: - New Event Banner Listeners
+    
+    private func setupNewEventListeners() {
+        let db = FirebaseManager.shared.db
+        
+        // Stop existing listeners
+        stopNewEventListeners()
+        
+        // Reset initialization counter - skip first snapshot from each listener
+        initializedListenerCount = 0
+        
+        // Listen for new events in "events" collection
+        let eventsListener = db.collection("events")
+            .addSnapshotListener { snapshot, error in
+                Task { @MainActor in
+                    if let error = error {
+                        print("❌ CrowdHomeView: Error listening to new events: \(error)")
+                        return
+                    }
+                    
+                    guard let snapshot = snapshot else { return }
+                    
+                    // Skip first snapshot (contains all existing documents)
+                    if self.initializedListenerCount < 2 {
+                        // Mark existing events as seen
+                        for document in snapshot.documents {
+                            self.seenEventIds.insert(document.documentID)
+                        }
+                        self.initializedListenerCount += 1
+                        return
+                    }
+                    
+                    // Process only newly added documents after initialization
+                    for change in snapshot.documentChanges {
+                        if change.type == .added {
+                            self.handleNewEvent(document: change.document, collection: "events")
+                        }
+                    }
+                }
+            }
+        
+        // Listen for new events in "userEvents" collection
+        let userEventsListener = db.collection("userEvents")
+            .addSnapshotListener { snapshot, error in
+                Task { @MainActor in
+                    if let error = error {
+                        print("❌ CrowdHomeView: Error listening to new userEvents: \(error)")
+                        return
+                    }
+                    
+                    guard let snapshot = snapshot else { return }
+                    
+                    // Skip first snapshot (contains all existing documents)
+                    if self.initializedListenerCount < 2 {
+                        // Mark existing events as seen
+                        for document in snapshot.documents {
+                            self.seenEventIds.insert(document.documentID)
+                        }
+                        self.initializedListenerCount += 1
+                        return
+                    }
+                    
+                    // Process only newly added documents after initialization
+                    for change in snapshot.documentChanges {
+                        if change.type == .added {
+                            self.handleNewEvent(document: change.document, collection: "userEvents")
+                        }
+                    }
+                }
+            }
+        
+        newEventListeners = [eventsListener, userEventsListener]
+    }
+    
+    private func stopNewEventListeners() {
+        for listener in newEventListeners {
+            listener.remove()
+        }
+        newEventListeners.removeAll()
+    }
+    
+    private func handleNewEvent(document: QueryDocumentSnapshot, collection: String) {
+        let eventId = document.documentID
+        
+        // Skip if we've already seen this event
+        if seenEventIds.contains(eventId) {
+            return
+        }
+        
+        // Parse event from document data
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else { return }
+        
+        do {
+            let event = try firebaseRepo.parseEvent(from: document.data())
+            
+            // Add to seen events
+            seenEventIds.insert(eventId)
+            
+            // Show banner
+            newEventBanner = event
+            startBannerDismissTimer()
+            
+            print("🔔 New event detected: \(event.title) (ID: \(eventId))")
+        } catch {
+            print("❌ Failed to parse new event: \(error)")
+        }
+    }
+    
+    private func startBannerDismissTimer() {
+        bannerDismissTimer?.invalidate()
+        bannerDismissTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
+            Task { @MainActor in
+                self.dismissBanner()
+            }
+        }
+    }
+    
+    private func dismissBanner() {
+        withAnimation(.easeOut(duration: 0.3)) {
+            newEventBanner = nil
+        }
+        bannerDismissTimer?.invalidate()
+        bannerDismissTimer = nil
+    }
+    
+    private func handleBannerJoin(event: CrowdEvent) {
+        Task {
+            // Check if this is the first event join (before leaving any previous event)
+            let wasFirstEvent = AttendedEventsService.shared.getAttendedEvents().isEmpty
+            
+            // Leave previous event if user is already in one
+            let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
+            if let previousEvent = attendedEvents.first(where: { $0.id != event.id }) {
+                print("🔄 Leaving previous event before joining new one: \(previousEvent.id)")
+                let viewModel = EventDetailViewModel(eventRepo: env.eventRepo)
+                await viewModel.leaveEvent(event: previousEvent)
+                
+                // Clear currentJoinedEvent if it matches
+                await MainActor.run {
+                    if appState.currentJoinedEvent?.id == previousEvent.id {
+                        appState.currentJoinedEvent = nil
+                    }
+                }
+            }
+            
+            // Join the new event
+            let viewModel = EventDetailViewModel(eventRepo: env.eventRepo)
+            let success = await viewModel.joinEvent(event: event)
+            
+            if success {
+                await MainActor.run {
+                    appState.currentJoinedEvent = event
+                    
+                    // Request app rating if this is the first event
+                    if wasFirstEvent {
+                        AppRatingService.shared.requestRatingIfNeeded(isFirstEvent: true)
+                    }
+                    
+                    // Dismiss banner and show navigation modal
+                    dismissBanner()
+                    showNavigationModal = true
                 }
             }
         }
@@ -773,6 +973,25 @@ struct CrowdHomeView: View {
                     .padding(.top, 0)
                     .offset(y: -18)
                     .zIndex(5)
+                    
+                    // New Event Banner
+                    if let bannerEvent = newEventBanner {
+                        VStack {
+                            NewEventBanner(
+                                event: bannerEvent,
+                                onJoin: {
+                                    handleBannerJoin(event: bannerEvent)
+                                },
+                                onDismiss: {
+                                    dismissBanner()
+                                }
+                            )
+                            .padding(.horizontal, 16)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                        .padding(.top, 8)
+                        .zIndex(4)
+                    }
 
                     Spacer(minLength: 0)
 
@@ -1184,7 +1403,13 @@ struct CrowdHomeView: View {
                     officialEvents = official
                     userEventsFromFirebase = userCreated
                     isLoadingEvents = false
+                    
+                    // Track seen event IDs
+                    let allLoadedEvents = official + userCreated
+                    seenEventIds = Set(allLoadedEvents.map { $0.id })
+                    
                     print("✅ Loaded \(official.count) official events and \(userCreated.count) user-created events from Firebase")
+                    print("📋 Tracking \(seenEventIds.count) seen event IDs")
                 }
             } else {
                 // Fallback for mock repository or other implementations
