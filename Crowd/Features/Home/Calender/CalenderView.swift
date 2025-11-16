@@ -15,7 +15,13 @@ struct CalenderView: View {
     @EnvironmentObject private var appState: AppState
     @State private var selectedCategories: Set<EventCategory> = []
     @State private var displayedEventCount = 10
+    @State private var selectedTab: TabSelection = .schoolEvents
     private let eventsPerPage = 10
+    
+    enum TabSelection {
+        case parties
+        case schoolEvents
+    }
     
     // Filtered events based on selected categories
     var filteredEvents: [CrowdEvent] {
@@ -58,74 +64,67 @@ struct CalenderView: View {
                         Spacer()
                         
                         VStack(alignment: .center, spacing: 4) {
-                            Text("Upcoming Events")
+                            Text(selectedTab == .schoolEvents ? "School Events" : "Parties")
                                 .font(.system(size: 24, weight: .bold))
                                 .foregroundStyle(.primary)
                             
-                            Text("\(displayedEvents.count) of \(filteredEvents.count) events")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.secondary)
+                            if selectedTab == .schoolEvents {
+                                Text("\(displayedEvents.count) of \(filteredEvents.count) events")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         
                         Spacer()
                         
-                        CategoryFilterDropdown(selectedCategories: $selectedCategories)
+                        if selectedTab == .schoolEvents {
+                            CategoryFilterDropdown(selectedCategories: $selectedCategories)
+                        }
                     }
                 }
                 .padding(.top, 20)
                 .padding(.horizontal, 20)
                 
-                // Events List
-                if filteredEvents.isEmpty {
-                    VStack(spacing: 20) {
-                        Image(systemName: "calendar.badge.clock")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.gray.opacity(0.5))
-                        
-                        Text(selectedCategories.isEmpty ? "No upcoming events" : "No events match selected categories")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        
-                        Text(selectedCategories.isEmpty ? "Check back later for new campus events" : "Try selecting different categories or clear the filter")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.top, 60)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(displayedEvents) { event in
-                                EventCardView(event: event)
-                            }
-                            
-                            // Load more button
-                            if hasMoreEvents {
-                                Button(action: {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        displayedEventCount += eventsPerPage
-                                    }
-                                }) {
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "arrow.down.circle.fill")
-                                            .font(.system(size: 16))
-                                        Text("Load More Events")
-                                            .font(.system(size: 16, weight: .medium))
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 24)
-                                    .padding(.vertical, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 20)
-                                            .fill(Color.accentColor)
-                                    )
-                                }
-                                .padding(.top, 8)
+                // Tab Switcher
+                HStack(spacing: 0) {
+                    CalendarTabButton(
+                        title: "Parties",
+                        isSelected: selectedTab == .parties,
+                        action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedTab = .parties
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.top, 20)
+                    )
+                    
+                    CalendarTabButton(
+                        title: "School Events",
+                        isSelected: selectedTab == .schoolEvents,
+                        action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedTab = .schoolEvents
+                            }
+                        }
+                    )
+                }
+                .frame(height: 48)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+                
+                // Tab Content
+                Group {
+                    if selectedTab == .parties {
+                        PartiesView()
+                    } else {
+                        SchoolEventsView(
+                            filteredEvents: filteredEvents,
+                            displayedEvents: displayedEvents,
+                            hasMoreEvents: hasMoreEvents,
+                            selectedCategories: selectedCategories,
+                            displayedEventCount: $displayedEventCount,
+                            eventsPerPage: eventsPerPage
+                        )
                     }
                 }
             }
@@ -177,6 +176,115 @@ struct CalenderView: View {
                 print("❌ geocodeEventIfNeeded failed for \(ev.id): \(error)")
             }
         }
+    }
+}
+
+// MARK: - Calendar Tab Button
+struct CalendarTabButton: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 16, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(isSelected ? .primary : .secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    isSelected
+                    ? Color.primary.opacity(0.1)
+                    : Color.clear
+                )
+                .cornerRadius(12)
+        }
+    }
+}
+
+// MARK: - School Events View
+struct SchoolEventsView: View {
+    let filteredEvents: [CrowdEvent]
+    let displayedEvents: [CrowdEvent]
+    let hasMoreEvents: Bool
+    let selectedCategories: Set<EventCategory>
+    @Binding var displayedEventCount: Int
+    let eventsPerPage: Int
+    
+    var body: some View {
+        if filteredEvents.isEmpty {
+            VStack(spacing: 20) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.gray.opacity(0.5))
+                
+                Text(selectedCategories.isEmpty ? "No upcoming events" : "No events match selected categories")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.secondary)
+                
+                Text(selectedCategories.isEmpty ? "Check back later for new campus events" : "Try selecting different categories or clear the filter")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 60)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(displayedEvents) { event in
+                        EventCardView(event: event)
+                    }
+                    
+                    // Load more button
+                    if hasMoreEvents {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                displayedEventCount += eventsPerPage
+                            }
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .font(.system(size: 16))
+                                Text("Load More Events")
+                                    .font(.system(size: 16, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(Color.accentColor)
+                            )
+                        }
+                        .padding(.top, 8)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+            }
+        }
+    }
+}
+
+// MARK: - Parties View (Placeholder)
+struct PartiesView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 48))
+                .foregroundStyle(.gray.opacity(0.5))
+            
+            Text("Parties Coming Soon")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.secondary)
+            
+            Text("Stay tuned for exciting party events!")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 60)
     }
 }
 
