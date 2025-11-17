@@ -99,15 +99,31 @@ final class FirebaseEventRepository: EventRepository {
         print("🎉 Fetching parties from events_from_linktree_raw collection")
         
         let partiesSnapshot = try await db.collection("events_from_linktree_raw").getDocuments()
+        print("📊 Found \(partiesSnapshot.documents.count) documents in events_from_linktree_raw")
+        
         var parties: [CrowdEvent] = []
+        var parseErrors = 0
         
         for document in partiesSnapshot.documents {
-            if let party = try? parseEvent(from: document.data()) {
+            var data = document.data()
+            // Use document ID if no id field exists
+            if data["id"] == nil && data["eventId"] == nil {
+                data["id"] = document.documentID
+            }
+            print("📄 Document ID: \(document.documentID)")
+            print("📄 Document data keys: \(data.keys.sorted())")
+            
+            do {
+                let party = try parseEvent(from: data)
                 parties.append(party)
+            } catch {
+                parseErrors += 1
+                print("⚠️ Failed to parse party document \(document.documentID): \(error.localizedDescription)")
+                print("📄 Data: \(data)")
             }
         }
         
-        print("✅ Fetched \(parties.count) parties from events_from_linktree_raw")
+        print("✅ Successfully parsed \(parties.count) parties, \(parseErrors) failed")
         return parties
     }
     
@@ -665,13 +681,22 @@ final class FirebaseEventRepository: EventRepository {
     // MARK: - Helpers
     
     func parseEvent(from data: [String: Any]) throws -> CrowdEvent {
-        guard let id = data["id"] as? String,
-              let title = data["title"] as? String,
-              let lat = data["latitude"] as? Double,
-              let lon = data["longitude"] as? Double,
-              let radiusMeters = data["radiusMeters"] as? Double else {
+        // Try to get ID from document ID or id field
+        let id = data["id"] as? String ?? data["eventId"] as? String ?? UUID().uuidString
+        
+        // Try multiple field name variations
+        let title = data["title"] as? String ?? data["name"] as? String ?? data["eventName"] as? String
+        let lat = data["latitude"] as? Double ?? data["lat"] as? Double
+        let lon = data["longitude"] as? Double ?? data["lng"] as? Double ?? data["lon"] as? Double
+        
+        guard let title = title,
+              let lat = lat,
+              let lon = lon else {
             throw CrowdError.invalidResponse
         }
+        
+        // radiusMeters is optional for parties, default to 0
+        let radiusMeters = data["radiusMeters"] as? Double ?? data["radius"] as? Double ?? 0.0
         
         let signalStrength = data["signalStrength"] as? Int ?? 0
         let attendeeCount = data["attendeeCount"] as? Int ?? 0
