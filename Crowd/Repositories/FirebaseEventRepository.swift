@@ -94,6 +94,23 @@ final class FirebaseEventRepository: EventRepository {
         return (official: officialEvents, userCreated: userCreatedEvents)
     }
     
+    /// Fetch parties from events_from_linktree_raw collection
+    func fetchParties() async throws -> [CrowdEvent] {
+        print("🎉 Fetching parties from events_from_linktree_raw collection")
+        
+        let partiesSnapshot = try await db.collection("events_from_linktree_raw").getDocuments()
+        var parties: [CrowdEvent] = []
+        
+        for document in partiesSnapshot.documents {
+            if let party = try? parseEvent(from: document.data()) {
+                parties.append(party)
+            }
+        }
+        
+        print("✅ Fetched \(parties.count) parties from events_from_linktree_raw")
+        return parties
+    }
+    
     func create(event: CrowdEvent) async throws {
         // Check authentication status before attempting creation
         guard let currentUserId = FirebaseManager.shared.getCurrentUserId() else {
@@ -701,6 +718,13 @@ final class FirebaseEventRepository: EventRepository {
             createdAt = Date(timeIntervalSince1970: seconds)
         }
         
+        // Parse optional fields
+        let description = data["description"] as? String
+        let sourceURL = data["sourceURL"] as? String
+        let rawLocationName = data["rawLocationName"] as? String
+        let imageURL = data["imageURL"] as? String ?? data["imageUrl"] as? String ?? data["image"] as? String
+        let ticketURL = data["ticketURL"] as? String ?? data["ticketUrl"] as? String ?? data["ticket"] as? String
+        
         return CrowdEvent(
             id: id,
             title: title,
@@ -715,7 +739,12 @@ final class FirebaseEventRepository: EventRepository {
             signalStrength: signalStrength,
             attendeeCount: attendeeCount,
             tags: tags,
-            category: category
+            category: category,
+            description: description,
+            sourceURL: sourceURL,
+            rawLocationName: rawLocationName,
+            imageURL: imageURL,
+            ticketURL: ticketURL
         )
     }
 }

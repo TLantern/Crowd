@@ -8,6 +8,7 @@
 import SwiftUI
 import CoreLocation
 import FirebaseFunctions
+import FirebaseFirestore
 
 struct CalenderView: View {
     @Environment(\.dismiss) private var dismiss
@@ -64,9 +65,15 @@ struct CalenderView: View {
                         Spacer()
                         
                         VStack(alignment: .center, spacing: 4) {
-                            Text(selectedTab == .schoolEvents ? "School Events" : "Parties")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundStyle(.primary)
+                            HStack(spacing: 4) {
+                                Text(selectedTab == .schoolEvents ? "School Events" : "Parties")
+                                    .font(.system(size: 24, weight: .bold))
+                                    .foregroundStyle(.primary)
+                                if selectedTab == .parties {
+                                    Text("🎉")
+                                        .font(.system(size: 24))
+                                }
+                            }
                             
                             if selectedTab == .schoolEvents {
                                 Text("\(displayedEvents.count) of \(filteredEvents.count) events")
@@ -266,25 +273,430 @@ struct SchoolEventsView: View {
     }
 }
 
-// MARK: - Parties View (Placeholder)
+// MARK: - Parties View
 struct PartiesView: View {
+    @Environment(\.appEnvironment) var env
+    @State private var parties: [CrowdEvent] = []
+    @State private var isLoading = false
+    @State private var selectedParty: CrowdEvent? = nil
+    
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 48))
-                .foregroundStyle(.gray.opacity(0.5))
-            
-            Text("Parties Coming Soon")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(.secondary)
-            
-            Text("Stay tuned for exciting party events!")
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        Group {
+            if isLoading {
+                VStack(spacing: 20) {
+                    ProgressView()
+                    Text("Loading parties...")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 60)
+            } else if parties.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.gray.opacity(0.5))
+                    
+                    Text("No Parties Available")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    
+                    Text("Check back later for exciting party events!")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 60)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        ForEach(parties) { party in
+                            PartyCardView(party: party)
+                                .onTapGesture {
+                                    selectedParty = party
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 60)
+        .onAppear {
+            Task {
+                await loadParties()
+            }
+        }
+        .sheet(item: $selectedParty) { party in
+            PartyDetailView(party: party)
+        }
+    }
+    
+    private func loadParties() async {
+        isLoading = true
+        do {
+            if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
+                let fetchedParties = try await firebaseRepo.fetchParties()
+                await MainActor.run {
+                    parties = fetchedParties
+                    isLoading = false
+                }
+            } else {
+                await MainActor.run {
+                    isLoading = false
+                }
+            }
+        } catch {
+            print("❌ Failed to load parties: \(error.localizedDescription)")
+            await MainActor.run {
+                isLoading = false
+            }
+        }
+    }
+}
+
+// MARK: - Party Card View
+struct PartyCardView: View {
+    let party: CrowdEvent
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Party Image
+            if let imageURL = party.imageURL, let url = URL(string: imageURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: 200)
+                            .overlay(
+                                ProgressView()
+                            )
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(height: 200)
+                            .clipped()
+                    case .failure:
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: 200)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .font(.system(size: 32))
+                                    .foregroundStyle(.gray)
+                            )
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(height: 200)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.gray)
+                    )
+            }
+            
+            // Party Info
+            VStack(alignment: .leading, spacing: 12) {
+                Text(party.title)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(isExpanded ? nil : 2)
+                
+                if isExpanded {
+                    if let description = party.description {
+                        Text(description)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                    }
+                    
+                    if let startsAt = party.startsAt {
+                        HStack(spacing: 8) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                            Text(formatEventTime(startsAt))
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.top, 8)
+                    }
+                    
+                    if let location = party.rawLocationName {
+                        HStack(spacing: 8) {
+                            Image(systemName: "location")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                            Text(location)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .background(.ultraThinMaterial)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(.primary.opacity(0.1), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isExpanded.toggle()
+            }
+        }
+    }
+    
+    private func formatEventTime(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        
+        if calendar.isDateInToday(date) {
+            return "Today at \(formatter.string(from: date))"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow at \(formatter.string(from: date))"
+        } else {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .medium
+            dateFormatter.timeStyle = .short
+            return dateFormatter.string(from: date)
+        }
+    }
+}
+
+// MARK: - Party Detail View
+struct PartyDetailView: View {
+    let party: CrowdEvent
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appEnvironment) var env
+    @StateObject private var viewModel = EventDetailViewModel()
+    @State private var isAttending = false
+    @State private var isJoining = false
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Party Image
+                    if let imageURL = party.imageURL, let url = URL(string: imageURL) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .empty:
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(height: 250)
+                                    .overlay(ProgressView())
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(height: 250)
+                                    .clipped()
+                            case .failure:
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(height: 250)
+                                    .overlay(
+                                        Image(systemName: "photo")
+                                            .font(.system(size: 40))
+                                            .foregroundStyle(.gray)
+                                    )
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Title
+                        Text(party.title)
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(.primary)
+                        
+                        // Description
+                        if let description = party.description {
+                            Text(description)
+                                .font(.system(size: 16))
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Divider()
+                        
+                        // Date & Time
+                        if let startsAt = party.startsAt {
+                            HStack(spacing: 12) {
+                                Image(systemName: "calendar")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Date & Time")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                    Text(formatEventTime(startsAt))
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(.primary)
+                                }
+                                Spacer()
+                            }
+                        }
+                        
+                        // Location
+                        if let location = party.rawLocationName {
+                            HStack(spacing: 12) {
+                                Image(systemName: "location")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Location")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                    Text(location)
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(.primary)
+                                }
+                                Spacer()
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        // Action Buttons
+                        VStack(spacing: 12) {
+                            // Join Button
+                            Button(action: {
+                                Task {
+                                    await joinParty()
+                                }
+                            }) {
+                                HStack {
+                                    if isJoining {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    } else {
+                                        Image(systemName: isAttending ? "checkmark.circle.fill" : "plus.circle.fill")
+                                            .font(.system(size: 18))
+                                        Text(isAttending ? "Joined" : "Join Party")
+                                            .font(.system(size: 16, weight: .semibold))
+                                    }
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(isAttending ? Color.green : Color.accentColor)
+                                )
+                            }
+                            .disabled(isJoining)
+                            
+                            // Buy Tickets Button
+                            if let ticketURL = party.ticketURL {
+                                Button(action: {
+                                    if let url = URL(string: ticketURL) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: "ticket.fill")
+                                            .font(.system(size: 18))
+                                        Text("Buy Tickets")
+                                            .font(.system(size: 16, weight: .semibold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.black)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle("Party Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .onAppear {
+                isAttending = AttendedEventsService.shared.isAttendingEvent(party.id)
+            }
+        }
+    }
+    
+    private func joinParty() async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
+        
+        isJoining = true
+        do {
+            try await env.eventRepo.join(eventId: party.id, userId: userId)
+            
+            // Create attendance record
+            let db = FirebaseManager.shared.db
+            let attendanceData: [String: Any] = [
+                "userId": userId,
+                "eventId": party.id,
+                "joinedAt": FieldValue.serverTimestamp()
+            ]
+            try await db.collection("userAttendances").addDocument(data: attendanceData)
+            
+            AttendedEventsService.shared.addAttendedEvent(party)
+            
+            await MainActor.run {
+                isAttending = true
+                isJoining = false
+            }
+        } catch {
+            print("❌ Failed to join party: \(error.localizedDescription)")
+            await MainActor.run {
+                isJoining = false
+            }
+        }
+    }
+    
+    private func formatEventTime(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        
+        if calendar.isDateInToday(date) {
+            return "Today at \(formatter.string(from: date))"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow at \(formatter.string(from: date))"
+        } else {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .medium
+            dateFormatter.timeStyle = .short
+            return dateFormatter.string(from: date)
+        }
     }
 }
 

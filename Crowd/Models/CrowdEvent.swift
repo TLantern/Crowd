@@ -30,6 +30,8 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     var description: String?
     var sourceURL: String?
     var rawLocationName: String?
+    var imageURL: String?
+    var ticketURL: String?
 
     var coordinates: CLLocationCoordinate2D {
         get { .init(latitude: latitude, longitude: longitude) }
@@ -109,7 +111,9 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             category: finalCategory,
             description: description,
             sourceURL: sourceURL,
-            rawLocationName: rawLocationName
+            rawLocationName: rawLocationName,
+            imageURL: nil,
+            ticketURL: nil
         )
     }
 }
