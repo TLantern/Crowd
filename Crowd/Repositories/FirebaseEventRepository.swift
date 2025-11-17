@@ -105,16 +105,12 @@ final class FirebaseEventRepository: EventRepository {
         var parseErrors = 0
         
         for document in partiesSnapshot.documents {
-            var data = document.data()
-            // Use document ID if no id field exists
-            if data["id"] == nil && data["eventId"] == nil {
-                data["id"] = document.documentID
-            }
+            let data = document.data()
             print("📄 Document ID: \(document.documentID)")
             print("📄 Document data keys: \(data.keys.sorted())")
             
             do {
-                let party = try parseEvent(from: data)
+                let party = try parseParty(from: data, documentId: document.documentID)
                 parties.append(party)
             } catch {
                 parseErrors += 1
@@ -125,6 +121,126 @@ final class FirebaseEventRepository: EventRepository {
         
         print("✅ Successfully parsed \(parties.count) parties, \(parseErrors) failed")
         return parties
+    }
+    
+    /// Parse party from events_from_linktree_raw collection
+    /// Fields: address, title, uploadedImageUrl, URL, description (contains date)
+    private func parseParty(from data: [String: Any], documentId: String) throws -> CrowdEvent {
+        guard let title = data["title"] as? String else {
+            throw CrowdError.invalidResponse
+        }
+        
+        let id = documentId
+        let description = data["description"] as? String ?? ""
+        let address = data["address"] as? String
+        let imageURL = data["uploadedImageUrl"] as? String
+        let ticketURL = data["URL"] as? String
+        
+        // Extract date from description
+        let startsAt = extractDateFromDescription(description)
+        
+        // Default coordinates (can be geocoded later if needed)
+        // Using UNT main campus coordinates as default
+        let latitude = 33.210081
+        let longitude = -97.147700
+        
+        return CrowdEvent(
+            id: id,
+            title: title,
+            hostId: "",
+            hostName: "Party Host",
+            latitude: latitude,
+            longitude: longitude,
+            radiusMeters: 0,
+            startsAt: startsAt,
+            endsAt: nil,
+            createdAt: Date(),
+            signalStrength: 0,
+            attendeeCount: 0,
+            tags: ["party"],
+            category: "Party",
+            description: description,
+            sourceURL: nil,
+            rawLocationName: address,
+            imageURL: imageURL,
+            ticketURL: ticketURL
+        )
+    }
+    
+    /// Extract date from description text
+    private func extractDateFromDescription(_ description: String) -> Date? {
+        // Try multiple date formats
+        let dateFormatters: [DateFormatter] = [
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMM d, yyyy"
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMMM d, yyyy"
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MM/dd/yyyy"
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMM d"
+                formatter.defaultDate = Date()
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .none
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .long
+                formatter.timeStyle = .none
+                return formatter
+            }()
+        ]
+        
+        // Try to find date patterns in the description
+        for formatter in dateFormatters {
+            if let date = formatter.date(from: description) {
+                return date
+            }
+        }
+        
+        // Try to find date patterns using regex
+        let patterns = [
+            "\\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{1,2},?\\s+\\d{4}\\b",
+            "\\b\\d{1,2}/\\d{1,2}/\\d{4}\\b",
+            "\\b\\d{4}-\\d{2}-\\d{2}\\b"
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let nsString = description as NSString
+                let range = NSRange(location: 0, length: nsString.length)
+                if let match = regex.firstMatch(in: description, options: [], range: range) {
+                    let matchedString = nsString.substring(with: match.range)
+                    for formatter in dateFormatters {
+                        if let date = formatter.date(from: matchedString) {
+                            return date
+                        }
+                    }
+                }
+            }
+        }
+        
+        return nil
     }
     
     func create(event: CrowdEvent) async throws {
