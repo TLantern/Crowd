@@ -41,13 +41,6 @@ struct NewEventBanner: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
-                    
-                    if let category = event.category, let eventCategory = EventCategory(rawValue: category) {
-                        Text(eventCategory.displayName)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
                 }
                 
                 Spacer()

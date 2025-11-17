@@ -647,7 +647,7 @@ final class FirebaseEventRepository: EventRepository {
     
     // MARK: - Helpers
     
-    private func parseEvent(from data: [String: Any]) throws -> CrowdEvent {
+    func parseEvent(from data: [String: Any]) throws -> CrowdEvent {
         guard let id = data["id"] as? String,
               let title = data["title"] as? String,
               let lat = data["latitude"] as? Double,

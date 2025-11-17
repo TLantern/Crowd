@@ -783,13 +783,13 @@ struct MarqueeTitle: View {
 
     private var title: some View {
         Text(text)
-            .font(.custom("Lato-Bold", size: calculatedFontSize))
+            .font(.system(size: calculatedFontSize, weight: .bold))
             .foregroundColor(.white)
             .lineLimit(1)
             .background(
                 // Measure at base font size
                 Text(text)
-                    .font(.custom("Lato-Bold", size: baseFontSize))
+                    .font(.system(size: baseFontSize, weight: .bold))
                     .lineLimit(1)
                     .background(
                         GeometryReader { g in

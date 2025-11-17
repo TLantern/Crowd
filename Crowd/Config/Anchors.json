@@ -2,7 +2,7 @@
   "anchors": [
     {
       "id": "gym_pohl_rec",
-      "name": "Pohl Rec Center – Gym",
+      "name": "Gym Buddies",
       "emoji": "🏋️",
       "location": "Pohl Recreation Center",
       "type": "anchor",
@@ -16,7 +16,7 @@
     },
     {
       "id": "willis_floor_2",
-      "name": "Willis Library – Floor 2",
+      "name": "Study Buddies",
       "emoji": "📚",
       "location": "Willis Library, Floor 2",
       "type": "anchor",
@@ -44,7 +44,7 @@
     },
     {
       "id": "eagle_landing_lunch",
-      "name": "Eagle Landing – Lunch",
+      "name": "Let's Grab Lunch",
       "emoji": "🥗",
       "location": "Eagle Landing Dining Hall",
       "type": "anchor",
@@ -58,7 +58,7 @@
     },
     {
       "id": "basketball_runs_rec",
-      "name": "Basketball Runs – Rec Courts",
+      "name": "Basketball Runs",
       "emoji": "🏀",
       "location": "Pohl Rec Center – Basketball Courts",
       "type": "anchor",
@@ -72,7 +72,7 @@
     },
     {
       "id": "eagle_landing_dinner",
-      "name": "Eagle Landing – Dinner",
+      "name": "Dinner Time",
       "emoji": "🍽️",
       "location": "Eagle Landing Dining Hall",
       "type": "anchor",
@@ -80,7 +80,7 @@
       "anchor_start_local": "16:00",
       "anchor_end_local": "19:30",
       "send_notification": true,
-      "notification_time_local": "16:00",
+      "notification_time_local": "18:00",
       "notification_message": "Dinner crowd warming up at Eagle Landing. Easy to find a seat or meet people now.",
       "description": "Dinner warm-up phase. People rolling in after classes, light chatter, more open tables. Easy opportunity to sit with others."
     }
