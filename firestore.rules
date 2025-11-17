@@ -110,6 +110,13 @@ service cloud.firestore {
       allow write: if false; // Only Cloud Functions can write
     }
     
+    // Parties collection (events_from_linktree_raw) - read-only for users
+    match /events_from_linktree_raw/{partyId} {
+      allow read: if true;
+      // Only Cloud Functions can write
+      allow write: if false;
+    }
+    
     // User attendances collection (tracking which events users are attending)
     match /userAttendances/{attendanceId} {
       // Authenticated users can read attendances
