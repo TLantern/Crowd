@@ -16,7 +16,7 @@ struct CalenderView: View {
     @EnvironmentObject private var appState: AppState
     @State private var selectedCategories: Set<EventCategory> = []
     @State private var displayedEventCount = 10
-    @State private var selectedTab: TabSelection = .schoolEvents
+    @State private var selectedTab: TabSelection = .parties
     private let eventsPerPage = 10
     
     enum TabSelection {
