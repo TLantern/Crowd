@@ -9,6 +9,7 @@ import SwiftUI
 import CoreLocation
 import FirebaseFunctions
 import FirebaseFirestore
+import MapKit
 
 struct CalenderView: View {
     @Environment(\.dismiss) private var dismiss
@@ -313,6 +314,7 @@ struct PartiesView: View {
                     LazyVStack(spacing: 16) {
                         ForEach(parties) { party in
                             Button(action: {
+                                print("🎉 Party card tapped: \(party.title)")
                                 selectedParty = party
                             }) {
                                 PartyCardView(party: party)
@@ -332,6 +334,11 @@ struct PartiesView: View {
         }
         .fullScreenCover(item: $selectedParty) { party in
             PartyDetailView(party: party)
+        }
+        .onChange(of: selectedParty) { oldValue, newValue in
+            if newValue != nil {
+                print("🎉 Selected party changed: \(newValue?.title ?? "nil")")
+            }
         }
     }
     
@@ -449,6 +456,8 @@ struct PartyDetailView: View {
     @StateObject private var viewModel = EventDetailViewModel()
     @State private var isAttending = false
     @State private var isJoining = false
+    @State private var loadedParty: CrowdEvent?
+    @State private var isLoadingParty = false
     
     var body: some View {
         ZStack(alignment: .top) {
@@ -456,10 +465,16 @@ struct PartyDetailView: View {
             Color(.systemBackground)
                 .ignoresSafeArea()
             
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Party Image - Full Width
-                    if let imageURL = party.imageURL, let url = URL(string: imageURL) {
+            if isLoadingParty {
+                ProgressView("Loading party details...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                let displayParty = loadedParty ?? party
+                
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Party Image - Full Width
+                        if let imageURL = displayParty.imageURL, let url = URL(string: imageURL) {
                         AsyncImage(url: url) { phase in
                             switch phase {
                             case .empty:
@@ -500,24 +515,25 @@ struct PartyDetailView: View {
                     // Content Section
                     VStack(alignment: .leading, spacing: 20) {
                         // Title
-                        Text(party.title)
+                        Text(displayParty.title)
                             .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(.primary)
                             .padding(.top, 20)
                         
                         // Description
-                        if let description = party.description {
+                        if let description = displayParty.description, !description.isEmpty {
                             Text(description)
                                 .font(.system(size: 16))
                                 .foregroundStyle(.secondary)
                                 .lineSpacing(4)
+                                .padding(.top, 4)
                         }
                         
                         Divider()
                             .padding(.vertical, 8)
                         
                         // Date & Time
-                        if let startsAt = party.startsAt {
+                        if let startsAt = displayParty.startsAt {
                             HStack(spacing: 16) {
                                 Image(systemName: "calendar")
                                     .font(.system(size: 20))
@@ -536,24 +552,32 @@ struct PartyDetailView: View {
                             .padding(.vertical, 8)
                         }
                         
-                        // Location
-                        if let location = party.rawLocationName {
-                            HStack(spacing: 16) {
-                                Image(systemName: "location.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(.accentColor)
-                                    .frame(width: 28)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Location")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(.secondary)
-                                    Text(location)
-                                        .font(.system(size: 17, weight: .medium))
-                                        .foregroundStyle(.primary)
+                        // Location - Clickable to open Maps
+                        if let location = displayParty.rawLocationName, !location.isEmpty {
+                            Button(action: {
+                                openLocationInMaps(address: location, coordinate: displayParty.coordinates)
+                            }) {
+                                HStack(spacing: 16) {
+                                    Image(systemName: "location.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundStyle(.accentColor)
+                                        .frame(width: 28)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Location")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                        Text(location)
+                                            .font(.system(size: 17, weight: .medium))
+                                            .foregroundStyle(.primary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right.square")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(.accentColor)
                                 }
-                                Spacer()
+                                .padding(.vertical, 8)
                             }
-                            .padding(.vertical, 8)
+                            .buttonStyle(PlainButtonStyle())
                         }
                         
                         Divider()
@@ -562,7 +586,7 @@ struct PartyDetailView: View {
                         // Action Buttons
                         VStack(spacing: 12) {
                             // Buy Tickets Button (Primary)
-                            if let ticketURL = party.ticketURL {
+                            if let ticketURL = displayParty.ticketURL {
                                 Button(action: {
                                     if let url = URL(string: ticketURL) {
                                         UIApplication.shared.open(url)
@@ -587,7 +611,7 @@ struct PartyDetailView: View {
                             // Join Button
                             Button(action: {
                                 Task {
-                                    await joinParty()
+                                    await joinParty(party: displayParty)
                                 }
                             }) {
                                 HStack {
@@ -654,13 +678,61 @@ struct PartyDetailView: View {
                 }
                 Spacer()
             }
+                }
+            }
         }
         .onAppear {
+            Task {
+                await loadPartyDetails()
+            }
             isAttending = AttendedEventsService.shared.isAttendingEvent(party.id)
         }
     }
     
-    private func joinParty() async {
+    private func loadPartyDetails() async {
+        isLoadingParty = true
+        do {
+            // Fetch fresh party data from Firebase
+            if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
+                let parties = try await firebaseRepo.fetchParties()
+                if let freshParty = parties.first(where: { $0.id == party.id }) {
+                    await MainActor.run {
+                        loadedParty = freshParty
+                        isLoadingParty = false
+                    }
+                } else {
+                    await MainActor.run {
+                        loadedParty = party
+                        isLoadingParty = false
+                    }
+                }
+            } else {
+                await MainActor.run {
+                    loadedParty = party
+                    isLoadingParty = false
+                }
+            }
+        } catch {
+            print("❌ Failed to load party details: \(error.localizedDescription)")
+            await MainActor.run {
+                loadedParty = party
+                isLoadingParty = false
+            }
+        }
+    }
+    
+    private func openLocationInMaps(address: String, coordinate: CLLocationCoordinate2D) {
+        // Try to use coordinates if available, otherwise use address string
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        mapItem.name = address
+        
+        // Open in Apple Maps
+        mapItem.openInMaps(launchOptions: [
+            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+        ])
+    }
+    
+    private func joinParty(party: CrowdEvent) async {
         guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
         
         isJoining = true
@@ -677,6 +749,14 @@ struct PartyDetailView: View {
             try await db.collection("userAttendances").addDocument(data: attendanceData)
             
             AttendedEventsService.shared.addAttendedEvent(party)
+            
+            // Update loaded party if available
+            if var updatedParty = loadedParty {
+                updatedParty.attendeeCount += 1
+                await MainActor.run {
+                    loadedParty = updatedParty
+                }
+            }
             
             await MainActor.run {
                 isAttending = true
@@ -708,42 +788,44 @@ struct PartyDetailView: View {
     }
     
     private func shareParty() {
+        let displayParty = loadedParty ?? party
+        
         // Track share analytics
         AnalyticsService.shared.track("party_shared", props: [
-            "party_id": party.id,
-            "title": party.title
+            "party_id": displayParty.id,
+            "title": displayParty.title
         ])
         
         var shareItems: [Any] = []
         
         // Create share text
-        var shareText = "🎉 \(party.title)\n\n"
+        var shareText = "🎉 \(displayParty.title)\n\n"
         
-        if let startsAt = party.startsAt {
+        if let startsAt = displayParty.startsAt {
             shareText += "📅 \(formatEventTime(startsAt))\n"
         }
         
-        if let location = party.rawLocationName {
+        if let location = displayParty.rawLocationName {
             shareText += "📍 \(location)\n\n"
         }
         
-        if let description = party.description {
+        if let description = displayParty.description {
             shareText += "\(description)\n\n"
         }
         
         // Add deep link or ticket URL
         let shareLinkService = ShareLinkService()
-        if let deepLink = shareLinkService.partyDeepLink(id: party.id) {
+        if let deepLink = shareLinkService.partyDeepLink(id: displayParty.id) {
             // Create a universal link that opens the app to party tab if installed
             shareText += "Join the party in Crowd: \(deepLink.absoluteString)"
             shareItems.append(shareText)
             shareItems.append(deepLink)
             
             // Add ticket URL as fallback for users without the app
-            if let ticketURL = party.ticketURL {
+            if let ticketURL = displayParty.ticketURL {
                 shareItems.append(URL(string: ticketURL)!)
             }
-        } else if let ticketURL = party.ticketURL {
+        } else if let ticketURL = displayParty.ticketURL {
             shareText += "Get tickets: \(ticketURL)"
             shareItems.append(shareText)
             shareItems.append(URL(string: ticketURL)!)

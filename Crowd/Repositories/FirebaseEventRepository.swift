@@ -140,8 +140,20 @@ final class FirebaseEventRepository: EventRepository {
                       data["image"] as? String
         let ticketURL = data["URL"] as? String ?? data["ticketURL"] as? String ?? data["ticketUrl"] as? String
         
-        // Extract date from description
-        let startsAt = extractDateFromDescription(description)
+        // Try to get date from dateTime field first, then extract from description
+        var startsAt: Date?
+        if let dateTimeString = data["dateTime"] as? String {
+            startsAt = parseDateTimeString(dateTimeString)
+        } else if let dateTimeTimestamp = data["dateTime"] as? Timestamp {
+            startsAt = dateTimeTimestamp.dateValue()
+        } else if let dateTimeSeconds = data["dateTime"] as? TimeInterval {
+            startsAt = Date(timeIntervalSince1970: dateTimeSeconds)
+        }
+        
+        // If no dateTime field, try to extract from description
+        if startsAt == nil {
+            startsAt = extractDateFromDescription(description)
+        }
         
         // Default coordinates (can be geocoded later if needed)
         // Using UNT main campus coordinates as default
@@ -169,6 +181,45 @@ final class FirebaseEventRepository: EventRepository {
             imageURL: imageURL,
             ticketURL: ticketURL
         )
+    }
+    
+    /// Parse dateTime string in various formats
+    private func parseDateTimeString(_ dateTimeString: String) -> Date? {
+        let formatters: [DateFormatter] = [
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .short
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }()
+        ]
+        
+        for formatter in formatters {
+            if let date = formatter.date(from: dateTimeString) {
+                return date
+            }
+        }
+        
+        return nil
     }
     
     /// Extract date from description text
