@@ -144,6 +144,24 @@ service cloud.firestore {
       allow update: if false;
     }
     
+    // Party "I'm Going" collection (tracking which users clicked "I'm Going" for parties)
+    match /partyGoing/{goingId} {
+      // Anyone can read going records (to display counts)
+      allow read: if true;
+      
+      // Authenticated users can create their own going records
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.partyId != null;
+      
+      // Users can delete their own going records
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+      
+      // No updates allowed (create/delete only)
+      allow update: if false;
+    }
+    
     // Activity logs collection (for DAU tracking)
     match /activity_logs/{date}/events/{eventId} {
       // Authenticated users can create events (for logging their actions)

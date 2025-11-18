@@ -110,7 +110,7 @@ final class FirebaseEventRepository: EventRepository {
             print("📄 Document data keys: \(data.keys.sorted())")
             
             do {
-                let party = try parseParty(from: data, documentId: document.documentID)
+                let party = try await parseParty(from: data, documentId: document.documentID)
                 parties.append(party)
             } catch {
                 parseErrors += 1
@@ -125,7 +125,7 @@ final class FirebaseEventRepository: EventRepository {
     
     /// Parse party from events_from_linktree_raw collection
     /// Fields: address, title, uploadedImageUrl, URL, description (contains date)
-    private func parseParty(from data: [String: Any], documentId: String) throws -> CrowdEvent {
+    private func parseParty(from data: [String: Any], documentId: String) async throws -> CrowdEvent {
         guard let title = data["title"] as? String else {
             throw CrowdError.invalidResponse
         }
@@ -139,6 +139,16 @@ final class FirebaseEventRepository: EventRepository {
                       data["imageUrl"] as? String ??
                       data["image"] as? String
         let ticketURL = data["URL"] as? String ?? data["ticketURL"] as? String ?? data["ticketUrl"] as? String
+        
+        // Check for host/group name in multiple possible field names
+        let hostName = data["hostName"] as? String ??
+                      data["host_name"] as? String ??
+                      data["groupName"] as? String ??
+                      data["group_name"] as? String ??
+                      data["organization"] as? String ??
+                      data["org"] as? String ??
+                      data["host"] as? String ??
+                      "Party Host"
         
         // Try to get date from dateTime field first, then extract from description
         var startsAt: Date?
@@ -160,11 +170,14 @@ final class FirebaseEventRepository: EventRepository {
         let latitude = 33.210081
         let longitude = -97.147700
         
+        // Fetch going count for this party
+        let goingCount = try? await getPartyGoingCount(partyId: id)
+        
         return CrowdEvent(
             id: id,
             title: title,
             hostId: "",
-            hostName: "Party Host",
+            hostName: hostName,
             latitude: latitude,
             longitude: longitude,
             radiusMeters: 0,
@@ -172,7 +185,7 @@ final class FirebaseEventRepository: EventRepository {
             endsAt: nil,
             createdAt: Date(),
             signalStrength: 0,
-            attendeeCount: 0,
+            attendeeCount: goingCount ?? 0,
             tags: ["party"],
             category: "Party",
             description: description,
@@ -181,6 +194,87 @@ final class FirebaseEventRepository: EventRepository {
             imageURL: imageURL,
             ticketURL: ticketURL
         )
+    }
+    
+    // MARK: - Party "I'm Going" Functions
+    
+    /// Mark that a user is going to a party
+    func markPartyGoing(partyId: String, userId: String) async throws {
+        print("🎉 Marking party going: partyId=\(partyId), userId=\(userId)")
+        
+        // Check if user already marked going
+        let existingQuery = try await db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: partyId)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+        
+        if !existingQuery.documents.isEmpty {
+            print("⚠️ User \(userId) already marked going for party \(partyId)")
+            return // Already marked, no error
+        }
+        
+        // Create going record
+        let goingData: [String: Any] = [
+            "partyId": partyId,
+            "userId": userId,
+            "clickedAt": FieldValue.serverTimestamp()
+        ]
+        
+        try await db.collection("partyGoing").addDocument(data: goingData)
+        print("✅ Successfully marked party going")
+    }
+    
+    /// Unmark that a user is going to a party
+    func unmarkPartyGoing(partyId: String, userId: String) async throws {
+        print("🎉 Unmarking party going: partyId=\(partyId), userId=\(userId)")
+        
+        // Find user's going record
+        let goingQuery = try await db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: partyId)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+        
+        // Delete all matching records (should only be one)
+        for document in goingQuery.documents {
+            try await document.reference.delete()
+        }
+        
+        print("✅ Successfully unmarked party going")
+    }
+    
+    /// Get the count of users going to a party
+    func getPartyGoingCount(partyId: String) async throws -> Int {
+        let goingQuery = try await db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: partyId)
+            .getDocuments()
+        
+        return goingQuery.documents.count
+    }
+    
+    /// Check if a user is going to a party
+    func isUserGoingToParty(partyId: String, userId: String) async throws -> Bool {
+        let goingQuery = try await db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: partyId)
+            .whereField("userId", isEqualTo: userId)
+            .limit(to: 1)
+            .getDocuments()
+        
+        return !goingQuery.documents.isEmpty
+    }
+    
+    /// Listen to party going count changes in real-time
+    func listenToPartyGoingCount(partyId: String, onChange: @escaping (Int) -> Void) -> ListenerRegistration {
+        return db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: partyId)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("❌ Error listening to party going count: \(error.localizedDescription)")
+                    return
+                }
+                
+                let count = snapshot?.documents.count ?? 0
+                onChange(count)
+            }
     }
     
     /// Parse dateTime string in various formats

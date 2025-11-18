@@ -414,10 +414,56 @@ struct PartyCardView: View {
             
             // Party Info
             VStack(alignment: .leading, spacing: 12) {
-                Text(party.title)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
+                // Title + Host Name (biggest)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(party.title)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    
+                    if !party.hostName.isEmpty && party.hostName != "Party Host" {
+                        Text(party.hostName)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                
+                // Time with emoji
+                if let startsAt = party.startsAt {
+                    HStack(spacing: 6) {
+                        Text("📅")
+                            .font(.system(size: 14))
+                        Text(formatEventTime(startsAt))
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                // Address with emoji
+                if let address = party.rawLocationName, !address.isEmpty {
+                    HStack(spacing: 6) {
+                        Text("📍")
+                            .font(.system(size: 14))
+                        Text(address)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                
+                // Going count badge
+                if party.attendeeCount > 0 {
+                    HStack(spacing: 4) {
+                        Text("\(party.attendeeCount >= 50 ? "50+" : "\(party.attendeeCount)")")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.accentColor)
+                        Text("going")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 4)
+                }
             }
             .padding(16)
         }
@@ -458,6 +504,8 @@ struct PartyDetailView: View {
     @State private var isJoining = false
     @State private var loadedParty: CrowdEvent?
     @State private var isLoadingParty = false
+    @State private var goingCount: Int = 0
+    @State private var goingCountListener: ListenerRegistration?
     
     var body: some View {
         ZStack(alignment: .top) {
@@ -514,11 +562,19 @@ struct PartyDetailView: View {
                     
                     // Content Section
                     VStack(alignment: .leading, spacing: 20) {
-                        // Title
-                        Text(displayParty.title)
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .padding(.top, 20)
+                        // Title + Host Name (biggest)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(displayParty.title)
+                                .font(.system(size: 32, weight: .bold))
+                                .foregroundStyle(.primary)
+                            
+                            if !displayParty.hostName.isEmpty && displayParty.hostName != "Party Host" {
+                                Text(displayParty.hostName)
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.top, 20)
                         
                         // Description
                         if let description = displayParty.description, !description.isEmpty {
@@ -526,7 +582,7 @@ struct PartyDetailView: View {
                                 .font(.system(size: 16))
                                 .foregroundStyle(.secondary)
                                 .lineSpacing(4)
-                                .padding(.top, 4)
+                                .padding(.top, 8)
                         }
                         
                         Divider()
@@ -608,10 +664,10 @@ struct PartyDetailView: View {
                                 }
                             }
                             
-                            // Join Button
+                            // I'm Going Button with count
                             Button(action: {
                                 Task {
-                                    await joinParty(party: displayParty)
+                                    await toggleGoing(party: displayParty)
                                 }
                             }) {
                                 HStack {
@@ -619,10 +675,17 @@ struct PartyDetailView: View {
                                         ProgressView()
                                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     } else {
-                                        Image(systemName: isAttending ? "checkmark.circle.fill" : "plus.circle.fill")
+                                        Image(systemName: isAttending ? "checkmark.circle.fill" : "hand.thumbsup.fill")
                                             .font(.system(size: 18))
-                                        Text(isAttending ? "Joined" : "Join Party")
-                                            .font(.system(size: 17, weight: .semibold))
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(isAttending ? "Going" : "I'm Going")
+                                                .font(.system(size: 17, weight: .semibold))
+                                            if goingCount > 0 {
+                                                Text("\(goingCount >= 50 ? "50+" : "\(goingCount)") going")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .opacity(0.9)
+                                            }
+                                        }
                                     }
                                 }
                                 .foregroundColor(.white)
@@ -685,7 +748,11 @@ struct PartyDetailView: View {
             Task {
                 await loadPartyDetails()
             }
-            isAttending = AttendedEventsService.shared.isAttendingEvent(party.id)
+            setupGoingCountListener()
+        }
+        .onDisappear {
+            goingCountListener?.remove()
+            goingCountListener = nil
         }
     }
     
@@ -694,17 +761,22 @@ struct PartyDetailView: View {
         do {
             // Fetch fresh party data from Firebase
             if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
-                let parties = try await firebaseRepo.fetchParties()
-                if let freshParty = parties.first(where: { $0.id == party.id }) {
-                    await MainActor.run {
-                        loadedParty = freshParty
-                        isLoadingParty = false
-                    }
-                } else {
-                    await MainActor.run {
-                        loadedParty = party
-                        isLoadingParty = false
-                    }
+                // Fetch going count and check if user is going
+                let count = try? await firebaseRepo.getPartyGoingCount(partyId: party.id)
+                let userId = FirebaseManager.shared.getCurrentUserId()
+                let isGoing = userId != nil ? (try? await firebaseRepo.isUserGoingToParty(partyId: party.id, userId: userId!)) ?? false : false
+                
+                // Update party with fresh data
+                var updatedParty = party
+                if let count = count {
+                    updatedParty.attendeeCount = count
+                }
+                
+                await MainActor.run {
+                    loadedParty = updatedParty
+                    isAttending = isGoing
+                    goingCount = count ?? 0
+                    isLoadingParty = false
                 }
             } else {
                 await MainActor.run {
@@ -721,6 +793,25 @@ struct PartyDetailView: View {
         }
     }
     
+    private func setupGoingCountListener() {
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else { return }
+        
+        // Remove existing listener if any
+        goingCountListener?.remove()
+        
+        // Set up real-time listener
+        goingCountListener = firebaseRepo.listenToPartyGoingCount(partyId: party.id) { count in
+            Task { @MainActor in
+                goingCount = count
+                // Update loaded party count as well
+                if var updatedParty = loadedParty {
+                    updatedParty.attendeeCount = count
+                    loadedParty = updatedParty
+                }
+            }
+        }
+    }
+    
     private func openLocationInMaps(address: String, coordinate: CLLocationCoordinate2D) {
         // Try to use coordinates if available, otherwise use address string
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
@@ -732,38 +823,31 @@ struct PartyDetailView: View {
         ])
     }
     
-    private func joinParty(party: CrowdEvent) async {
-        guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
+    private func toggleGoing(party: CrowdEvent) async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId(),
+              let firebaseRepo = env.eventRepo as? FirebaseEventRepository else { return }
         
         isJoining = true
         do {
-            try await env.eventRepo.join(eventId: party.id, userId: userId)
-            
-            // Create attendance record
-            let db = FirebaseManager.shared.db
-            let attendanceData: [String: Any] = [
-                "userId": userId,
-                "eventId": party.id,
-                "joinedAt": FieldValue.serverTimestamp()
-            ]
-            try await db.collection("userAttendances").addDocument(data: attendanceData)
-            
-            AttendedEventsService.shared.addAttendedEvent(party)
-            
-            // Update loaded party if available
-            if var updatedParty = loadedParty {
-                updatedParty.attendeeCount += 1
+            if isAttending {
+                // Unmark going
+                try await firebaseRepo.unmarkPartyGoing(partyId: party.id, userId: userId)
+                
                 await MainActor.run {
-                    loadedParty = updatedParty
+                    isAttending = false
+                    isJoining = false
+                }
+            } else {
+                // Mark going
+                try await firebaseRepo.markPartyGoing(partyId: party.id, userId: userId)
+                
+                await MainActor.run {
+                    isAttending = true
+                    isJoining = false
                 }
             }
-            
-            await MainActor.run {
-                isAttending = true
-                isJoining = false
-            }
         } catch {
-            print("❌ Failed to join party: \(error.localizedDescription)")
+            print("❌ Failed to toggle going: \(error.localizedDescription)")
             await MainActor.run {
                 isJoining = false
             }
