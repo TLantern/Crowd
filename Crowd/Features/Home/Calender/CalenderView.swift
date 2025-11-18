@@ -464,6 +464,30 @@ struct PartyCardView: View {
                     }
                     .padding(.top, 4)
                 }
+                
+                // Buy Ticket Button
+                if let ticketURL = party.ticketURL {
+                    Button(action: {
+                        if let url = URL(string: ticketURL) {
+                            UIApplication.shared.open(url)
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "ticket.fill")
+                                .font(.system(size: 14))
+                            Text("Buy Ticket")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.black)
+                        )
+                    }
+                    .padding(.top, 8)
+                }
             }
             .padding(16)
         }
@@ -698,23 +722,25 @@ struct PartyDetailView: View {
                             }
                             .disabled(isJoining)
                             
-                            // Share Button
-                            Button(action: {
-                                shareParty()
-                            }) {
-                                HStack {
-                                    Image(systemName: "square.and.arrow.up")
-                                        .font(.system(size: 18))
-                                    Text("Share Party")
-                                        .font(.system(size: 17, weight: .semibold))
+                            // Share Button - Shares ticket URL
+                            if let ticketURL = displayParty.ticketURL {
+                                Button(action: {
+                                    shareTicketURL(ticketURL: ticketURL, partyTitle: displayParty.title)
+                                }) {
+                                    HStack {
+                                        Image(systemName: "square.and.arrow.up")
+                                            .font(.system(size: 18))
+                                        Text("Share")
+                                            .font(.system(size: 17, weight: .semibold))
+                                    }
+                                    .foregroundColor(.primary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(Color(.systemGray6))
+                                    )
                                 }
-                                .foregroundColor(.primary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(Color(.systemGray6))
-                                )
                             }
                         }
                         .padding(.top, 8)
@@ -871,50 +897,22 @@ struct PartyDetailView: View {
         }
     }
     
-    private func shareParty() {
-        let displayParty = loadedParty ?? party
-        
+    private func shareTicketURL(ticketURL: String, partyTitle: String) {
         // Track share analytics
-        AnalyticsService.shared.track("party_shared", props: [
-            "party_id": displayParty.id,
-            "title": displayParty.title
+        AnalyticsService.shared.track("party_ticket_shared", props: [
+            "party_id": party.id,
+            "title": partyTitle
         ])
         
-        var shareItems: [Any] = []
+        // Create share text with ticket URL
+        var shareText = "🎉 \(partyTitle)\n\n"
+        shareText += "Get tickets: \(ticketURL)"
         
-        // Create share text
-        var shareText = "🎉 \(displayParty.title)\n\n"
+        var shareItems: [Any] = [shareText]
         
-        if let startsAt = displayParty.startsAt {
-            shareText += "📅 \(formatEventTime(startsAt))\n"
-        }
-        
-        if let location = displayParty.rawLocationName {
-            shareText += "📍 \(location)\n\n"
-        }
-        
-        if let description = displayParty.description {
-            shareText += "\(description)\n\n"
-        }
-        
-        // Add deep link or ticket URL
-        let shareLinkService = ShareLinkService()
-        if let deepLink = shareLinkService.partyDeepLink(id: displayParty.id) {
-            // Create a universal link that opens the app to party tab if installed
-            shareText += "Join the party in Crowd: \(deepLink.absoluteString)"
-            shareItems.append(shareText)
-            shareItems.append(deepLink)
-            
-            // Add ticket URL as fallback for users without the app
-            if let ticketURL = displayParty.ticketURL {
-                shareItems.append(URL(string: ticketURL)!)
-            }
-        } else if let ticketURL = displayParty.ticketURL {
-            shareText += "Get tickets: \(ticketURL)"
-            shareItems.append(shareText)
-            shareItems.append(URL(string: ticketURL)!)
-        } else {
-            shareItems.append(shareText)
+        // Add ticket URL
+        if let url = URL(string: ticketURL) {
+            shareItems.append(url)
         }
         
         let activityViewController = UIActivityViewController(
