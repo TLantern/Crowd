@@ -312,10 +312,12 @@ struct PartiesView: View {
                 ScrollView {
                     LazyVStack(spacing: 16) {
                         ForEach(parties) { party in
-                            PartyCardView(party: party)
-                                .onTapGesture {
-                                    selectedParty = party
-                                }
+                            Button(action: {
+                                selectedParty = party
+                            }) {
+                                PartyCardView(party: party)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                     .padding(.horizontal, 20)
@@ -359,7 +361,6 @@ struct PartiesView: View {
 // MARK: - Party Card View
 struct PartyCardView: View {
     let party: CrowdEvent
-    @State private var isExpanded = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -409,40 +410,7 @@ struct PartyCardView: View {
                 Text(party.title)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(.primary)
-                    .lineLimit(isExpanded ? nil : 2)
-                
-                if isExpanded {
-                    if let description = party.description {
-                        Text(description)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 4)
-                    }
-                    
-                    if let startsAt = party.startsAt {
-                        HStack(spacing: 8) {
-                            Image(systemName: "calendar")
-                                .font(.system(size: 14))
-                                .foregroundStyle(.secondary)
-                            Text(formatEventTime(startsAt))
-                                .font(.system(size: 14))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.top, 8)
-                    }
-                    
-                    if let location = party.rawLocationName {
-                        HStack(spacing: 8) {
-                            Image(systemName: "location")
-                                .font(.system(size: 14))
-                                .foregroundStyle(.secondary)
-                            Text(location)
-                                .font(.system(size: 14))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.top, 4)
-                    }
-                }
+                    .lineLimit(2)
             }
             .padding(16)
         }
@@ -453,12 +421,6 @@ struct PartyCardView: View {
                 .stroke(.primary.opacity(0.1), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isExpanded.toggle()
-            }
-        }
     }
     
     private func formatEventTime(_ date: Date) -> String {
