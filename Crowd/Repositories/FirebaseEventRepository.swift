@@ -133,8 +133,12 @@ final class FirebaseEventRepository: EventRepository {
         let id = documentId
         let description = data["description"] as? String ?? ""
         let address = data["address"] as? String
-        let imageURL = data["uploadedImageUrl"] as? String
-        let ticketURL = data["URL"] as? String
+        // Check multiple possible image field names
+        let imageURL = data["uploadedImageUrl"] as? String ?? 
+                      data["imageURL"] as? String ?? 
+                      data["imageUrl"] as? String ??
+                      data["image"] as? String
+        let ticketURL = data["URL"] as? String ?? data["ticketURL"] as? String ?? data["ticketUrl"] as? String
         
         // Extract date from description
         let startsAt = extractDateFromDescription(description)

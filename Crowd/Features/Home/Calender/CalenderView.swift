@@ -328,7 +328,7 @@ struct PartiesView: View {
                 await loadParties()
             }
         }
-        .sheet(item: $selectedParty) { party in
+        .fullScreenCover(item: $selectedParty) { party in
             PartyDetailView(party: party)
         }
     }
@@ -489,28 +489,32 @@ struct PartyDetailView: View {
     @State private var isJoining = false
     
     var body: some View {
-        NavigationStack {
+        ZStack(alignment: .top) {
+            // Background
+            Color(.systemBackground)
+                .ignoresSafeArea()
+            
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Party Image
+                VStack(spacing: 0) {
+                    // Party Image - Full Width
                     if let imageURL = party.imageURL, let url = URL(string: imageURL) {
                         AsyncImage(url: url) { phase in
                             switch phase {
                             case .empty:
                                 Rectangle()
                                     .fill(Color.gray.opacity(0.2))
-                                    .frame(height: 250)
+                                    .frame(height: 400)
                                     .overlay(ProgressView())
                             case .success(let image):
                                 image
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
-                                    .frame(height: 250)
+                                    .frame(height: 400)
                                     .clipped()
                             case .failure:
                                 Rectangle()
                                     .fill(Color.gray.opacity(0.2))
-                                    .frame(height: 250)
+                                    .frame(height: 400)
                                     .overlay(
                                         Image(systemName: "photo")
                                             .font(.system(size: 40))
@@ -520,65 +524,104 @@ struct PartyDetailView: View {
                                 EmptyView()
                             }
                         }
+                    } else {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: 400)
+                            .overlay(
+                                Image(systemName: "photo")
+                                    .font(.system(size: 40))
+                                    .foregroundStyle(.gray)
+                            )
                     }
                     
-                    VStack(alignment: .leading, spacing: 16) {
+                    // Content Section
+                    VStack(alignment: .leading, spacing: 20) {
                         // Title
                         Text(party.title)
-                            .font(.system(size: 28, weight: .bold))
+                            .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(.primary)
+                            .padding(.top, 20)
                         
                         // Description
                         if let description = party.description {
                             Text(description)
                                 .font(.system(size: 16))
                                 .foregroundStyle(.secondary)
+                                .lineSpacing(4)
                         }
                         
                         Divider()
+                            .padding(.vertical, 8)
                         
                         // Date & Time
                         if let startsAt = party.startsAt {
-                            HStack(spacing: 12) {
+                            HStack(spacing: 16) {
                                 Image(systemName: "calendar")
-                                    .font(.system(size: 18))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 24)
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(.accentColor)
+                                    .frame(width: 28)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Date & Time")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(.secondary)
                                     Text(formatEventTime(startsAt))
-                                        .font(.system(size: 16))
+                                        .font(.system(size: 17, weight: .medium))
                                         .foregroundStyle(.primary)
                                 }
                                 Spacer()
                             }
+                            .padding(.vertical, 8)
                         }
                         
                         // Location
                         if let location = party.rawLocationName {
-                            HStack(spacing: 12) {
-                                Image(systemName: "location")
-                                    .font(.system(size: 18))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 24)
+                            HStack(spacing: 16) {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(.accentColor)
+                                    .frame(width: 28)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Location")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(.secondary)
                                     Text(location)
-                                        .font(.system(size: 16))
+                                        .font(.system(size: 17, weight: .medium))
                                         .foregroundStyle(.primary)
                                 }
                                 Spacer()
                             }
+                            .padding(.vertical, 8)
                         }
                         
                         Divider()
+                            .padding(.vertical, 8)
                         
                         // Action Buttons
                         VStack(spacing: 12) {
+                            // Buy Tickets Button (Primary)
+                            if let ticketURL = party.ticketURL {
+                                Button(action: {
+                                    if let url = URL(string: ticketURL) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: "ticket.fill")
+                                            .font(.system(size: 18))
+                                        Text("Buy Tickets")
+                                            .font(.system(size: 17, weight: .semibold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(Color.black)
+                                    )
+                                }
+                            }
+                            
                             // Join Button
                             Button(action: {
                                 Task {
@@ -593,62 +636,65 @@ struct PartyDetailView: View {
                                         Image(systemName: isAttending ? "checkmark.circle.fill" : "plus.circle.fill")
                                             .font(.system(size: 18))
                                         Text(isAttending ? "Joined" : "Join Party")
-                                            .font(.system(size: 16, weight: .semibold))
+                                            .font(.system(size: 17, weight: .semibold))
                                     }
                                 }
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
+                                .padding(.vertical, 16)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: 14)
                                         .fill(isAttending ? Color.green : Color.accentColor)
                                 )
                             }
                             .disabled(isJoining)
                             
-                            // Buy Tickets Button
-                            if let ticketURL = party.ticketURL {
-                                Button(action: {
-                                    if let url = URL(string: ticketURL) {
-                                        UIApplication.shared.open(url)
-                                    }
-                                }) {
-                                    HStack {
-                                        Image(systemName: "ticket.fill")
-                                            .font(.system(size: 18))
-                                        Text("Buy Tickets")
-                                            .font(.system(size: 16, weight: .semibold))
-                                    }
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.black)
-                                    )
+                            // Share Button
+                            Button(action: {
+                                shareParty()
+                            }) {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 18))
+                                    Text("Share Party")
+                                        .font(.system(size: 17, weight: .semibold))
                                 }
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(Color(.systemGray6))
+                                )
                             }
                         }
+                        .padding(.top, 8)
                     }
-                    .padding(20)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
                 }
             }
-            .navigationTitle("Party Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+            
+            // Close Button - Floating at top
+            VStack {
+                HStack {
+                    Spacer()
                     Button {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 32))
+                            .foregroundStyle(.white)
+                            .background(Circle().fill(Color.black.opacity(0.3)).frame(width: 36, height: 36))
                     }
+                    .padding(.trailing, 20)
+                    .padding(.top, 16)
                 }
+                Spacer()
             }
-            .onAppear {
-                isAttending = AttendedEventsService.shared.isAttendingEvent(party.id)
-            }
+        }
+        .onAppear {
+            isAttending = AttendedEventsService.shared.isAttendingEvent(party.id)
         }
     }
     
@@ -696,6 +742,77 @@ struct PartyDetailView: View {
             dateFormatter.dateStyle = .medium
             dateFormatter.timeStyle = .short
             return dateFormatter.string(from: date)
+        }
+    }
+    
+    private func shareParty() {
+        // Track share analytics
+        AnalyticsService.shared.track("party_shared", props: [
+            "party_id": party.id,
+            "title": party.title
+        ])
+        
+        var shareItems: [Any] = []
+        
+        // Create share text
+        var shareText = "🎉 \(party.title)\n\n"
+        
+        if let startsAt = party.startsAt {
+            shareText += "📅 \(formatEventTime(startsAt))\n"
+        }
+        
+        if let location = party.rawLocationName {
+            shareText += "📍 \(location)\n\n"
+        }
+        
+        if let description = party.description {
+            shareText += "\(description)\n\n"
+        }
+        
+        // Add deep link or ticket URL
+        let shareLinkService = ShareLinkService()
+        if let deepLink = shareLinkService.partyDeepLink(id: party.id) {
+            // Create a universal link that opens the app to party tab if installed
+            shareText += "Join the party in Crowd: \(deepLink.absoluteString)"
+            shareItems.append(shareText)
+            shareItems.append(deepLink)
+            
+            // Add ticket URL as fallback for users without the app
+            if let ticketURL = party.ticketURL {
+                shareItems.append(URL(string: ticketURL)!)
+            }
+        } else if let ticketURL = party.ticketURL {
+            shareText += "Get tickets: \(ticketURL)"
+            shareItems.append(shareText)
+            shareItems.append(URL(string: ticketURL)!)
+        } else {
+            shareItems.append(shareText)
+        }
+        
+        let activityViewController = UIActivityViewController(
+            activityItems: shareItems,
+            applicationActivities: nil
+        )
+        
+        // Configure for iPad
+        if let popover = activityViewController.popoverPresentationController {
+            popover.sourceView = UIApplication.shared.windows.first
+            popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height / 2, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        
+        // Present the activity view controller
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootViewController = window.rootViewController {
+            
+            // Find the topmost presented view controller
+            var topController = rootViewController
+            while let presentedController = topController.presentedViewController {
+                topController = presentedController
+            }
+            
+            topController.present(activityViewController, animated: true)
         }
     }
 }
