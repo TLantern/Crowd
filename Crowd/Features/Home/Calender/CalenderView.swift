@@ -457,7 +457,7 @@ struct PartyCardView: View {
                     HStack(spacing: 4) {
                         Text("\(party.attendeeCount >= 50 ? "50+" : "\(party.attendeeCount)")")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.accentColor)
+                            .foregroundStyle(Color.accentColor)
                         Text("going")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
@@ -617,7 +617,7 @@ struct PartyDetailView: View {
                             HStack(spacing: 16) {
                                 Image(systemName: "calendar")
                                     .font(.system(size: 20))
-                                    .foregroundStyle(.accentColor)
+                                    .foregroundStyle(Color.accentColor)
                                     .frame(width: 28)
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Date & Time")
@@ -640,7 +640,7 @@ struct PartyDetailView: View {
                                 HStack(spacing: 16) {
                                     Image(systemName: "location.fill")
                                         .font(.system(size: 20))
-                                        .foregroundStyle(.accentColor)
+                                        .foregroundStyle(Color.accentColor)
                                         .frame(width: 28)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Location")
@@ -653,7 +653,7 @@ struct PartyDetailView: View {
                                     Spacer()
                                     Image(systemName: "arrow.up.right.square")
                                         .font(.system(size: 16))
-                                        .foregroundStyle(.accentColor)
+                                        .foregroundStyle(Color.accentColor)
                                 }
                                 .padding(.vertical, 8)
                             }
@@ -767,8 +767,6 @@ struct PartyDetailView: View {
                 }
                 Spacer()
             }
-                }
-            }
         }
         .onAppear {
             Task {
@@ -788,20 +786,18 @@ struct PartyDetailView: View {
             // Fetch fresh party data from Firebase
             if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
                 // Fetch going count and check if user is going
-                let count = try? await firebaseRepo.getPartyGoingCount(partyId: party.id)
+                let count = try await firebaseRepo.getPartyGoingCount(partyId: party.id)
                 let userId = FirebaseManager.shared.getCurrentUserId()
-                let isGoing = userId != nil ? (try? await firebaseRepo.isUserGoingToParty(partyId: party.id, userId: userId!)) ?? false : false
+                let isGoing = userId != nil ? (try await firebaseRepo.isUserGoingToParty(partyId: party.id, userId: userId!)) : false
                 
                 // Update party with fresh data
                 var updatedParty = party
-                if let count = count {
-                    updatedParty.attendeeCount = count
-                }
+                updatedParty.attendeeCount = count
                 
                 await MainActor.run {
                     loadedParty = updatedParty
                     isAttending = isGoing
-                    goingCount = count ?? 0
+                    goingCount = count
                     isLoadingParty = false
                 }
             } else {
