@@ -343,22 +343,42 @@ struct PartiesView: View {
     }
     
     private func loadParties() async {
-        isLoading = true
+        // Set loading state
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        // Ensure we have a Firebase repository
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
+            print("⚠️ Event repository is not FirebaseEventRepository")
+            await MainActor.run {
+                isLoading = false
+            }
+            return
+        }
+        
+        // Fetch parties from Firebase
         do {
-            if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
-                let fetchedParties = try await firebaseRepo.fetchParties()
-                await MainActor.run {
-                    parties = fetchedParties
-                    isLoading = false
-                }
-            } else {
-                await MainActor.run {
-                    isLoading = false
-                }
+            print("🎉 Starting party fetch...")
+            let fetchedParties = try await firebaseRepo.fetchParties()
+            print("✅ Successfully fetched \(fetchedParties.count) parties")
+            
+            // Sort parties by date (soonest first)
+            let sortedParties = fetchedParties.sorted { party1, party2 in
+                guard let date1 = party1.startsAt else { return false }
+                guard let date2 = party2.startsAt else { return true }
+                return date1 < date2
+            }
+            
+            // Update UI on main thread
+            await MainActor.run {
+                parties = sortedParties
+                isLoading = false
             }
         } catch {
             print("❌ Failed to load parties: \(error.localizedDescription)")
             await MainActor.run {
+                parties = []
                 isLoading = false
             }
         }
@@ -781,54 +801,94 @@ struct PartyDetailView: View {
     }
     
     private func loadPartyDetails() async {
-        isLoadingParty = true
+        // Set loading state
+        await MainActor.run {
+            isLoadingParty = true
+        }
+        
+        // Ensure we have a Firebase repository
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
+            print("⚠️ Event repository is not FirebaseEventRepository")
+            await MainActor.run {
+                loadedParty = party
+                isLoadingParty = false
+            }
+            return
+        }
+        
+        // Get current user ID
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            print("⚠️ No authenticated user found")
+            await MainActor.run {
+                loadedParty = party
+                isLoadingParty = false
+            }
+            return
+        }
+        
         do {
-            // Fetch fresh party data from Firebase
-            if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
-                // Fetch going count and check if user is going
-                let count = try await firebaseRepo.getPartyGoingCount(partyId: party.id)
-                let userId = FirebaseManager.shared.getCurrentUserId()
-                let isGoing = userId != nil ? (try await firebaseRepo.isUserGoingToParty(partyId: party.id, userId: userId!)) : false
-                
-                // Update party with fresh data
-                var updatedParty = party
-                updatedParty.attendeeCount = count
-                
-                await MainActor.run {
-                    loadedParty = updatedParty
-                    isAttending = isGoing
-                    goingCount = count
-                    isLoadingParty = false
-                }
-            } else {
-                await MainActor.run {
-                    loadedParty = party
-                    isLoadingParty = false
-                }
+            print("🎉 Loading party details for: \(party.id)")
+            
+            // Fetch party data in parallel for better performance
+            async let goingCountTask = firebaseRepo.getPartyGoingCount(partyId: party.id)
+            async let isGoingTask = firebaseRepo.isUserGoingToParty(partyId: party.id, userId: userId)
+            
+            // Wait for both results
+            let (fetchedGoingCount, fetchedIsGoing) = try await (goingCountTask, isGoingTask)
+            
+            print("✅ Party details loaded - Going: \(fetchedGoingCount), User attending: \(fetchedIsGoing)")
+            
+            // Create updated party with fresh data
+            var updatedParty = party
+            updatedParty.attendeeCount = fetchedGoingCount
+            
+            // Update UI on main thread
+            await MainActor.run {
+                loadedParty = updatedParty
+                isAttending = fetchedIsGoing
+                goingCount = fetchedGoingCount
+                isLoadingParty = false
             }
         } catch {
             print("❌ Failed to load party details: \(error.localizedDescription)")
+            
+            // Fallback to original party data
             await MainActor.run {
                 loadedParty = party
+                goingCount = party.attendeeCount
+                isAttending = false
                 isLoadingParty = false
             }
         }
     }
     
     private func setupGoingCountListener() {
-        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else { return }
+        // Ensure we have a Firebase repository
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
+            print("⚠️ Cannot setup listener - Event repository is not FirebaseEventRepository")
+            return
+        }
         
-        // Remove existing listener if any
+        // Remove existing listener if any to prevent duplicates
         goingCountListener?.remove()
+        goingCountListener = nil
         
-        // Set up real-time listener
-        goingCountListener = firebaseRepo.listenToPartyGoingCount(partyId: party.id) { count in
+        print("🎉 Setting up real-time listener for party: \(party.id)")
+        
+        // Set up real-time listener for going count changes
+        goingCountListener = firebaseRepo.listenToPartyGoingCount(partyId: party.id) { [weak self] count in
+            guard let self = self else { return }
+            
+            print("🔄 Party going count updated: \(count)")
+            
+            // Update state on main thread
             Task { @MainActor in
-                goingCount = count
-                // Update loaded party count as well
-                if var updatedParty = loadedParty {
+                self.goingCount = count
+                
+                // Update loaded party with new count
+                if var updatedParty = self.loadedParty {
                     updatedParty.attendeeCount = count
-                    loadedParty = updatedParty
+                    self.loadedParty = updatedParty
                 }
             }
         }
@@ -846,23 +906,49 @@ struct PartyDetailView: View {
     }
     
     private func toggleGoing(party: CrowdEvent) async {
-        guard let userId = FirebaseManager.shared.getCurrentUserId(),
-              let firebaseRepo = env.eventRepo as? FirebaseEventRepository else { return }
+        // Get current user ID
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            print("⚠️ Cannot toggle going - No authenticated user")
+            return
+        }
         
-        isJoining = true
+        // Ensure we have a Firebase repository
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
+            print("⚠️ Cannot toggle going - Event repository is not FirebaseEventRepository")
+            return
+        }
+        
+        // Set loading state
+        await MainActor.run {
+            isJoining = true
+        }
+        
+        // Save current state for rollback if needed
+        let previousState = isAttending
+        
         do {
             if isAttending {
+                print("🎉 Unmarking party as going: \(party.id)")
+                
                 // Unmark going
                 try await firebaseRepo.unmarkPartyGoing(partyId: party.id, userId: userId)
                 
+                print("✅ Successfully unmarked party as going")
+                
+                // Update UI
                 await MainActor.run {
                     isAttending = false
                     isJoining = false
                 }
             } else {
+                print("🎉 Marking party as going: \(party.id)")
+                
                 // Mark going
                 try await firebaseRepo.markPartyGoing(partyId: party.id, userId: userId)
                 
+                print("✅ Successfully marked party as going")
+                
+                // Update UI
                 await MainActor.run {
                     isAttending = true
                     isJoining = false
@@ -870,7 +956,10 @@ struct PartyDetailView: View {
             }
         } catch {
             print("❌ Failed to toggle going: \(error.localizedDescription)")
+            
+            // Rollback to previous state on error
             await MainActor.run {
+                isAttending = previousState
                 isJoining = false
             }
         }
