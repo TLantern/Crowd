@@ -116,7 +116,10 @@ final class EventChatService: ObservableObject {
     
     func sendMessage(eventId: String, text: String, userId: String, userName: String, image: UIImage? = nil, imageData: Data? = nil) async throws {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedText.isEmpty || image != nil else { return }
+        guard !trimmedText.isEmpty || image != nil else {
+            print("⚠️ EventChatService: Cannot send empty message (no text or image)")
+            throw NSError(domain: "EventChatService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot send empty message"])
+        }
         
         // Check authentication state before sending
         guard let currentUser = FirebaseManager.shared.auth.currentUser else {

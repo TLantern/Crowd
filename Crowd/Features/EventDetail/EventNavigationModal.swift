@@ -519,13 +519,21 @@ struct EventNavigationModal: View {
     
     private func sendMessage() {
         // Prevent multiple simultaneous sends
-        guard !isSendingMessage else { return }
+        guard !isSendingMessage else {
+            print("⚠️ EventNavigationModal: Already sending message, ignoring duplicate send")
+            return
+        }
         
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         let imageToSend = selectedImage
         let imageDataToSend = selectedImageData
         
-        guard !text.isEmpty || imageToSend != nil else { return }
+        guard !text.isEmpty || imageToSend != nil else {
+            print("⚠️ EventNavigationModal: Cannot send empty message (no text or image)")
+            return
+        }
+        
+        print("📤 EventNavigationModal: Sending message - text: '\(text)', hasImage: \(imageToSend != nil)")
         
         // Clear text and image immediately for better UX
         let messageToSend = text
@@ -537,14 +545,21 @@ struct EventNavigationModal: View {
         
         Task.detached(priority: .userInitiated) {
             do {
+                let userId = await currentUserId
+                let userName = await currentUserName
+                
+                print("📤 EventNavigationModal: Calling chatService.sendMessage with userId: \(userId), userName: \(userName)")
+                
                 try await chatService.sendMessage(
                     eventId: event.id,
                     text: messageToSend,
-                    userId: await currentUserId,
-                    userName: await currentUserName,
+                    userId: userId,
+                    userName: userName,
                     image: imageToSend,
                     imageData: imageDataToSend
                 )
+                
+                print("✅ EventNavigationModal: Message sent successfully")
                 
                 // Track analytics on main thread
                 await MainActor.run {
@@ -555,6 +570,7 @@ struct EventNavigationModal: View {
             } catch {
                 await MainActor.run {
                     print("❌ EventNavigationModal: Failed to send message: \(error)")
+                    print("❌ EventNavigationModal: Error details: \(error.localizedDescription)")
                     // Restore message text and image on error
                     messageText = messageToSend
                     selectedImage = imageToSend
@@ -699,7 +715,7 @@ struct ChatTabView: View {
                 Divider()
                 
                 // Image preview
-                if let selectedImage = selectedImage {
+                if let image = selectedImage {
                     VStack(spacing: 8) {
                         HStack {
                             Spacer()
@@ -715,7 +731,7 @@ struct ChatTabView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
                         
-                        Image(uiImage: selectedImage)
+                        Image(uiImage: image)
                             .resizable()
                             .scaledToFit()
                             .frame(maxHeight: 200)
@@ -753,11 +769,13 @@ struct ChatTabView: View {
                         .cornerRadius(20)
                         .focused($isTextFieldFocused)
                         .onSubmit {
+                            print("⌨️ EventNavigationModal: TextField onSubmit triggered")
                             sendMessage()
                             isTextFieldFocused = false
                         }
                     
                     Button(action: {
+                        print("🔘 EventNavigationModal: Send button tapped")
                         sendMessage()
                         isTextFieldFocused = false
                     }) {

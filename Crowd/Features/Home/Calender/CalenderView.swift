@@ -90,7 +90,7 @@ struct CalenderView: View {
                         }
                     }
                 }
-                .padding(.top, 20)
+                .padding(.top, 10)
                 .padding(.horizontal, 20)
                 
                 // Tab Switcher
