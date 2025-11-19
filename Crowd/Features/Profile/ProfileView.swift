@@ -63,7 +63,6 @@ struct ProfileView: View {
                         identityCard
                         tagsCard
                         statsCard
-                        debugTestBannerCard
                     }
                     .padding(16)
                 }
@@ -424,59 +423,6 @@ struct ProfileView: View {
     private func stopInterestCarousel() {
         interestCarouselTimer?.invalidate()
         interestCarouselTimer = nil
-    }
-    
-    // MARK: - Debug Test Banner Card
-    @ViewBuilder
-    private var debugTestBannerCard: some View {
-        #if DEBUG
-        SUCard(model: cardModel) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Debug")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.secondary)
-                
-                Button(action: {
-                    // Create mock event for testing
-                    let mockEvent = CrowdEvent(
-                        id: UUID().uuidString,
-                        title: "Test Event",
-                        hostId: FirebaseManager.shared.getCurrentUserId() ?? "test",
-                        hostName: "Test Host",
-                        latitude: locationService.lastKnown?.latitude ?? 33.2100,
-                        longitude: locationService.lastKnown?.longitude ?? -97.1500,
-                        radiusMeters: 60,
-                        startsAt: Date(),
-                        endsAt: Date().addingTimeInterval(3600),
-                        createdAt: Date(),
-                        signalStrength: 3,
-                        attendeeCount: 0,
-                        tags: ["party"],
-                        category: "party"
-                    )
-                    
-                    // Post notification to trigger banner
-                    NotificationCenter.default.post(
-                        name: .testNewEventBanner,
-                        object: mockEvent
-                    )
-                }) {
-                    HStack {
-                        Image(systemName: "bell.badge")
-                        Text("Test New Event Banner")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.blue)
-                    .cornerRadius(8)
-                }
-            }
-        }
-        #else
-        EmptyView()
-        #endif
     }
     
 }

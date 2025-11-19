@@ -61,7 +61,7 @@ struct HostEventSheet: View {
     @State private var coord: CLLocationCoordinate2D
     @State private var locationName: String = ""
     @State private var selectedLocationId: String? = "Current Location"
-    @State private var category: EventCategory = .other
+    @State private var category: EventCategory = .chillHangout
     @State private var timeMode: TimeMode = .now
     @State private var startDate: Date = Date()
     @State private var endDate: Date = Date().addingTimeInterval(3600) // 1 hour later

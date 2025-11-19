@@ -81,8 +81,8 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
         sourceURL: String? = nil,
         rawLocationName: String? = nil
     ) -> Self {
-        // Ensure category is never nil - default to "Just Vibing"
-        let finalCategory = category ?? EventCategory.other.rawValue
+        // Ensure category is never nil - default to "Chill Hangout"
+        let finalCategory = category ?? EventCategory.chillHangout.rawValue
         
         // Ensure tags are never empty - generate from category if needed
         var finalTags = tags
@@ -90,7 +90,7 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             if let cat = EventCategory(rawValue: finalCategory) {
                 finalTags = [cat.defaultTag]
             } else {
-                finalTags = [EventCategory.other.defaultTag]
+                finalTags = [EventCategory.chillHangout.defaultTag]
             }
         }
         

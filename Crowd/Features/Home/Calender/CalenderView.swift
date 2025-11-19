@@ -93,7 +93,7 @@ struct CalenderView: View {
                 .padding(.top, 10)
                 .padding(.horizontal, 20)
                 
-                // Tab Switcher
+                // Tab SwitcherP
                 HStack(spacing: 0) {
                     CalendarTabButton(
                         title: "Parties",
@@ -1205,6 +1205,42 @@ struct PartyDetailView: View {
         ])
     }
     
+    private func saveEventToProfile(eventId: String, userId: String) async throws {
+        // Fetch current profile to get existing eventStatus
+        let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
+        var currentEventStatus = profile.eventStatus ?? []
+        
+        // Add event ID if not already present
+        if !currentEventStatus.contains(eventId) {
+            currentEventStatus.append(eventId)
+            
+            // Update profile with new event status
+            try await UserProfileService.shared.updateProfile(userId: userId, updates: [
+                "eventStatus": currentEventStatus
+            ])
+            
+            print("✅ Saved event \(eventId) to user profile event status")
+        }
+    }
+    
+    private func removeEventFromProfile(eventId: String, userId: String) async throws {
+        // Fetch current profile to get existing eventStatus
+        let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
+        var currentEventStatus = profile.eventStatus ?? []
+        
+        // Remove event ID if present
+        if currentEventStatus.contains(eventId) {
+            currentEventStatus.removeAll { $0 == eventId }
+            
+            // Update profile with updated event status (empty array is fine, keeps the field)
+            try await UserProfileService.shared.updateProfile(userId: userId, updates: [
+                "eventStatus": currentEventStatus
+            ])
+            
+            print("✅ Removed event \(eventId) from user profile event status")
+        }
+    }
+    
     private func toggleGoing(party: CrowdEvent) async {
         // Get current user ID
         guard let userId = FirebaseManager.shared.getCurrentUserId() else {
@@ -1233,7 +1269,10 @@ struct PartyDetailView: View {
                 // Unmark going
                 try await firebaseRepo.unmarkPartyGoing(partyId: party.id, userId: userId)
                 
-                print("✅ Successfully unmarked party as going")
+                // Remove from user profile event status
+                try await removeEventFromProfile(eventId: party.id, userId: userId)
+                
+                print("✅ Successfully unmarked party as going and removed from profile")
                 
                 // Update UI
                 await MainActor.run {
@@ -1246,7 +1285,10 @@ struct PartyDetailView: View {
                 // Mark going
                 try await firebaseRepo.markPartyGoing(partyId: party.id, userId: userId)
                 
-                print("✅ Successfully marked party as going")
+                // Save to user profile event status
+                try await saveEventToProfile(eventId: party.id, userId: userId)
+                
+                print("✅ Successfully marked party as going and saved to profile")
                 
                 // Update UI
                 await MainActor.run {

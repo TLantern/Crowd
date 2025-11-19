@@ -78,6 +78,7 @@ struct CrowdHomeView: View {
     @State private var selectedAnchor: Anchor?
     @State private var showAnchorNavigationModal = false
     @State private var expandedAnchorGroupId: String? = nil // Track which anchor group is expanded
+    @State private var expandedCombinedGroupId: String? = nil // Track which combined anchor+event group is expanded
     
     // MARK: - New Event Banner
     @State private var newEventBanner: CrowdEvent? = nil
@@ -85,6 +86,9 @@ struct CrowdHomeView: View {
     @State private var newEventListeners: [ListenerRegistration] = []
     @State private var bannerDismissTimer: Timer? = nil
     @State private var initializedListenerCount = 0
+    
+    // MARK: - Event End Timer
+    @State private var eventEndCheckTimer: Timer? = nil
     
     private var anchorsToDisplay: [Anchor] {
         anchorService.activeAnchors
@@ -130,6 +134,85 @@ struct CrowdHomeView: View {
         }
         // Use coordinates rounded to 6 decimal places as group ID
         return "\(String(format: "%.6f", coord.latitude))_\(String(format: "%.6f", coord.longitude))"
+    }
+    
+    // Check if an anchor group overlaps with an event cluster (within 5 meters)
+    private func anchorGroupOverlapsCluster(_ anchorGroup: [Anchor], _ cluster: EventCluster) -> Bool {
+        guard let anchorCoord = anchorGroup.first?.coordinates else { return false }
+        let location1 = CLLocation(latitude: anchorCoord.latitude, longitude: anchorCoord.longitude)
+        let location2 = CLLocation(latitude: cluster.centerCoordinate.latitude, longitude: cluster.centerCoordinate.longitude)
+        let distance = location1.distance(from: location2)
+        return distance <= 5.0
+    }
+    
+    // Generate a unique ID for a combined group (anchors + events)
+    private func combinedGroupId(anchorGroup: [Anchor], cluster: EventCluster) -> String {
+        guard let anchorCoord = anchorGroup.first?.coordinates else {
+            return "combined_\(cluster.id)"
+        }
+        return "combined_\(String(format: "%.6f", anchorCoord.latitude))_\(String(format: "%.6f", anchorCoord.longitude))"
+    }
+    
+    // Calculate expanded coordinate for anchor in a combined group
+    private func expandedAnchorCoordinateInCombined(
+        anchor: Anchor,
+        anchorGroup: [Anchor],
+        cluster: EventCluster,
+        center: CLLocationCoordinate2D,
+        groupId: String
+    ) -> CLLocationCoordinate2D {
+        guard expandedCombinedGroupId == groupId else {
+            return center
+        }
+        
+        guard let index = anchorGroup.firstIndex(where: { $0.id == anchor.id }) else {
+            return center
+        }
+        
+        // Position anchors on the left side, events on the right
+        let totalItems = anchorGroup.count + cluster.eventCount
+        let spacingMeters: Double = 250.0
+        let totalWidth = Double(totalItems - 1) * spacingMeters
+        let startOffset = -totalWidth / 2.0
+        let anchorOffset = startOffset + (Double(index) * spacingMeters)
+        
+        let lonOffset = anchorOffset / (111000.0 * cos(center.latitude * .pi / 180.0))
+        
+        return CLLocationCoordinate2D(
+            latitude: center.latitude,
+            longitude: center.longitude + lonOffset
+        )
+    }
+    
+    // Calculate expanded coordinate for event in a combined group
+    private func expandedEventCoordinateInCombined(
+        event: CrowdEvent,
+        anchorGroup: [Anchor],
+        cluster: EventCluster,
+        center: CLLocationCoordinate2D,
+        groupId: String
+    ) -> CLLocationCoordinate2D {
+        guard expandedCombinedGroupId == groupId else {
+            return center
+        }
+        
+        guard let index = cluster.events.firstIndex(where: { $0.id == event.id }) else {
+            return center
+        }
+        
+        // Position anchors on the left side, events on the right
+        let totalItems = anchorGroup.count + cluster.eventCount
+        let spacingMeters: Double = 250.0
+        let totalWidth = Double(totalItems - 1) * spacingMeters
+        let startOffset = -totalWidth / 2.0
+        let eventOffset = startOffset + (Double(anchorGroup.count + index) * spacingMeters)
+        
+        let lonOffset = eventOffset / (111000.0 * cos(center.latitude * .pi / 180.0))
+        
+        return CLLocationCoordinate2D(
+            latitude: center.latitude,
+            longitude: center.longitude + lonOffset
+        )
     }
     
     // Calculate expanded coordinate for anchor in a group
@@ -205,12 +288,26 @@ struct CrowdHomeView: View {
         }
     }
     
-    // MARK: - Helper: Filter events to today only
+    // MARK: - Helper: Filter events to today only and not ended
     private func filterEventsForToday(_ events: [CrowdEvent]) -> [CrowdEvent] {
         let calendar = Calendar.current
         let now = Date()
         
         return events.filter { event in
+            // First, check if event has ended
+            if let endsAt = event.endsAt {
+                // Event has ended if end time has passed
+                if endsAt < now {
+                    return false
+                }
+            } else if let startsAt = event.startsAt {
+                // If no end time but has start time, assume 4 hour duration
+                let fourHoursLater = Calendar.current.date(byAdding: .hour, value: 4, to: startsAt) ?? startsAt
+                if fourHoursLater < now {
+                    return false
+                }
+            }
+            
             // If event has a start time, check if it's today
             if let startsAt = event.startsAt {
                 return calendar.isDateInToday(startsAt)
@@ -418,21 +515,210 @@ struct CrowdHomeView: View {
         }
     }
     
+    // Helper struct to represent combined groups for rendering
+    private struct CombinedGroup: Identifiable {
+        let id: String
+        let anchorGroup: [Anchor]
+        let cluster: EventCluster
+        let center: CLLocationCoordinate2D
+    }
+    
+    // Helper struct to represent standalone anchor groups
+    private struct StandaloneAnchorGroup: Identifiable {
+        let id: String
+        let group: [Anchor]
+    }
+    
+    // Compute combined groups and standalone groups
+    private var combinedGroups: [CombinedGroup] {
+        guard sourceFilter == .user else { return [] }
+        let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
+        let clusters = currentEventsClusters
+        var processedClusters = Set<String>()
+        var result: [CombinedGroup] = []
+        
+        for anchorGroup in anchorGroups {
+            guard let anchorCoord = anchorGroup.first?.coordinates else { continue }
+            
+            for cluster in clusters {
+                if !processedClusters.contains(cluster.id) && anchorGroupOverlapsCluster(anchorGroup, cluster) {
+                    let groupId = combinedGroupId(anchorGroup: anchorGroup, cluster: cluster)
+                    result.append(CombinedGroup(
+                        id: groupId,
+                        anchorGroup: anchorGroup,
+                        cluster: cluster,
+                        center: anchorCoord
+                    ))
+                    processedClusters.insert(cluster.id)
+                    break
+                }
+            }
+        }
+        
+        return result
+    }
+    
+    // Compute standalone anchor groups (not overlapping with clusters)
+    private var standaloneAnchorGroups: [StandaloneAnchorGroup] {
+        guard sourceFilter == .user else { return [] }
+        let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
+        let clusters = currentEventsClusters
+        var processedAnchorIndices = Set<Int>()
+        
+        // Mark anchor groups that are part of combined groups
+        for (index, anchorGroup) in anchorGroups.enumerated() {
+            guard let anchorCoord = anchorGroup.first?.coordinates else { continue }
+            
+            for cluster in clusters {
+                if anchorGroupOverlapsCluster(anchorGroup, cluster) {
+                    processedAnchorIndices.insert(index)
+                    break
+                }
+            }
+        }
+        
+        // Return standalone groups
+        return anchorGroups.enumerated().compactMap { index, group in
+            if processedAnchorIndices.contains(index) {
+                return nil
+            }
+            let groupId = anchorGroupId(for: group)
+            return StandaloneAnchorGroup(id: groupId, group: group)
+        }
+    }
+    
     @MapContentBuilder
     private func anchorAnnotations() -> some MapContent {
         if sourceFilter == .user {
-            let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
-            ForEach(Array(anchorGroups.enumerated()), id: \.offset) { index, group in
-                anchorGroupAnnotations(group: group)
+            // Render combined groups (anchors + events at same location)
+            ForEach(combinedGroups) { combinedGroup in
+                let isExpanded = expandedCombinedGroupId == combinedGroup.id
+                
+                if isExpanded {
+                    combinedGroupExpandedAnnotations(
+                        anchorGroup: combinedGroup.anchorGroup,
+                        cluster: combinedGroup.cluster,
+                        center: combinedGroup.center,
+                        groupId: combinedGroup.id
+                    )
+                } else {
+                    combinedGroupCollapsedAnnotation(
+                        anchorGroup: combinedGroup.anchorGroup,
+                        cluster: combinedGroup.cluster,
+                        center: combinedGroup.center,
+                        groupId: combinedGroup.id
+                    )
+                }
+            }
+            
+            // Render standalone anchor groups (not overlapping with clusters)
+            ForEach(standaloneAnchorGroups) { standaloneGroup in
+                anchorGroupAnnotations(group: standaloneGroup.group)
             }
         }
+    }
+    
+    @MapContentBuilder
+    private func combinedGroupExpandedAnnotations(
+        anchorGroup: [Anchor],
+        cluster: EventCluster,
+        center: CLLocationCoordinate2D,
+        groupId: String
+    ) -> some MapContent {
+        // Render expanded anchors
+        ForEach(Array(anchorGroup), id: \.id) { anchor in
+            let displayCoord = expandedAnchorCoordinateInCombined(
+                anchor: anchor,
+                anchorGroup: anchorGroup,
+                cluster: cluster,
+                center: center,
+                groupId: groupId
+            )
+            
+            Annotation("", coordinate: displayCoord) {
+                AnchorAnnotationView(
+                    anchor: anchor,
+                    onTap: {
+                        handleAnchorTap(anchor)
+                    }
+                )
+            }
+            .annotationTitles(.hidden)
+        }
+        
+        // Render expanded events
+        ForEach(Array(cluster.events), id: \.id) { event in
+            let displayCoord = expandedEventCoordinateInCombined(
+                event: event,
+                anchorGroup: anchorGroup,
+                cluster: cluster,
+                center: center,
+                groupId: groupId
+            )
+            
+            Annotation("", coordinate: displayCoord) {
+                EventAnnotationView(
+                    event: event,
+                    isInExpandedCluster: true,
+                    currentUserId: FirebaseManager.shared.getCurrentUserId()
+                )
+                .onTapGesture {
+                    handleEventTap(event)
+                }
+            }
+            .annotationTitles(.hidden)
+        }
+    }
+    
+    @MapContentBuilder
+    private func combinedGroupCollapsedAnnotation(
+        anchorGroup: [Anchor],
+        cluster: EventCluster,
+        center: CLLocationCoordinate2D,
+        groupId: String
+    ) -> some MapContent {
+        // Show anchor annotation with count indicator for both anchors and events
+        if let firstAnchor = anchorGroup.first {
+            let totalCount = anchorGroup.count + cluster.eventCount
+            Annotation("", coordinate: center) {
+                AnchorAnnotationView(
+                    anchor: firstAnchor,
+                    count: totalCount > 1 ? totalCount : nil,
+                    onTap: {
+                        handleCombinedGroupTap(anchorGroup: anchorGroup, cluster: cluster, groupId: groupId)
+                    }
+                )
+            }
+            .annotationTitles(.hidden)
+        }
+    }
+    
+    // Compute clusters that don't overlap with anchors
+    private var standaloneClusters: [EventCluster] {
+        guard sourceFilter == .user else { return currentEventsClusters }
+        let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
+        let clusters = currentEventsClusters
+        var processedClusters = Set<String>()
+        
+        // Mark clusters that overlap with anchors
+        for anchorGroup in anchorGroups {
+            guard anchorGroup.first?.coordinates != nil else { continue }
+            for cluster in clusters {
+                if anchorGroupOverlapsCluster(anchorGroup, cluster) {
+                    processedClusters.insert(cluster.id)
+                }
+            }
+        }
+        
+        // Return clusters that don't overlap
+        return clusters.filter { !processedClusters.contains($0.id) }
     }
     
     // MARK: - Map View
     private var mapView: some View {
         Map(position: $cameraPosition) {
-            // Event clusters (rendered first)
-            ForEach(currentEventsClusters) { cluster in
+            // Event clusters (rendered first, but skip ones that overlap with anchors)
+            ForEach(standaloneClusters) { cluster in
                 if expandedClusterId == cluster.id && cluster.eventCount > 1 {
                     expandedClusterAnnotations(cluster: cluster)
                 } else {
@@ -440,7 +726,7 @@ struct CrowdHomeView: View {
                 }
             }
             
-            // Anchor annotations (only show on user-created events view, not school-hosted)
+            // Anchor annotations (includes combined groups)
             anchorAnnotations()
             
             // User location annotation (rendered last to ensure it's always on top)
@@ -458,6 +744,11 @@ struct CrowdHomeView: View {
                     } else if showSearchResults {
                         isSearchFocused = false
                         showSearchResults = false
+                    } else if expandedCombinedGroupId != nil {
+                        // Collapse expanded combined groups when tapping on map
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            expandedCombinedGroupId = nil
+                        }
                     } else if expandedAnchorGroupId != nil {
                         // Collapse expanded anchor groups when tapping on map
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -477,7 +768,10 @@ struct CrowdHomeView: View {
             snapTo(selectedRegion)
             AnalyticsService.shared.trackScreenView("home")
             AnalyticsService.shared.track("map_viewed", props: [:])
-            if let location = locationService.lastKnown {
+            
+            // Capture location synchronously to avoid concurrency warnings
+            let location = locationService.lastKnown
+            if let location = location {
                 let coordinate = CLLocationCoordinate2D(latitude: location.latitude, longitude: location.longitude)
                 let zone = coordinate.geohash(precision: 4)
                 AnalyticsService.shared.logToFirestore(eventName: "map_viewed", zone: zone)
@@ -498,11 +792,25 @@ struct CrowdHomeView: View {
         currentCamera = ctx.camera
         currentCameraDistance = ctx.camera.distance
         
+        if expandedCombinedGroupId != nil && currentCameraDistance >= 3000 {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                expandedCombinedGroupId = nil
+            }
+            print("📍 Auto-collapsed combined group at distance 3000")
+        }
+        
         if expandedClusterId != nil && currentCameraDistance >= 3000 {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 expandedClusterId = nil
             }
             print("📍 Auto-collapsed cluster at distance 3000")
+        }
+        
+        if expandedAnchorGroupId != nil && currentCameraDistance >= 3000 {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                expandedAnchorGroupId = nil
+            }
+            print("📍 Auto-collapsed anchor group at distance 3000")
         }
         
         let spec = selectedRegion.spec
@@ -621,10 +929,13 @@ struct CrowdHomeView: View {
                     if let event = newEvent {
                         liveAttendeeCount = event.attendeeCount
                         startEventListener(for: event)
+                        // Restart timer to check for event end
+                        startEventEndCheckTimer()
                     } else {
                         eventListener?.remove()
                         eventListener = nil
                         liveAttendeeCount = 0
+                        stopEventEndCheckTimer()
                     }
                 }
                 .onAppear {
@@ -632,6 +943,10 @@ struct CrowdHomeView: View {
                         liveAttendeeCount = joinedEvent.attendeeCount
                         startEventListener(for: joinedEvent)
                     }
+                    startEventEndCheckTimer()
+                }
+                .onDisappear {
+                    stopEventEndCheckTimer()
                 }
         }
     }
@@ -682,6 +997,75 @@ struct CrowdHomeView: View {
                     liveAttendeeCount = attendeeCount
                     print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
                 }
+            }
+        }
+    }
+    
+    // MARK: - Event End Check Timer
+    
+    private func startEventEndCheckTimer() {
+        stopEventEndCheckTimer() // Stop any existing timer
+        
+        // Check every 30 seconds if the current joined event has ended
+        // Since CrowdHomeView is a struct, we can't use [weak self]
+        // Capture appState reference to use in the timer closure
+        let state = appState
+        
+        eventEndCheckTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+            Task { @MainActor in
+                // Check if the current joined event has ended
+                guard let joinedEvent = state.currentJoinedEvent else { return }
+                
+                let now = Date()
+                var eventHasEnded = false
+                
+                if let endsAt = joinedEvent.endsAt {
+                    eventHasEnded = endsAt < now
+                } else if let startsAt = joinedEvent.startsAt {
+                    // If no end time, assume 4 hour duration
+                    let fourHoursLater = Calendar.current.date(byAdding: .hour, value: 4, to: startsAt) ?? startsAt
+                    eventHasEnded = fourHoursLater < now
+                }
+                
+                if eventHasEnded {
+                    // Clear the joined event
+                    state.currentJoinedEvent = nil
+                    print("✅ Cleared ended joined event: \(joinedEvent.title)")
+                }
+            }
+        }
+    }
+    
+    private func stopEventEndCheckTimer() {
+        eventEndCheckTimer?.invalidate()
+        eventEndCheckTimer = nil
+    }
+    
+    private func checkAndClearEndedJoinedEvent() {
+        guard let joinedEvent = appState.currentJoinedEvent else { return }
+        
+        let now = Date()
+        var eventHasEnded = false
+        
+        if let endsAt = joinedEvent.endsAt {
+            // Event has ended if end time has passed
+            eventHasEnded = endsAt < now
+        } else if let startsAt = joinedEvent.startsAt {
+            // If no end time but has start time, assume 4 hour duration
+            let fourHoursLater = Calendar.current.date(byAdding: .hour, value: 4, to: startsAt) ?? startsAt
+            eventHasEnded = fourHoursLater < now
+        }
+        
+        if eventHasEnded {
+            print("⏰ Event '\(joinedEvent.title)' has ended, clearing from map and chat")
+            appState.currentJoinedEvent = nil
+            eventListener?.remove()
+            eventListener = nil
+            liveAttendeeCount = 0
+            
+            // Close navigation modal if it's open
+            if showNavigationModal {
+                showNavigationModal = false
             }
         }
     }
@@ -1481,11 +1865,14 @@ struct CrowdHomeView: View {
                 AttendedEventsService.shared.removeAttendedEvent(eventId)
             }
             
-            // Clear currentJoinedEvent if it's one of the expired events (this will hide the white circle button)
-            if let currentEvent = appState.currentJoinedEvent,
-               expiredEventIds.contains(currentEvent.id) {
-                appState.currentJoinedEvent = nil
-            }
+        // Clear currentJoinedEvent if it's one of the expired events (this will hide the white circle button)
+        if let currentEvent = appState.currentJoinedEvent,
+           expiredEventIds.contains(currentEvent.id) {
+            appState.currentJoinedEvent = nil
+        }
+        
+        // Also check if currentJoinedEvent has ended based on end time
+        checkAndClearEndedJoinedEvent()
             
             // Also remove signals and attendances from Firestore and delete expired events from database
             Task {
@@ -1607,6 +1994,31 @@ struct CrowdHomeView: View {
         }
     }
     
+    private func handleCombinedGroupTap(anchorGroup: [Anchor], cluster: EventCluster, groupId: String) {
+        // If single anchor and single event, show anchor modal
+        if anchorGroup.count == 1 && cluster.eventCount == 1, let anchor = anchorGroup.first {
+            handleAnchorTap(anchor)
+            return
+        }
+        
+        // If group is already expanded, open the first anchor's modal or first event
+        if expandedCombinedGroupId == groupId {
+            if let firstAnchor = anchorGroup.first {
+                handleAnchorTap(firstAnchor)
+            } else if let firstEvent = cluster.events.first {
+                handleEventTap(firstEvent)
+            }
+        } else {
+            // Expand the combined group
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                expandedCombinedGroupId = groupId
+                // Collapse other expanded groups
+                expandedAnchorGroupId = nil
+                expandedClusterId = nil
+            }
+        }
+    }
+    
     private func handleAnchorTap(_ anchor: Anchor) {
         print("📍 Anchor tapped: \(anchor.name)")
         
@@ -1625,6 +2037,11 @@ struct CrowdHomeView: View {
         if expandedAnchorGroupId != nil {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 expandedAnchorGroupId = nil
+            }
+        }
+        if expandedCombinedGroupId != nil {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                expandedCombinedGroupId = nil
             }
         }
     }

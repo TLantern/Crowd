@@ -599,13 +599,13 @@ final class FirebaseEventRepository: EventRepository {
         let geohash = coordinate.geohash(precision: 6)
         
         // Ensure tags and category are never missing before saving
-        let finalCategory = event.category ?? EventCategory.other.rawValue
+        let finalCategory = event.category ?? EventCategory.chillHangout.rawValue
         var finalTags = event.tags
         if finalTags.isEmpty {
             if let cat = EventCategory(rawValue: finalCategory) {
                 finalTags = [cat.defaultTag]
             } else {
-                finalTags = [EventCategory.other.defaultTag]
+                finalTags = [EventCategory.chillHangout.defaultTag]
             }
         }
         
@@ -1179,15 +1179,15 @@ final class FirebaseEventRepository: EventRepository {
         var tags = data["tags"] as? [String] ?? []
         
         // Parse category - ensure never nil
-        var category = data["category"] as? String ?? EventCategory.other.rawValue
+        var category = data["category"] as? String ?? EventCategory.chillHangout.rawValue
         
         // If tags are empty but category exists, generate tags from category
         if tags.isEmpty {
             if let cat = EventCategory(rawValue: category) {
                 tags = [cat.defaultTag]
             } else {
-                tags = [EventCategory.other.defaultTag]
-                category = EventCategory.other.rawValue
+                tags = [EventCategory.chillHangout.defaultTag]
+                category = EventCategory.chillHangout.rawValue
             }
         }
         

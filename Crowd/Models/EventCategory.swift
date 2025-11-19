@@ -10,37 +10,35 @@
 import Foundation
 
 enum EventCategory: String, CaseIterable, Identifiable {
-    case musicEntertainment = "Music & Entertainment"
-    case foodDining = "Food & Dining"
-    case sportsFitness = "Sports & Fitness"
-    case academicEducation = "Academic & Education"
-    case artsCulture = "Arts & Culture"
-    case socialNetworking = "Social & Networking"
-    case healthWellness = "Health & Wellness"
-    case outdoorNature = "Outdoor & Nature"
-    case gamingEntertainment = "Gaming & Entertainment"
-    case lifestyleHobbies = "Lifestyle & Hobbies"
-    case politicsActivism = "Politics & Activism"
-    case specialEvents = "Special Events"
-    case other = "Just Vibing"
+    case studySession = "Study Session"
+    case gymMeetup = "Gym Meetup"
+    case foodRun = "Food Run"
+    case chillHangout = "Chill Hangout"
+    case gameNight = "Game Night"
+    case kickback = "Kickback"
+    case party = "Party"
+    case clubEvent = "Club Event"
+    case outdoorActivity = "Outdoor Activity"
+    case careerAcademic = "Career and Academic Boost"
+    case artActivity = "Art & Creative Session"
+    case politicalDiscussion = "Politics & Debate"
 
     var id: String { rawValue }
 
     var emoji: String {
         switch self {
-        case .musicEntertainment: return "🎵"
-        case .foodDining: return "🍕"
-        case .sportsFitness: return "⚽"
-        case .academicEducation: return "📚"
-        case .artsCulture: return "🎨"
-        case .socialNetworking: return "🤝"
-        case .healthWellness: return "🏥"
-        case .outdoorNature: return "🏔️"
-        case .gamingEntertainment: return "🎮"
-        case .lifestyleHobbies: return "👗"
-        case .politicsActivism: return "🏛️"
-        case .specialEvents: return "🎉"
-        case .other: return "🫂"
+        case .studySession: return "📚"
+        case .gymMeetup: return "💪"
+        case .foodRun: return "🍔"
+        case .chillHangout: return "🛋️"
+        case .gameNight: return "🎮"
+        case .kickback: return "🥤"
+        case .party: return "🎉"
+        case .clubEvent: return "🏛️"
+        case .outdoorActivity: return "🏀"
+        case .careerAcademic: return "💼"
+        case .artActivity: return "🎨"
+        case .politicalDiscussion: return "🗳️"
         }
     }
 
@@ -51,51 +49,48 @@ enum EventCategory: String, CaseIterable, Identifiable {
     // Get a default tag keyword for this category (used when creating events)
     var defaultTag: String {
         switch self {
-        case .musicEntertainment: return "music"
-        case .foodDining: return "food"
-        case .sportsFitness: return "sports"
-        case .academicEducation: return "academic"
-        case .artsCulture: return "art"
-        case .socialNetworking: return "networking"
-        case .healthWellness: return "health"
-        case .outdoorNature: return "outdoor"
-        case .gamingEntertainment: return "gaming"
-        case .lifestyleHobbies: return "social"
-        case .politicsActivism: return "politics"
-        case .specialEvents: return "celebration"
-        case .other: return "social"
+        case .studySession: return "study"
+        case .gymMeetup: return "gym"
+        case .foodRun: return "food"
+        case .chillHangout: return "chill"
+        case .gameNight: return "gaming"
+        case .kickback: return "social"
+        case .party: return "party"
+        case .clubEvent: return "club"
+        case .outdoorActivity: return "outdoor"
+        case .careerAcademic: return "career"
+        case .artActivity: return "art"
+        case .politicalDiscussion: return "politics"
         }
     }
     
     // Tag mapping for each category
     private var tagKeywords: [String] {
         switch self {
-        case .musicEntertainment:
-            return ["music", "concert", "party", "festival", "dance", "dancing", "live", "performance"]
-        case .foodDining:
-            return ["food", "dining", "restaurant", "cafe", "coffee", "lunch", "dinner", "breakfast", "snack"]
-        case .sportsFitness:
-            return ["sports", "basketball", "football", "soccer", "tennis", "volleyball", "baseball", "fitness", "gym", "workout", "yoga", "running", "cycling"]
-        case .academicEducation:
-            return ["study", "academic", "lecture", "workshop", "seminar", "conference", "education", "learning", "research", "science", "tech", "technology", "coding", "programming"]
-        case .artsCulture:
-            return ["art", "creative", "culture", "cultural", "international", "language", "film", "movie", "theater", "drama", "comedy", "standup", "photography", "gallery"]
-        case .socialNetworking:
-            return ["networking", "meetup", "community", "volunteer", "charity", "fundraising", "career", "job", "business", "entrepreneur", "startup"]
-        case .healthWellness:
-            return ["health", "wellness", "mental", "spiritual", "religious", "faith", "meditation", "mindfulness"]
-        case .outdoorNature:
-            return ["outdoor", "hiking", "camping", "nature", "environment", "sustainability", "travel", "adventure"]
-        case .gamingEntertainment:
-            return ["gaming", "esports", "board", "trivia", "puzzle", "card"]
-        case .lifestyleHobbies:
-            return ["fashion", "beauty", "cooking", "baking", "wine", "beer", "tea", "book", "reading", "writing", "poetry", "blog"]
-        case .politicsActivism:
-            return ["politics", "debate", "activism", "protest", "voting", "election"]
-        case .specialEvents:
-            return ["graduation", "celebration", "anniversary", "birthday", "holiday", "christmas", "halloween", "valentine", "newyear"]
-        case .other:
-            return ["official", "student", "instagram", "social"]
+        case .studySession:
+            return ["study", "homework", "exam", "project", "academic", "learning"]
+        case .gymMeetup:
+            return ["gym", "lift", "workout", "fitness", "train", "exercise"]
+        case .foodRun:
+            return ["food", "snack", "drink", "restaurant", "cafe", "dining"]
+        case .chillHangout:
+            return ["chill", "hangout", "relax", "social", "talk", "music"]
+        case .gameNight:
+            return ["game", "gaming", "board", "card", "video", "esports"]
+        case .kickback:
+            return ["kickback", "social", "meetup", "dorm", "apartment"]
+        case .party:
+            return ["party", "pregame", "music", "drinks", "celebration"]
+        case .clubEvent:
+            return ["club", "organization", "meeting", "practice", "event"]
+        case .outdoorActivity:
+            return ["outdoor", "basketball", "soccer", "frisbee", "walking", "sports"]
+        case .careerAcademic:
+            return ["career", "resume", "interview", "tutoring", "academic", "support"]
+        case .artActivity:
+            return ["art", "creative", "drawing", "painting", "photography", "crafting"]
+        case .politicalDiscussion:
+            return ["politics", "debate", "discussion", "political", "voting"]
         }
     }
     
@@ -112,8 +107,8 @@ enum EventCategory: String, CaseIterable, Identifiable {
         return false
     }
 
-    // Simple classifier that defaults to "other" since we now use tag-based matching
+    // Simple classifier that defaults to chillHangout since we now use tag-based matching
     static func guess(from title: String, sourceType: String, locationName: String?) -> EventCategory {
-        return .other
+        return .chillHangout
     }
 }

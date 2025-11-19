@@ -66,8 +66,8 @@ enum TagEmoji {
             // Otherwise use category's emoji directly
             return ec.emoji
         }
-        // Last resort: use "Just Vibing" category emoji instead of calendar
-        return EventCategory.other.emoji
+        // Last resort: use "Chill Hangout" category emoji instead of calendar
+        return EventCategory.chillHangout.emoji
     }
 }
 

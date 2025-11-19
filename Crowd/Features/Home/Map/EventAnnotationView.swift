@@ -388,7 +388,7 @@ struct FlameShape: Shape {
                 signalStrength: 3,
                 attendeeCount: 3,
                 tags: [],
-                category: EventCategory.other.rawValue,
+                category: EventCategory.chillHangout.rawValue,
                 description: "Test"
             ))
             Text("Regular Event (3 people)")

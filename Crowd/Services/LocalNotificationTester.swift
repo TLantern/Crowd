@@ -96,32 +96,30 @@ final class LocalNotificationTester {
     
     private func getSampleEventTitle(for category: EventCategory) -> String {
         switch category {
-        case .musicEntertainment:
-            return "Open Mic Night"
-        case .foodDining:
-            return "Taco Tuesday"
-        case .sportsFitness:
-            return "Basketball Pickup Game"
-        case .academicEducation:
+        case .studySession:
             return "Finals Study Group"
-        case .artsCulture:
-            return "Art Gallery Opening"
-        case .socialNetworking:
-            return "Career Mixer"
-        case .healthWellness:
-            return "Yoga Session"
-        case .outdoorNature:
-            return "Campus Walk"
-        case .gamingEntertainment:
-            return "Mario Kart Tournament"
-        case .lifestyleHobbies:
+        case .gymMeetup:
+            return "Gym Workout Session"
+        case .foodRun:
+            return "Taco Tuesday"
+        case .chillHangout:
             return "Coffee Chat"
-        case .politicsActivism:
-            return "Student Government Meeting"
-        case .specialEvents:
+        case .gameNight:
+            return "Mario Kart Tournament"
+        case .kickback:
+            return "Dorm Hangout"
+        case .party:
             return "Friday Night Party"
-        case .other:
-            return "General Event"
+        case .clubEvent:
+            return "Student Government Meeting"
+        case .outdoorActivity:
+            return "Basketball Pickup Game"
+        case .careerAcademic:
+            return "Career Mixer"
+        case .artActivity:
+            return "Art Gallery Opening"
+        case .politicalDiscussion:
+            return "Political Debate"
         }
     }
     
@@ -140,7 +138,7 @@ final class LocalNotificationTester {
     
     /// Send multiple test notifications with delays
     func sendTestBatch(count: Int = 3, delayBetween: TimeInterval = 3) {
-        let categories: [EventCategory] = [.musicEntertainment, .foodDining, .academicEducation, .gamingEntertainment, .sportsFitness]
+        let categories: [EventCategory] = [.studySession, .foodRun, .gameNight, .gymMeetup, .chillHangout]
         
         for i in 0..<count {
             let category = categories[i % categories.count]

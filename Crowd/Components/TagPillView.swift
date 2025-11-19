@@ -13,6 +13,8 @@ struct TagPillView: View {
     let onDelete: () -> Void
     let onTap: () -> Void
     
+    @Environment(\.colorScheme) private var colorScheme
+    
     // 5 different color schemes for randomization
     private let colorSchemes: [(background: Color, border: Color, text: Color)] = [
         (Color.blue.opacity(0.25), Color.blue.opacity(0.5), Color.blue),
@@ -23,9 +25,14 @@ struct TagPillView: View {
     ]
     
     // Get consistent color based on interest name hash
-    private var colorScheme: (background: Color, border: Color, text: Color) {
+    private var colorSchemeForInterest: (background: Color, border: Color, text: Color) {
         let hash = abs(interest.name.hashValue)
         return colorSchemes[hash % colorSchemes.count]
+    }
+    
+    // Text color based on color scheme
+    private var textColor: Color {
+        colorScheme == .light ? .black : .white
     }
     
     init(interest: Interest, isEditMode: Bool = false, onDelete: @escaping () -> Void = {}, onTap: @escaping () -> Void = {}) {
@@ -58,11 +65,11 @@ struct TagPillView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(textColor)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(colorScheme.background, in: Capsule())
-            .overlay(Capsule().stroke(colorScheme.border, lineWidth: 1))
+            .background(colorSchemeForInterest.background, in: Capsule())
+            .overlay(Capsule().stroke(colorSchemeForInterest.border, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }

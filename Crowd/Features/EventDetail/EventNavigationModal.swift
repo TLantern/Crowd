@@ -743,6 +743,8 @@ struct ChatTabView: View {
                 
                 // Message input
                 HStack(spacing: 12) {
+                    // Image/GIF picker - commented out
+                    /*
                     if #available(iOS 16.0, *) {
                         PhotosPicker(selection: $selectedItem, matching: .any(of: [.images, .livePhotos])) {
                             Image(systemName: "photo")
@@ -760,6 +762,7 @@ struct ChatTabView: View {
                             }
                         }
                     }
+                    */
                     
                     TextField("Type a message...", text: $messageText)
                         .textFieldStyle(.plain)
@@ -965,12 +968,20 @@ struct ChatMessageBubble: View {
                     }
                 }
                 Text(author)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: 0x02853E).opacity(0.15))
+                    .cornerRadius(8)
             } else {
                 Text(author)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: 0x02853E).opacity(0.15))
+                    .cornerRadius(8)
                 VStack(alignment: .leading, spacing: 4) {
                     if let imageURL = imageURL, let url = URL(string: imageURL) {
                         AsyncImage(url: url) { phase in

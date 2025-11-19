@@ -39,6 +39,9 @@ struct UserProfile: Codable, Equatable, Identifiable {
     var notificationCooldowns: [String: Timestamp]?
     var lastNotificationSent: Timestamp?
     
+    // Event status - stores party event IDs user is going to
+    var eventStatus: [String]? // Array of party event IDs
+    
     // Computed property (not encoded/decoded)
     var avatarColor: Color {
         Color(hexString: avatarColorHex)
@@ -67,6 +70,7 @@ struct UserProfile: Codable, Equatable, Identifiable {
         case lastLocationUpdate
         case notificationCooldowns
         case lastNotificationSent
+        case eventStatus
     }
 
     static let anonymous = UserProfile(
@@ -91,6 +95,7 @@ struct UserProfile: Codable, Equatable, Identifiable {
         geohash: nil,
         lastLocationUpdate: nil,
         notificationCooldowns: nil,
-        lastNotificationSent: nil
+        lastNotificationSent: nil,
+        eventStatus: nil
     )
 }

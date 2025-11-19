@@ -31,7 +31,7 @@
     {
       "id": "union_main_floor",
       "name": "Union Main Floor",
-      "emoji": "📚",
+      "emoji": "🏫",
       "location": "University Union – Main Floor",
       "type": "anchor",
       "days_active": ["Mon", "Tue", "Wed", "Thu", "Fri"],
@@ -45,7 +45,7 @@
     {
       "id": "eagle_landing_lunch",
       "name": "Let's Grab Lunch",
-      "emoji": "🥗",
+      "emoji": "🦅",
       "location": "Eagle Landing Dining Hall",
       "type": "anchor",
       "days_active": ["Mon", "Tue", "Wed", "Thu", "Fri"],
@@ -86,4 +86,3 @@
     }
   ]
 }
-
