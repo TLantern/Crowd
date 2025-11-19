@@ -915,16 +915,23 @@ struct PartyDetailView: View {
                     
                     // Content Section
                     VStack(alignment: .leading, spacing: 20) {
-                        // Title + Host Name (biggest)
-                        VStack(alignment: .leading, spacing: 8) {
+                        // Title + Hosted by
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Title only (largest)
                             Text(displayParty.title)
                                 .font(.system(size: 32, weight: .bold))
                                 .foregroundStyle(.primary)
                             
+                            // Hosted by with label
                             if !displayParty.hostName.isEmpty && displayParty.hostName != "Party Host" {
-                                Text(displayParty.hostName)
-                                    .font(.system(size: 20, weight: .semibold))
-                                    .foregroundStyle(.secondary)
+                                HStack(spacing: 4) {
+                                    Text("Hosted by:")
+                                        .font(.system(size: 18, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                    Text(displayParty.hostName)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                }
                             }
                         }
                         .padding(.top, 20)
@@ -938,55 +945,40 @@ struct PartyDetailView: View {
                                 .padding(.top, 8)
                         }
                         
-                        Divider()
-                            .padding(.vertical, 8)
-                        
-                        // Date & Time
+                        // Date
                         if let startsAt = displayParty.startsAt {
-                            HStack(spacing: 16) {
-                                Image(systemName: "calendar")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 28)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Date & Time")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(.secondary)
-                                    Text(formatEventTime(startsAt))
-                                        .font(.system(size: 17, weight: .medium))
-                                        .foregroundStyle(.primary)
-                                }
-                                Spacer()
+                            HStack(spacing: 4) {
+                                Text("Date:")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Text("📅")
+                                    .font(.system(size: 18))
+                                Text(formatFullDate(startsAt))
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.primary)
                             }
-                            .padding(.vertical, 8)
                         }
                         
                         // Location - Clickable to open Maps
                         if let location = displayParty.rawLocationName, !location.isEmpty {
-                            Button(action: {
-                                openLocationInMaps(address: location, coordinate: displayParty.coordinates)
-                            }) {
-                                HStack(spacing: 16) {
-                                    Image(systemName: "location.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundStyle(Color.accentColor)
-                                        .frame(width: 28)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Location")
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundStyle(.secondary)
+                            HStack(spacing: 4) {
+                                Text("Location:")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Button(action: {
+                                    openLocationInMaps(address: location, coordinate: displayParty.coordinates)
+                                }) {
+                                    HStack(spacing: 4) {
                                         Text(location)
-                                            .font(.system(size: 17, weight: .medium))
-                                            .foregroundStyle(.primary)
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundStyle(.blue)
+                                            .underline()
+                                        Image(systemName: "arrow.up.right.square")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(.blue)
                                     }
-                                    Spacer()
-                                    Image(systemName: "arrow.up.right.square")
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(Color.accentColor)
                                 }
-                                .padding(.vertical, 8)
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
                         
                         Divider()
@@ -1288,6 +1280,13 @@ struct PartyDetailView: View {
             dateFormatter.timeStyle = .short
             return dateFormatter.string(from: date)
         }
+    }
+    
+    private func formatFullDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE MMM d, yyyy"
+        return formatter.string(from: date)
+        // Returns: "Saturday Nov 15, 2025"
     }
     
     private func shareTicketURL(ticketURL: String, partyTitle: String) {
