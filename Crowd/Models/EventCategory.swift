@@ -19,7 +19,7 @@ enum EventCategory: String, CaseIterable, Identifiable {
     case party = "Party"
     case clubEvent = "Club Event"
     case outdoorActivity = "Outdoor Activity"
-    case careerAcademic = "Career and Academic Boost"
+    case careerAcademic = "Career and Academic"
     case artActivity = "Art & Creative Session"
     case politicalDiscussion = "Politics & Debate"
 

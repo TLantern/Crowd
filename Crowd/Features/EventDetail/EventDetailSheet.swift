@@ -469,6 +469,10 @@ struct EventDetailView: View {
                 NotificationCenter.default.post(name: .eventDeleted, object: event.id)
                 
                 await MainActor.run {
+                    // Clear currentJoinedEvent if it matches the cancelled event
+                    if appState.currentJoinedEvent?.id == event.id {
+                        appState.currentJoinedEvent = nil
+                    }
                     dismiss()
                 }
             } catch {
