@@ -126,19 +126,50 @@ final class FirebaseEventRepository: EventRepository {
     /// Parse party from events_from_linktree_raw collection
     /// Fields: address, title, uploadedImageUrl, URL, description (contains date)
     private func parseParty(from data: [String: Any], documentId: String) async throws -> CrowdEvent {
+        // Add detailed logging for debugging
+        print("📄 Parsing party document: \(documentId)")
+        print("📄 Available fields: \(data.keys.sorted())")
+        
         guard let title = data["title"] as? String else {
+            print("❌ Missing required 'title' field")
             throw CrowdError.invalidResponse
         }
         
         let id = documentId
-        let description = data["description"] as? String ?? ""
-        let address = data["address"] as? String
-        // Check multiple possible image field names
+        
+        // Description - Check multiple field name variations
+        let description = data["description"] as? String ?? 
+                         data["desc"] as? String ?? 
+                         data["details"] as? String ?? 
+                         data["about"] as? String ?? 
+                         data["info"] as? String ?? ""
+        print("📄 Description: \(description.isEmpty ? "empty" : String(description.prefix(50)))")
+        
+        // Address - Check multiple field name variations
+        let address = data["address"] as? String ?? 
+                     data["location"] as? String ?? 
+                     data["venue"] as? String ?? 
+                     data["place"] as? String ?? 
+                     data["where"] as? String
+        print("📄 Address: \(address ?? "nil")")
+        
+        // Image URL - Check multiple possible field names
         let imageURL = data["uploadedImageUrl"] as? String ?? 
                       data["imageURL"] as? String ?? 
                       data["imageUrl"] as? String ??
-                      data["image"] as? String
-        let ticketURL = data["URL"] as? String ?? data["ticketURL"] as? String ?? data["ticketUrl"] as? String
+                      data["image"] as? String ??
+                      data["uploadedImage"] as? String
+        print("📄 Image URL: \(imageURL ?? "nil")")
+        
+        // Ticket URL - Check multiple field name variations
+        let ticketURL = data["URL"] as? String ?? 
+                       data["ticketURL"] as? String ?? 
+                       data["ticketUrl"] as? String ??
+                       data["link"] as? String ??
+                       data["ticketLink"] as? String ??
+                       data["eventLink"] as? String ??
+                       data["url"] as? String
+        print("📄 Ticket URL: \(ticketURL ?? "nil")")
         
         // Check for host/group name in multiple possible field names
         let hostName = data["hostName"] as? String ??
@@ -148,22 +179,60 @@ final class FirebaseEventRepository: EventRepository {
                       data["organization"] as? String ??
                       data["org"] as? String ??
                       data["host"] as? String ??
+                      data["organizer"] as? String ??
                       "Party Host"
+        print("📄 Host Name: \(hostName)")
         
-        // Try to get date from dateTime field first, then extract from description
+        // Try to get date from multiple field name variations
         var startsAt: Date?
+        
+        // Check dateTime field in various formats
         if let dateTimeString = data["dateTime"] as? String {
+            print("📄 Found dateTime string: \(dateTimeString)")
             startsAt = parseDateTimeString(dateTimeString)
         } else if let dateTimeTimestamp = data["dateTime"] as? Timestamp {
+            print("📄 Found dateTime timestamp")
             startsAt = dateTimeTimestamp.dateValue()
         } else if let dateTimeSeconds = data["dateTime"] as? TimeInterval {
+            print("📄 Found dateTime interval: \(dateTimeSeconds)")
             startsAt = Date(timeIntervalSince1970: dateTimeSeconds)
+        } else if let dateTimeMillis = data["dateTime"] as? Double {
+            print("📄 Found dateTime double: \(dateTimeMillis)")
+            // Try as milliseconds if value is very large
+            if dateTimeMillis > 10000000000 {
+                startsAt = Date(timeIntervalSince1970: dateTimeMillis / 1000)
+            } else {
+                startsAt = Date(timeIntervalSince1970: dateTimeMillis)
+            }
+        }
+        
+        // Try alternative date field names
+        if startsAt == nil {
+            if let dateString = data["date"] as? String {
+                print("📄 Found date string: \(dateString)")
+                startsAt = parseDateTimeString(dateString)
+            } else if let timeString = data["time"] as? String {
+                print("📄 Found time string: \(timeString)")
+                startsAt = parseDateTimeString(timeString)
+            } else if let startTimeString = data["startTime"] as? String {
+                print("📄 Found startTime string: \(startTimeString)")
+                startsAt = parseDateTimeString(startTimeString)
+            } else if let eventDateString = data["eventDate"] as? String {
+                print("📄 Found eventDate string: \(eventDateString)")
+                startsAt = parseDateTimeString(eventDateString)
+            } else if let startString = data["start"] as? String {
+                print("📄 Found start string: \(startString)")
+                startsAt = parseDateTimeString(startString)
+            }
         }
         
         // If no dateTime field, try to extract from description
-        if startsAt == nil {
+        if startsAt == nil && !description.isEmpty {
+            print("📄 Attempting to extract date from description")
             startsAt = extractDateFromDescription(description)
         }
+        
+        print("📄 Final parsed date: \(startsAt?.description ?? "nil")")
         
         // Default coordinates (can be geocoded later if needed)
         // Using UNT main campus coordinates as default
@@ -279,19 +348,40 @@ final class FirebaseEventRepository: EventRepository {
     
     /// Parse dateTime string in various formats
     private func parseDateTimeString(_ dateTimeString: String) -> Date? {
+        // First check if it's a Unix timestamp (numeric string)
+        if let timestamp = Double(dateTimeString) {
+            // If value is very large, it's likely milliseconds
+            if timestamp > 10000000000 {
+                return Date(timeIntervalSince1970: timestamp / 1000)
+            } else {
+                return Date(timeIntervalSince1970: timestamp)
+            }
+        }
+        
         let formatters: [DateFormatter] = [
+            // ISO 8601 formats
             {
                 let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
                 formatter.timeZone = TimeZone.current
                 return formatter
             }(),
             {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
                 formatter.timeZone = TimeZone.current
                 return formatter
             }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            // Common date/time formats
             {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
@@ -300,7 +390,65 @@ final class FirebaseEventRepository: EventRepository {
             }(),
             {
                 let formatter = DateFormatter()
+                formatter.dateFormat = "MMMM d, yyyy 'at' h:mm a"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MM/dd/yyyy h:mm a"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MM/dd/yyyy HH:mm"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd HH:mm"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            // Date only formats (assume midnight)
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MM/dd/yyyy"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            // Natural language formats
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "EEEE, MMMM d, yyyy"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            // Generic formats
+            {
+                let formatter = DateFormatter()
                 formatter.dateStyle = .medium
+                formatter.timeStyle = .short
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .long
                 formatter.timeStyle = .short
                 formatter.timeZone = TimeZone.current
                 return formatter
@@ -309,17 +457,31 @@ final class FirebaseEventRepository: EventRepository {
         
         for formatter in formatters {
             if let date = formatter.date(from: dateTimeString) {
+                print("✅ Successfully parsed date using format: \(formatter.dateFormat ?? "standard")")
                 return date
             }
         }
         
+        print("⚠️ Could not parse date string: \(dateTimeString)")
         return nil
     }
     
     /// Extract date from description text
     private func extractDateFromDescription(_ description: String) -> Date? {
-        // Try multiple date formats
+        print("📄 Attempting to extract date from description: \(String(description.prefix(100)))")
+        
+        // Try multiple date formats on the full description first
         let dateFormatters: [DateFormatter] = [
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMMM d, yyyy 'at' h:mm a"
+                return formatter
+            }(),
             {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "MMM d, yyyy"
@@ -328,6 +490,11 @@ final class FirebaseEventRepository: EventRepository {
             {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "MMMM d, yyyy"
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MM/dd/yyyy h:mm a"
                 return formatter
             }(),
             {
@@ -348,6 +515,12 @@ final class FirebaseEventRepository: EventRepository {
             }(),
             {
                 let formatter = DateFormatter()
+                formatter.dateFormat = "EEEE, MMMM d"
+                formatter.defaultDate = Date()
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
                 formatter.dateStyle = .medium
                 formatter.timeStyle = .none
                 return formatter
@@ -360,17 +533,25 @@ final class FirebaseEventRepository: EventRepository {
             }()
         ]
         
-        // Try to find date patterns in the description
+        // Try to find date patterns in the description using formatters
         for formatter in dateFormatters {
             if let date = formatter.date(from: description) {
+                print("✅ Extracted date from full description using format: \(formatter.dateFormat ?? "standard")")
                 return date
             }
         }
         
-        // Try to find date patterns using regex
+        // Try to find date patterns using regex and then parse
         let patterns = [
-            "\\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{1,2},?\\s+\\d{4}\\b",
+            // Full date with time: "Nov 15, 2025 at 9:00 PM" or "November 15, 2025 at 9:00 PM"
+            "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},?\\s+\\d{4}\\s+at\\s+\\d{1,2}:\\d{2}\\s*(AM|PM|am|pm)",
+            // Date with year: "Nov 15, 2025" or "November 15, 2025"
+            "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2},?\\s+\\d{4}",
+            // Date without year: "Nov 15" or "November 15"
+            "(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{1,2}",
+            // Numeric dates: "11/15/2025"
             "\\b\\d{1,2}/\\d{1,2}/\\d{4}\\b",
+            // ISO format: "2025-11-15"
             "\\b\\d{4}-\\d{2}-\\d{2}\\b"
         ]
         
@@ -380,15 +561,25 @@ final class FirebaseEventRepository: EventRepository {
                 let range = NSRange(location: 0, length: nsString.length)
                 if let match = regex.firstMatch(in: description, options: [], range: range) {
                     let matchedString = nsString.substring(with: match.range)
+                    print("📄 Found date pattern: \(matchedString)")
+                    
                     for formatter in dateFormatters {
                         if let date = formatter.date(from: matchedString) {
+                            print("✅ Extracted date from pattern using format: \(formatter.dateFormat ?? "standard")")
                             return date
                         }
+                    }
+                    
+                    // Try parsing the matched string directly
+                    if let date = parseDateTimeString(matchedString) {
+                        print("✅ Extracted date from pattern using parseDateTimeString")
+                        return date
                     }
                 }
             }
         }
         
+        print("⚠️ Could not extract date from description")
         return nil
     }
     
