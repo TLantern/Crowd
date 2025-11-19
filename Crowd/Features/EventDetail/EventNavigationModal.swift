@@ -12,6 +12,7 @@ import CoreMotion
 import Combine
 import FirebaseFirestore
 import UIKit
+import PhotosUI
 
 // MARK: - Motion Manager for device heading
 @MainActor
@@ -67,6 +68,8 @@ struct EventNavigationModal: View {
     @State private var currentUserName: String = "Guest"
     @StateObject private var chatService = EventChatService.shared
     @State private var messageText: String = ""
+    @State private var selectedImage: UIImage? = nil
+    @State private var selectedImageData: Data? = nil
     @State private var liveAttendeeCount: Int = 0
     @State private var eventListener: ListenerRegistration?
     @State private var selectedTab: TabSelection = .chat
@@ -181,6 +184,8 @@ struct EventNavigationModal: View {
                             ChatTabView(
                                 chatService: chatService,
                                 messageText: $messageText,
+                                selectedImage: $selectedImage,
+                                selectedImageData: $selectedImageData,
                                 sendMessage: sendMessage,
                                 isSendingMessage: $isSendingMessage
                             )
@@ -517,11 +522,16 @@ struct EventNavigationModal: View {
         guard !isSendingMessage else { return }
         
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let imageToSend = selectedImage
+        let imageDataToSend = selectedImageData
         
-        // Clear text immediately for better UX
+        guard !text.isEmpty || imageToSend != nil else { return }
+        
+        // Clear text and image immediately for better UX
         let messageToSend = text
         messageText = ""
+        selectedImage = nil
+        selectedImageData = nil
         
         isSendingMessage = true
         
@@ -531,7 +541,9 @@ struct EventNavigationModal: View {
                     eventId: event.id,
                     text: messageToSend,
                     userId: await currentUserId,
-                    userName: await currentUserName
+                    userName: await currentUserName,
+                    image: imageToSend,
+                    imageData: imageDataToSend
                 )
                 
                 // Track analytics on main thread
@@ -543,8 +555,10 @@ struct EventNavigationModal: View {
             } catch {
                 await MainActor.run {
                     print("❌ EventNavigationModal: Failed to send message: \(error)")
-                    // Restore message text on error
+                    // Restore message text and image on error
                     messageText = messageToSend
+                    selectedImage = imageToSend
+                    selectedImageData = imageDataToSend
                     isSendingMessage = false
                 }
             }
@@ -593,11 +607,14 @@ struct MapTabView: View {
 struct ChatTabView: View {
     @ObservedObject var chatService: EventChatService
     @Binding var messageText: String
+    @Binding var selectedImage: UIImage?
+    @Binding var selectedImageData: Data?
     let sendMessage: () -> Void
     @Binding var isSendingMessage: Bool
     
     @FocusState private var isTextFieldFocused: Bool
     @State private var keyboardHeight: CGFloat = 0
+    @State private var selectedItem: PhotosPickerItem?
     
     var body: some View {
         GeometryReader { geometry in
@@ -644,6 +661,7 @@ struct ChatTabView: View {
                                 ForEach(chatService.messages) { message in
                                     ChatMessageBubble(
                                         message: message.text,
+                                        imageURL: message.imageURL,
                                         author: message.userName,
                                         isCurrentUser: message.isCurrentUser
                                     )
@@ -680,8 +698,53 @@ struct ChatTabView: View {
                 
                 Divider()
                 
+                // Image preview
+                if let selectedImage = selectedImage {
+                    VStack(spacing: 8) {
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                selectedImage = nil
+                                selectedImageData = nil
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        
+                        Image(uiImage: selectedImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 200)
+                            .cornerRadius(12)
+                            .padding(.horizontal, 16)
+                    }
+                    .background(Color(uiColor: .systemBackground))
+                }
+                
                 // Message input
                 HStack(spacing: 12) {
+                    if #available(iOS 16.0, *) {
+                        PhotosPicker(selection: $selectedItem, matching: .any(of: [.images, .livePhotos])) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 22))
+                                .foregroundColor(Color(hex: 0x02853E))
+                        }
+                        .onChange(of: selectedItem) { _, newItem in
+                            Task {
+                                if let data = try? await newItem?.loadTransferable(type: Data.self) {
+                                    await MainActor.run {
+                                        selectedImageData = data
+                                        selectedImage = UIImage(data: data)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
                     TextField("Type a message...", text: $messageText)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 12)
@@ -704,10 +767,10 @@ struct ChatTabView: View {
                         } else {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 28))
-                                .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : Color(hex: 0x02853E))
+                                .foregroundColor((messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImage == nil) ? .gray : Color(hex: 0x02853E))
                         }
                     }
-                    .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSendingMessage)
+                    .disabled((messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImage == nil) || isSendingMessage)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
@@ -842,6 +905,7 @@ struct MarqueeTitle: View {
 // MARK: - Chat Message Bubble
 struct ChatMessageBubble: View {
     let message: String
+    let imageURL: String?
     let author: String
     let isCurrentUser: Bool
     
@@ -849,13 +913,39 @@ struct ChatMessageBubble: View {
         HStack(spacing: 8) {
             if isCurrentUser {
                 Spacer()
-                Text(message)
-                    .font(.system(size: 15))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(hex: 0x02853E))
-                    .foregroundColor(.white)
-                    .cornerRadius(16)
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let imageURL = imageURL, let url = URL(string: imageURL) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .empty:
+                                ProgressView()
+                                    .frame(width: 200, height: 200)
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: 250, maxHeight: 300)
+                                    .cornerRadius(12)
+                            case .failure:
+                                Image(systemName: "photo")
+                                    .foregroundColor(.gray)
+                                    .frame(width: 200, height: 200)
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
+                    }
+                    
+                    if !message.isEmpty {
+                        Text(message)
+                            .font(.system(size: 15))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(hex: 0x02853E))
+                            .foregroundColor(.white)
+                            .cornerRadius(16)
+                    }
+                }
                 Text(author)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
@@ -863,13 +953,39 @@ struct ChatMessageBubble: View {
                 Text(author)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.secondary)
-                Text(message)
-                    .font(.system(size: 15))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemGray5))
-                    .foregroundColor(.primary)
-                    .cornerRadius(16)
+                VStack(alignment: .leading, spacing: 4) {
+                    if let imageURL = imageURL, let url = URL(string: imageURL) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .empty:
+                                ProgressView()
+                                    .frame(width: 200, height: 200)
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: 250, maxHeight: 300)
+                                    .cornerRadius(12)
+                            case .failure:
+                                Image(systemName: "photo")
+                                    .foregroundColor(.gray)
+                                    .frame(width: 200, height: 200)
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
+                    }
+                    
+                    if !message.isEmpty {
+                        Text(message)
+                            .font(.system(size: 15))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(.systemGray5))
+                            .foregroundColor(.primary)
+                            .cornerRadius(16)
+                    }
+                }
                 Spacer()
             }
         }

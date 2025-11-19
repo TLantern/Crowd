@@ -9,6 +9,8 @@ import Foundation
 import FirebaseFirestore
 import Combine
 import FirebaseAuth
+import FirebaseStorage
+import UIKit
 
 struct ChatMessage: Identifiable, Codable {
     let id: String
@@ -17,23 +19,26 @@ struct ChatMessage: Identifiable, Codable {
     let text: String
     let timestamp: Date
     let isCurrentUser: Bool
+    let imageURL: String?
     
-    init(userId: String, userName: String, text: String, isCurrentUser: Bool = false) {
+    init(userId: String, userName: String, text: String, imageURL: String? = nil, isCurrentUser: Bool = false) {
         self.id = UUID().uuidString
         self.userId = userId
         self.userName = userName
         self.text = text
         self.timestamp = Date()
         self.isCurrentUser = isCurrentUser
+        self.imageURL = imageURL
     }
     
-    init(id: String, userId: String, userName: String, text: String, timestamp: Date, isCurrentUser: Bool) {
+    init(id: String, userId: String, userName: String, text: String, timestamp: Date, isCurrentUser: Bool, imageURL: String? = nil) {
         self.id = id
         self.userId = userId
         self.userName = userName
         self.text = text
         self.timestamp = timestamp
         self.isCurrentUser = isCurrentUser
+        self.imageURL = imageURL
     }
 }
 
@@ -84,13 +89,16 @@ final class EventChatService: ObservableObject {
                             return nil
                         }
                         
+                        let imageURL = data["imageURL"] as? String
+                        
                         return ChatMessage(
                             id: doc.documentID,
                             userId: userId,
                             userName: userName,
                             text: text,
                             timestamp: timestamp.dateValue(),
-                            isCurrentUser: userId == currentUserId
+                            isCurrentUser: userId == currentUserId,
+                            imageURL: imageURL
                         )
                     }
                     
@@ -106,8 +114,9 @@ final class EventChatService: ObservableObject {
         messages = []
     }
     
-    func sendMessage(eventId: String, text: String, userId: String, userName: String) async throws {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    func sendMessage(eventId: String, text: String, userId: String, userName: String, image: UIImage? = nil, imageData: Data? = nil) async throws {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty || image != nil else { return }
         
         // Check authentication state before sending
         guard let currentUser = FirebaseManager.shared.auth.currentUser else {
@@ -119,12 +128,23 @@ final class EventChatService: ObservableObject {
         print("🔍 EventChatService: Current auth user: \(currentUser.uid)")
         print("🔍 EventChatService: Is anonymous: \(currentUser.isAnonymous)")
         
-        let messageData: [String: Any] = [
+        var imageURL: String? = nil
+        
+        if let image = image {
+            let messageId = UUID().uuidString
+            imageURL = try await uploadChatImage(image, eventId: eventId, messageId: messageId, imageData: imageData)
+        }
+        
+        var messageData: [String: Any] = [
             "userId": userId,
             "userName": userName,
-            "text": text,
+            "text": trimmedText.isEmpty ? "" : trimmedText,
             "timestamp": FieldValue.serverTimestamp()
         ]
+        
+        if let imageURL = imageURL {
+            messageData["imageURL"] = imageURL
+        }
         
         do {
             try await db.collection("eventChats")
@@ -137,6 +157,73 @@ final class EventChatService: ObservableObject {
             print("❌ EventChatService: Failed to send message - \(error.localizedDescription)")
             print("❌ EventChatService: Error details - \(error)")
             throw error
+        }
+    }
+    
+    func uploadChatImage(_ image: UIImage, eventId: String, messageId: String, imageData: Data? = nil) async throws -> String {
+        let storage = Storage.storage()
+        let storageRef = storage.reference()
+        
+        let finalImageData: Data
+        let fileExtension: String
+        
+        if let providedData = imageData {
+            let isGIF = providedData.prefix(6) == Data([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]) || providedData.prefix(6) == Data([0x47, 0x49, 0x46, 0x38, 0x37, 0x61])
+            if isGIF {
+                finalImageData = providedData
+                fileExtension = "gif"
+            } else {
+                let resizedImage = resizeImage(image, to: CGSize(width: 2048, height: 2048))
+                guard let jpegData = resizedImage.jpegData(compressionQuality: 0.8) else {
+                    throw NSError(domain: "EventChatService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+                }
+                finalImageData = jpegData
+                fileExtension = "jpg"
+            }
+        } else {
+            let resizedImage = resizeImage(image, to: CGSize(width: 2048, height: 2048))
+            guard let jpegData = resizedImage.jpegData(compressionQuality: 0.8) else {
+                throw NSError(domain: "EventChatService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to data"])
+            }
+            finalImageData = jpegData
+            fileExtension = "jpg"
+        }
+        
+        let imagePath = "chat_images/\(eventId)/\(messageId).\(fileExtension)"
+        let imageRef = storageRef.child(imagePath)
+        
+        let metadata = StorageMetadata()
+        metadata.contentType = fileExtension == "gif" ? "image/gif" : "image/jpeg"
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            _ = imageRef.putData(finalImageData, metadata: metadata) { metadata, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                
+                imageRef.downloadURL { url, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    
+                    guard let url = url else {
+                        continuation.resume(throwing: NSError(domain: "EventChatService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get download URL"]))
+                        return
+                    }
+                    
+                    print("✅ EventChatService: Image uploaded successfully: \(url.absoluteString)")
+                    continuation.resume(returning: url.absoluteString)
+                }
+            }
+        }
+    }
+    
+    private func resizeImage(_ image: UIImage, to size: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
         }
     }
 }

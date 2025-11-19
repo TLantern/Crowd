@@ -10,6 +10,8 @@ import CoreLocation
 import CoreMotion
 import Combine
 import FirebaseFirestore
+import UIKit
+import PhotosUI
 
 // MARK: - Anchor Navigation Modal
 struct AnchorNavigationModal: View {
@@ -31,6 +33,8 @@ struct AnchorNavigationModal: View {
     @State private var currentUserName: String = "Guest"
     @StateObject private var chatService = EventChatService.shared
     @State private var messageText: String = ""
+    @State private var selectedImage: UIImage? = nil
+    @State private var selectedImageData: Data? = nil
     @State private var selectedTab: TabSelection = .chat
     @State private var isSendingMessage = false
     
@@ -143,6 +147,8 @@ struct AnchorNavigationModal: View {
                             ChatTabView(
                                 chatService: chatService,
                                 messageText: $messageText,
+                                selectedImage: $selectedImage,
+                                selectedImageData: $selectedImageData,
                                 sendMessage: sendMessage,
                                 isSendingMessage: $isSendingMessage
                             )
@@ -264,11 +270,16 @@ struct AnchorNavigationModal: View {
         guard !isSendingMessage else { return }
         
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let imageToSend = selectedImage
+        let imageDataToSend = selectedImageData
         
-        // Clear text immediately for better UX
+        guard !text.isEmpty || imageToSend != nil else { return }
+        
+        // Clear text and image immediately for better UX
         let messageToSend = text
         messageText = ""
+        selectedImage = nil
+        selectedImageData = nil
         
         isSendingMessage = true
         
@@ -278,7 +289,9 @@ struct AnchorNavigationModal: View {
                     eventId: anchor.id,
                     text: messageToSend,
                     userId: await currentUserId,
-                    userName: await currentUserName
+                    userName: await currentUserName,
+                    image: imageToSend,
+                    imageData: imageDataToSend
                 )
                 
                 // Track analytics on main thread
@@ -290,8 +303,10 @@ struct AnchorNavigationModal: View {
             } catch {
                 await MainActor.run {
                     print("❌ AnchorNavigationModal: Failed to send message: \(error)")
-                    // Restore message text on error
+                    // Restore message text and image on error
                     messageText = messageToSend
+                    selectedImage = imageToSend
+                    selectedImageData = imageDataToSend
                     isSendingMessage = false
                 }
             }
