@@ -152,8 +152,9 @@ struct CalenderView: View {
                 }
             }
             .onAppear {
-                // Initial one-time fetch, then live updates to ensure Upcoming list stays populated
+                // Fetch fresh data each time calendar opens, then set up live updates
                 Task {
+                    // Always fetch fresh data when calendar opens
                     await campusEventsVM.fetchOnce(limit: 25)
                     campusEventsVM.start()
                     await geocodeTodaysEventsIfNeeded()

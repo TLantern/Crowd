@@ -76,6 +76,8 @@ struct EventNavigationModal: View {
     @State private var isSendingMessage = false
     @State private var showOnboarding = false
     @State private var onboardingStep: OnboardingStep = .chat
+    @StateObject private var viewModel = EventDetailViewModel()
+    @State private var isLeaving = false
     
     enum TabSelection {
         case map
@@ -109,6 +111,26 @@ struct EventNavigationModal: View {
 
                             HStack {
                                 Spacer()
+                                
+                                // Leave event button (black door icon)
+                                if AttendedEventsService.shared.isAttendingEvent(event.id) {
+                                    Button(action: {
+                                        leaveEvent()
+                                    }) {
+                                        Image("door")
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 20, height: 20)
+                                            .foregroundColor(.black)
+                                            .background(Color.white)
+                                            .clipShape(Circle())
+                                            .frame(width: 28, height: 28)
+                                    }
+                                    .padding(.trailing, 8)
+                                    .disabled(isLeaving)
+                                }
+                                
+                                // Close button (X circle)
                                 Button(action: { 
                                     dismiss() 
                                 }) {
@@ -513,6 +535,24 @@ struct EventNavigationModal: View {
     private func dismissOnboarding() {
         TutorialManager.shared.markEventNavigationOnboardingComplete()
         showOnboarding = false
+    }
+    
+    // MARK: - Leave Event
+    
+    private func leaveEvent() {
+        isLeaving = true
+        Task {
+            let success = await viewModel.leaveEvent(event: event)
+            if success {
+                // Clear currentJoinedEvent if it matches
+                if appState.currentJoinedEvent?.id == event.id {
+                    appState.currentJoinedEvent = nil
+                }
+                // Dismiss the modal after leaving
+                dismiss()
+            }
+            isLeaving = false
+        }
     }
     
     // MARK: - Chat

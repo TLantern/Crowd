@@ -17,10 +17,22 @@ private let fallbackCoord = CLLocationCoordinate2D(
     longitude: -97.1500
 )
 
+// University Union coordinates from HostEventSheet.swift line 29
+// Any location containing "union" should use these coordinates
+private let universityUnionCoord = CLLocationCoordinate2D(
+    latitude: 33.2098926,
+    longitude: -97.1514762
+)
+
 // Try to match raw location text to predefined UNT locations (see HostEventSheet.untLocations)
 func matchUNTLocationCoordinate(for raw: String?) -> CLLocationCoordinate2D? {
     guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
     let text = raw.lowercased()
+    
+    // Any location containing "union" should use University Union coordinates (no geocoding)
+    if text.contains("union") {
+        return universityUnionCoord
+    }
 
     // Simple aliases for common variations
     let aliasToCanonical: [String: String] = [

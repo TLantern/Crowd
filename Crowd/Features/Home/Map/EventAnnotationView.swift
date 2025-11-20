@@ -43,14 +43,6 @@ struct EventAnnotationView: View {
     var isSchoolHosted: Bool {
         event.sourceURL != nil
     }
-    
-    var displayText: String {
-        // School-hosted events always show emoji, no animation
-        if isSchoolHosted {
-            return emoji
-        }
-        return showAttendeeCount ? "\(liveAttendeeCount)" : emoji
-    }
 
     var body: some View {
         ZStack {
@@ -103,7 +95,7 @@ struct EventAnnotationView: View {
                                 .opacity(showAttendeeCount ? 0 : 1)
                                 .scaleEffect(showAttendeeCount ? 0.8 : 1)
                         } else {
-                            // School-hosted always shows emoji
+                            // School-hosted always shows emoji, never switches to count
                             Text(emoji)
                                 .font(.system(size: 40, weight: .regular))
                         }
@@ -131,9 +123,12 @@ struct EventAnnotationView: View {
         .scaleEffect(scaleMultiplier)
         .onAppear {
             liveAttendeeCount = event.attendeeCount
-            // Only start timer for user-created events, not school-hosted
+            // School-hosted events never switch to crowd count - always show emoji
             if !isSchoolHosted {
                 startTimer()
+            } else {
+                // Ensure showAttendeeCount stays false for school-hosted events
+                showAttendeeCount = false
             }
             startEventListener()
         }

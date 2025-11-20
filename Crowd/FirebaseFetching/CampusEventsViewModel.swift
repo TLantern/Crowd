@@ -19,12 +19,22 @@ final class CampusEventsViewModel: ObservableObject {
 
     // Energy-friendly single fetch used by calendar view (14-day feed already in Firestore)
     func fetchOnce(limit: Int = 25) async {
+        // Clear existing events to ensure fresh data on each fetch
+        await MainActor.run {
+            self.crowdEvents = []
+            self.geocodedIds.removeAll()
+        }
+        
         let db = Firestore.firestore()
         print("🔄 CampusEventsViewModel: One-time fetch from campus_events_live (limit: \(limit))")
         
         do {
+            // Fetch all documents (or a large batch) since we filter for future events client-side
+            // Order by createdAt descending to get most recent events first
+            // Use a high limit to ensure we get all future events even if many are past
             let snap = try await db.collection("campus_events_live")
-                .limit(to: limit * 2)
+                .order(by: "createdAt", descending: true)
+                .limit(to: 200)
                 .getDocuments()
 
             let docs = snap.documents
@@ -45,7 +55,8 @@ final class CampusEventsViewModel: ObservableObject {
                 let bStart = b.startsAt ?? .distantFuture
                 return aStart < bStart
             }
-            await MainActor.run { self.crowdEvents = Array(quickMapped.prefix(limit)) }
+            // Don't limit here - show all future events found
+            await MainActor.run { self.crowdEvents = quickMapped }
             
             let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) { () async -> [CrowdEvent] in
                 var tmp: [CrowdEvent] = []
@@ -57,7 +68,12 @@ final class CampusEventsViewModel: ObservableObject {
                             let trimmedName = live.locationName?.trimmingCharacters(in: .whitespacesAndNewlines)
                             let name: String? = (trimmedName?.isEmpty == false) ? live.locationName : live.location
                             if let query = name, !query.isEmpty {
-                            geocoded = await searchLocationOnAppleMapsCampus(query)
+                                // Check predefined locations first (e.g., Union) to avoid geocoding
+                                if let predefined = matchUNTLocationCoordinate(for: query) {
+                                    geocoded = predefined
+                                } else {
+                                    geocoded = await searchLocationOnAppleMapsCampus(query)
+                                }
                             }
                         }
                         if var ce = mapCampusEventLiveToCrowdEvent(live) {
@@ -71,7 +87,8 @@ final class CampusEventsViewModel: ObservableObject {
                     let bStart = b.startsAt ?? .distantFuture
                     return aStart < bStart
                 }
-                return Array(tmp.prefix(limit))
+                // Don't limit here - return all future events found
+                return tmp
             }.value
 
             await MainActor.run { self.crowdEvents = mapped }
@@ -87,7 +104,9 @@ final class CampusEventsViewModel: ObservableObject {
         
         print("🔄 CampusEventsViewModel: Starting listener for campus_events_live collection")
 
+        // Order by createdAt to get most recent events first
         listener = db.collection("campus_events_live")
+            .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snap, err in
                 guard let self = self else { return }
                 
