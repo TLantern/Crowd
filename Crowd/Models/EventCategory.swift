@@ -30,7 +30,7 @@ enum EventCategory: String, CaseIterable, Identifiable {
         case .studySession: return "📚"
         case .gymMeetup: return "💪"
         case .foodRun: return "🍔"
-        case .chillHangout: return "🛋️"
+        case .chillHangout: return "💬"
         case .gameNight: return "🎮"
         case .kickback: return "🥤"
         case .party: return "🎉"

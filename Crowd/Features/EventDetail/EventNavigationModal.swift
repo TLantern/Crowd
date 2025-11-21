@@ -108,39 +108,6 @@ struct EventNavigationModal: View {
                             MarqueeTitle(text: "\(eventEmoji) \(event.title)")
                                 .padding(.horizontal, 5)
                                 .padding(.bottom, 4)
-
-                            HStack {
-                                Spacer()
-                                
-                                // Leave event button (black door icon)
-                                if AttendedEventsService.shared.isAttendingEvent(event.id) {
-                                    Button(action: {
-                                        leaveEvent()
-                                    }) {
-                                        Image("door")
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(width: 22, height: 22)
-                                            .foregroundColor(.black)
-                                            .background(Color.white)
-                                            .clipShape(Circle())
-                                    }
-                                    .padding(.trailing, 8)
-                                    .disabled(isLeaving)
-                                }
-                                
-                                // Close button (X circle)
-                                Button(action: { 
-                                    dismiss() 
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 22, weight: .bold))
-                                        .foregroundColor(.red)
-                                        .background(Color.white)
-                                        .clipShape(Circle())
-                                }
-                                .padding(.trailing, 12)
-                            }
                         }
                         .padding(.bottom, 4)
                         
@@ -186,6 +153,37 @@ struct EventNavigationModal: View {
                                 }
                             }
                             Spacer()
+                            
+                            // Leave event button (black door icon) and Close button (X circle)
+                            HStack(spacing: 8) {
+                                if AttendedEventsService.shared.isAttendingEvent(event.id) {
+                                    Button(action: {
+                                        leaveEvent()
+                                    }) {
+                                        Image("door")
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 22, height: 22)
+                                            .foregroundColor(.black)
+                                            .background(Color.white)
+                                            .clipShape(Circle())
+                                    }
+                                    .disabled(isLeaving)
+                                }
+                                
+                                Button(action: { 
+                                    dismiss() 
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 33, height: 33)
+                                        .foregroundColor(.red)
+                                        .background(Color.white)
+                                        .clipShape(Circle())
+                                }
+                            }
+                            .padding(.trailing, 16)
                         }
                         .frame(height: 48)
                         .padding(.horizontal, 16)
