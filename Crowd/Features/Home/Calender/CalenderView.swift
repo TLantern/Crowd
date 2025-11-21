@@ -700,127 +700,83 @@ struct PartyCardView: View {
     let party: CrowdEvent
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Party Image
-            if let imageURL = party.imageURL, let url = URL(string: imageURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 200)
-                            .overlay(
-                                ProgressView()
-                            )
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: 200)
-                            .clipped()
-                    case .failure:
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 200)
-                            .overlay(
-                                Image(systemName: "photo")
-                                    .font(.system(size: 32))
-                                    .foregroundStyle(.gray)
-                            )
-                    @unknown default:
-                        EmptyView()
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            // Title + Host Name (biggest)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(party.title)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                
+                if !party.hostName.isEmpty && party.hostName != "Party Host" {
+                    Text(party.hostName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-            } else {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(height: 200)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.gray)
-                    )
             }
             
-            // Party Info
-            VStack(alignment: .leading, spacing: 12) {
-                // Title + Host Name (biggest)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(party.title)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                    
-                    if !party.hostName.isEmpty && party.hostName != "Party Host" {
-                        Text(party.hostName)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                
-                // Time with emoji
-                if let startsAt = party.startsAt {
-                    HStack(spacing: 6) {
-                        Text("📅")
-                            .font(.system(size: 14))
-                        Text(formatEventTime(startsAt))
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                // Address with emoji
-                if let address = party.rawLocationName, !address.isEmpty {
-                    HStack(spacing: 6) {
-                        Text("📍")
-                            .font(.system(size: 14))
-                        Text(address)
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-                
-                // Going count badge
-                if party.attendeeCount > 0 {
-                    HStack(spacing: 4) {
-                        Text("\(party.attendeeCount >= 50 ? "50+" : "\(party.attendeeCount)")")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                        Text("going")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 4)
-                }
-                
-                // Buy Ticket Button
-                if let ticketURL = party.ticketURL {
-                    Button(action: {
-                        if let url = URL(string: ticketURL) {
-                            UIApplication.shared.open(url)
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "ticket.fill")
-                                .font(.system(size: 14))
-                            Text("Buy Ticket")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.black)
-                        )
-                    }
-                    .padding(.top, 8)
+            // Time with emoji
+            if let startsAt = party.startsAt {
+                HStack(spacing: 6) {
+                    Text("📅")
+                        .font(.system(size: 14))
+                    Text(formatEventTime(startsAt))
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
                 }
             }
-            .padding(16)
+            
+            // Address with emoji
+            if let address = party.rawLocationName, !address.isEmpty {
+                HStack(spacing: 6) {
+                    Text("📍")
+                        .font(.system(size: 14))
+                    Text(address)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            
+            // Going count badge
+            if party.attendeeCount > 0 {
+                HStack(spacing: 4) {
+                    Text("\(party.attendeeCount >= 50 ? "50+" : "\(party.attendeeCount)")")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                    Text("going")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 4)
+            }
+            
+            // Buy Ticket Button
+            if let ticketURL = party.ticketURL {
+                Button(action: {
+                    if let url = URL(string: ticketURL) {
+                        UIApplication.shared.open(url)
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "ticket.fill")
+                            .font(.system(size: 14))
+                        Text("Buy Ticket")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.black)
+                    )
+                }
+                .padding(.top, 8)
+            }
         }
+        .padding(16)
         .background(.ultraThinMaterial)
         .cornerRadius(16)
         .overlay(

@@ -39,7 +39,7 @@
       "anchor_end_local": "19:00",
       "send_notification": true,
       "notification_time_local": "11:30",
-      "notification_message": "Union is heating up for lunch traffic. Good spot to link or chill between classes.",
+      "notification_message": "Union is heating up for lunch. Good spot to link or chill between classes.",
       "description": "Lunch crowds, clubs tabling, people chilling between classes. Good spot to find friends, link for food, or meet someone fast."
     },
     {
@@ -81,7 +81,7 @@
       "anchor_end_local": "19:30",
       "send_notification": true,
       "notification_time_local": "18:00",
-      "notification_message": "Dinner crowd warming up at Eagle Landing. Easy to find a seat or meet people now.",
+      "notification_message": "Dinner crowd warming up at Eagle Landing. Find a seat and meet some new people now.",
       "description": "Dinner warm-up phase. People rolling in after classes, light chatter, more open tables. Easy opportunity to sit with others."
     }
   ]

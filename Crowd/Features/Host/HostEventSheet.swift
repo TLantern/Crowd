@@ -27,10 +27,11 @@ struct PredefinedLocation: Identifiable {
 
 let untLocations: [PredefinedLocation] = [
     PredefinedLocation(name: "University Union", coordinate: CLLocationCoordinate2D(latitude: 33.2098926, longitude: -97.1514762), searchOverride: nil),
-    PredefinedLocation(name: "University Union – Main Floor", coordinate: CLLocationCoordinate2D(latitude: 33.2098926, longitude: -97.1514762), searchOverride: nil),
-    PredefinedLocation(name: "Union Main Floor", coordinate: CLLocationCoordinate2D(latitude: 33.2106138, longitude: -97.1473253), searchOverride: nil),
+    // PredefinedLocation(name: "University Union – Main Floor", coordinate: CLLocationCoordinate2D(latitude: 33.2098926, longitude: -97.1514762), searchOverride: nil),
+    // PredefinedLocation(name: "Union Main Floor", coordinate: CLLocationCoordinate2D(latitude: 33.2106138, longitude: -97.1473253), searchOverride: nil),
     PredefinedLocation(name: "Willis Library", coordinate: CLLocationCoordinate2D(latitude: 33.210113, longitude: -97.1489542), searchOverride: nil),
     PredefinedLocation(name: "Business Leadership Building", coordinate: CLLocationCoordinate2D(latitude: 33.2088579, longitude: -97.147729), searchOverride: nil),
+    PredefinedLocation(name: "Pohl Recreation Center", coordinate: CLLocationCoordinate2D(latitude: 33.21207, longitude: -97.15404), searchOverride: nil),
     PredefinedLocation(name: "Sage Hall", coordinate: CLLocationCoordinate2D(latitude: 33.212014, longitude: -97.1467232), searchOverride: nil),
     PredefinedLocation(name: "DATCU Stadium", coordinate: CLLocationCoordinate2D(latitude: 33.2039355, longitude: -97.1592403), searchOverride: nil),
     PredefinedLocation(name: "Discovery Park", coordinate: CLLocationCoordinate2D(latitude: 33.25331, longitude: -97.1544), searchOverride: nil),
@@ -39,7 +40,6 @@ let untLocations: [PredefinedLocation] = [
     PredefinedLocation(name: "Joe Greene Hall", coordinate: CLLocationCoordinate2D(latitude: 33.2069554, longitude: -97.1462809), searchOverride: nil),
     PredefinedLocation(name: "Denton Square", coordinate: CLLocationCoordinate2D(latitude: 33.2150434, longitude: -97.1330684), searchOverride: nil),
     // PredefinedLocation(name: "Clark Hall", coordinate: CLLocationCoordinate2D(latitude: 33.20779, longitude: -97.15143), searchOverride: "Clark Hall"),
-    PredefinedLocation(name: "Pohl Recreation Center", coordinate: CLLocationCoordinate2D(latitude: 33.21207, longitude: -97.15404), searchOverride: nil),
     PredefinedLocation(name: "Eagle Landing Dining Hall", coordinate: CLLocationCoordinate2D(latitude: 33.208596, longitude: -97.146741), searchOverride: nil),
     PredefinedLocation(name: "UNT Music Building", coordinate: CLLocationCoordinate2D(latitude: 33.2106644, longitude: -97.1501177), searchOverride: nil),
     PredefinedLocation(name: "Art Building", coordinate: CLLocationCoordinate2D(latitude: 33.2131446, longitude: -97.1454504), searchOverride: nil),

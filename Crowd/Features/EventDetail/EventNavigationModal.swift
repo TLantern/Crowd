@@ -120,11 +120,10 @@ struct EventNavigationModal: View {
                                         Image("door")
                                             .resizable()
                                             .scaledToFit()
-                                            .frame(width: 20, height: 20)
+                                            .frame(width: 22, height: 22)
                                             .foregroundColor(.black)
                                             .background(Color.white)
                                             .clipShape(Circle())
-                                            .frame(width: 28, height: 28)
                                     }
                                     .padding(.trailing, 8)
                                     .disabled(isLeaving)
