@@ -145,6 +145,8 @@ struct AnchorNavigationModal: View {
                             }
                         } else {
                             ChatTabView(
+                                eventId: anchor.id,
+                                attendeeCount: 0,
                                 chatService: chatService,
                                 messageText: $messageText,
                                 selectedImage: $selectedImage,
