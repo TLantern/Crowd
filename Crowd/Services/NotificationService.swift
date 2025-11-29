@@ -250,6 +250,25 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
         completionHandler()
     }
 
+    // MARK: - Host Follow Subscriptions
+    
+    func subscribeToHost(hostId: String) {
+        print("🔔 NotificationService: Subscribed to host \(hostId)")
+        // TODO: Implement FCM topic subscription when backend is ready
+        // Messaging.messaging().subscribe(toTopic: "host_\(hostId)")
+    }
+    
+    func unsubscribeFromHost(hostId: String) {
+        print("🔕 NotificationService: Unsubscribed from host \(hostId)")
+        // TODO: Implement FCM topic unsubscription when backend is ready
+        // Messaging.messaging().unsubscribe(fromTopic: "host_\(hostId)")
+    }
+    
+    func sendHostEventNotification(hostId: String, event: CrowdEvent) {
+        print("📨 NotificationService: Would send notification for host \(hostId) event \(event.id)")
+        // TODO: Implement via Firebase Cloud Function when backend is ready
+    }
+    
     private func sendDebugTestNotification() async {
         guard let userId = FirebaseManager.shared.getCurrentUserId() else { 
             print("❌ Debug: No user ID available for test notification")

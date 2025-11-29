@@ -1324,11 +1324,11 @@ struct CrowdHomeView: View {
 
                         // Small type filter (half height of main pill) centered below
                         Menu {
-                            Button("User Created Events") {
+                            Button("Student Crowds") {
                                 sourceFilter = .user
                                 AnalyticsService.shared.trackFilterChanged(filterType: "source", value: "user")
                             }
-                            Button("School Hosted Events") {
+                            Button("Official Events") {
                                 sourceFilter = .school
                                 AnalyticsService.shared.trackFilterChanged(filterType: "source", value: "school")
                             }

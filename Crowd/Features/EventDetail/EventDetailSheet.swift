@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseFirestore
+import ComponentsKit
 
 extension Notification.Name {
     static let eventDeleted = Notification.Name("eventDeleted")
@@ -25,9 +26,11 @@ struct EventDetailView: View {
     @State private var showNavigationModal = false
     @ObservedObject private var attendedEventsService = AttendedEventsService.shared
     @State private var liveAttendeeCount: Int = 0
+    @State private var attendees: [UserProfile] = []
     @State private var eventListener: ListenerRegistration?
     @State private var displayDescription: String?
-    @State private var isGeneratingDescription = false
+    @State private var isFollowingHost = false
+    @State private var shareButtonScale: CGFloat = 0.9
     
     var currentUserName: String {
         appState.sessionUser?.displayName ?? "You"
@@ -72,32 +75,69 @@ struct EventDetailView: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Header: Emoji + Title (centered together)
+                        // Header: Emoji + Title (centered) with Share button on right
                         HStack(spacing: 8) {
+                            // Invisible spacer to balance the share button
+                            Color.clear
+                                .frame(width: 44, height: 44)
+                            
+                            Spacer()
+                            
                             Text(emoji)
                                 .font(.system(size: 40))
                             
                             Text(event.title)
                                 .font(.system(size: 24, weight: .bold))
+                            
+                            Spacer()
+                            
+                            // Share button
+                            Button(action: shareEvent) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 44, height: 44)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(.systemGray6))
+                                    )
+                            }
+                            .scaleEffect(shareButtonScale)
+                            .onAppear {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                                    shareButtonScale = 1.0
+                                }
+                            }
                         }
-                        .frame(maxWidth: .infinity)
                         .padding(.horizontal)
                         .padding(.top, (isHost || hasJoined) ? 0 : 20)
                     
-                    // Host info with aura points
-                    VStack(spacing: 4) {
-                        if viewModel.isLoadingHost {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else if let host = viewModel.hostProfile {
-                            Text("Hosted by: \(host.displayName) • \(host.auraPoints) points")
-                                .font(.system(size: 15))
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("Hosted by: \(event.hostName) • 0 points")
-                                .font(.system(size: 15))
-                                .foregroundColor(.secondary)
+                    // Host info with follow button
+                    if viewModel.isLoadingHost {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        HStack {
+                            HStack(spacing: 8) {
+                                HostAvatarView(host: viewModel.hostProfile, fallbackName: event.hostName)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Hosted by")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                    Text(viewModel.hostProfile?.displayName ?? event.hostName)
+                                        .font(.system(size: 15, weight: .semibold))
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            if !isHost {
+                                FollowButton(isFollowing: isFollowingHost) {
+                                    toggleFollowHost()
+                                }
+                            }
                         }
+                        .padding(.horizontal)
                     }
                     
                     Divider()
@@ -105,14 +145,21 @@ struct EventDetailView: View {
                     
                     // Event details
                     VStack(spacing: 20) {
-                        // Crowd Size (centered)
+                        // People here now (centered)
                         VStack(spacing: 8) {
-                            Text("Crowd Size")
+                            Text("People here now")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.secondary)
-                            Text("\(liveAttendeeCount)")
-                                .font(.system(size: 32, weight: .bold))
-                                .foregroundColor(.primary)
+                            CrowdAvatarGroup(
+                                members: attendees.map {
+                                    Member(
+                                        id: $0.id,
+                                        imageURL: $0.profileImageURL,
+                                        initials: String($0.displayName.prefix(2)).uppercased()
+                                    )
+                                },
+                                totalCount: liveAttendeeCount
+                            )
                         }
                         
                         // Time
@@ -121,7 +168,7 @@ struct EventDetailView: View {
                                 Text("Time")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.secondary)
-                                Text(formatTime(start, end))
+                                Text(formatTimeWithContext(start: start, end: end))
                                     .font(.system(size: 16))
                                     .foregroundColor(.primary)
                             }
@@ -136,7 +183,7 @@ struct EventDetailView: View {
                             Group {
                                 if let raw = event.rawLocationName, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                     Text(raw)
-                                        .font(.system(size: 16, weight: .bold))
+                                        .font(.system(size: 16))
                                         .foregroundColor(.primary)
                                 } else if let closestName = findClosestLocationName(for: event.coordinates) {
                                     Text(closestName)
@@ -146,7 +193,7 @@ struct EventDetailView: View {
                             }
                         }
                         
-                        // Description
+                        // Description - only show if displayDescription has text
                         if let description = displayDescription, !description.isEmpty {
                             VStack(spacing: 8) {
                                 Text("Description")
@@ -161,31 +208,54 @@ struct EventDetailView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                                     .padding(.horizontal, 5)
                             }
-                        } else if isGeneratingDescription {
-                            VStack(spacing: 8) {
-                                Text("Description")
-                                    .font(.system(size: 14, weight: .semibold))
+                        }
+                        
+                        // Vibe Chips - "Perfect for" section
+                        let chips = generateVibeChips(
+                            tags: event.tags,
+                            title: event.title,
+                            description: displayDescription
+                        )
+                        if !chips.isEmpty {
+                            VStack(alignment: .center, spacing: 6) {
+                                Text("Perfect for")
+                                    .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity)
-                                
-                                HStack {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                    Text("Generating description...")
-                                        .font(.system(size: 15))
-                                        .foregroundColor(.secondary)
+                                HStack(spacing: 8) {
+                                    ForEach(Array(chips.enumerated()), id: \.offset) { index, chip in
+                                        SUBadge(model: BadgeVM {
+                                            $0.title = chip
+                                            $0.color = vibeChipColor(for: index)
+                                            $0.style = .light
+                                            $0.font = .smButton
+                                            $0.cornerRadius = .full
+                                            $0.paddings = .init(horizontal: 10, vertical: 6)
+                                        })
+                                    }
                                 }
                             }
+                            .padding(.top, 4)
+                            .padding(.bottom, 24)
                         }
                     }
                     
-                    Spacer(minLength: 20)
+                    Spacer(minLength: 0)
                 }
             }
+            .scrollIndicators(.hidden)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             
             
             // Action buttons
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
+                // Value statement - only show when not joined
+                if !hasJoined {
+                    Text("Join to see who's here and drop a message.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                
                 if hasJoined {
                     // Leave button (red)
                     Button {
@@ -245,7 +315,7 @@ struct EventDetailView: View {
                         }
                     }
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         if viewModel.isJoining {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -256,7 +326,9 @@ struct EventDetailView: View {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 18, weight: .semibold))
                         } else {
-                            Text("Join Crowd")
+                            Image(systemName: "person.3.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                            Text("Join this Crowd")
                                 .font(.system(size: 18, weight: .semibold))
                         }
                     }
@@ -265,12 +337,13 @@ struct EventDetailView: View {
                     .padding(.vertical, 16)
                     .background(
                         LinearGradient(
-                            colors: [Color(hex: 0x02853E), Color(hex: 0x03A04E)],
+                            colors: [Color(hex: 0x027838), Color(hex: 0x03A04E)],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
-                    .cornerRadius(16)
+                    .cornerRadius(22)
+                    .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
                 }
                 .disabled(viewModel.isJoining || hasJoined)
             }
@@ -281,11 +354,17 @@ struct EventDetailView: View {
         .task {
             await viewModel.loadHostProfile(hostId: event.hostId)
             AnalyticsService.shared.trackScreenView("event_detail")
+            if let fetched = try? await EventAttendeesService.shared.fetchAttendees(eventId: event.id) {
+                attendees = fetched
+            }
         }
         .onAppear {
             // Initialize with current event count
             liveAttendeeCount = event.attendeeCount
             startEventListener()
+            
+            // Check if following host
+            isFollowingHost = FollowService.shared.isFollowing(hostId: event.hostId)
             
             // Always prioritize event's description field (from HostEventSheet or other sources)
             // Only generate a new description if the event doesn't have one
@@ -327,97 +406,277 @@ struct EventDetailView: View {
         }
     }
     
-    private func formatTime(_ start: Date, _ end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+    private func eventShareURL() -> URL {
+        let base = "https://crowdapp.io/event"
+        return URL(string: "\(base)/\(event.id)")!
+    }
+    
+    private func shareEvent() {
+        let url = eventShareURL()
+        let message = "Pull up: \(event.title) at \(event.rawLocationName ?? "campus") on Crowd."
+        
+        let items: [Any] = [message, url]
+        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = scene.keyWindow?.rootViewController {
+            root.present(activityVC, animated: true)
+        }
+    }
+    
+    private func formatTimeWithContext(start: Date, end: Date) -> String {
+        let calendar = Calendar.current
+        
+        // Determine day prefix
+        let dayPrefix: String
+        if calendar.isDateInToday(start) {
+            dayPrefix = "Today"
+        } else if calendar.isDateInTomorrow(start) {
+            dayPrefix = "Tomorrow"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEE"
+            dayPrefix = formatter.string(from: start)
+        }
+        
+        // Format time based on minutes
+        func formatTimeComponent(_ date: Date) -> String {
+            let minute = calendar.component(.minute, from: date)
+            let formatter = DateFormatter()
+            formatter.dateFormat = minute == 0 ? "h a" : "h:mm a"
+            return formatter.string(from: date)
+        }
+        
+        return "\(dayPrefix) · \(formatTimeComponent(start)) – \(formatTimeComponent(end))"
     }
     
     private func generateDescription() {
-        isGeneratingDescription = true
-        
-        Task {
-            let description = await createEventDescription(for: event)
-            await MainActor.run {
-                displayDescription = description
-                isGeneratingDescription = false
-            }
-        }
-    }
-    
-    private func createEventDescription(for event: CrowdEvent) async -> String {
-        var parts: [String] = []
-        
-        // Add location context
-        let locationName: String = {
+        let location: String? = {
             if let raw = event.rawLocationName, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return raw
-            } else if let closest = findClosestLocationName(for: event.coordinates) {
-                return closest
-            } else {
-                return "this awesome spot"
             }
+            return findClosestLocationName(for: event.coordinates)
         }()
         
-        // Build description based on event info
-        let emoji = TagEmoji.emoji(for: event.tags, fallbackCategory: event.category)
+        let generated = autoGenerateDescription(for: event, location: location)
+        displayDescription = generated.isEmpty ? nil : generated
+    }
+    
+    private func autoGenerateDescription(for event: CrowdEvent, location: String?) -> String {
+        let loc = location ?? "campus"
         
-        // Fun opening phrases
-        let funOpenings = [
-            "Get ready to vibe",
-            "Come hang out",
-            "Let's make it happen",
-            "Time to connect",
-            "Join the fun",
-            "Don't miss out"
-        ]
-        let opening = funOpenings.randomElement() ?? "Join us"
-        
-        // Start with a fun, contextual sentence about the event
-        parts.append("\(emoji) \(opening) for \(event.title) at \(locationName)!")
-        
-        // Add time context if available with fun phrasing
-        if let start = event.startsAt {
-            let calendar = Calendar.current
-            let formatter = DateFormatter()
-            formatter.timeStyle = .short
+        // Vibe templates based on category/tags
+        let vibeTemplates: [(check: () -> Bool, templates: [String])] = [
+            // Study
+            ({ event.category == EventCategory.studySession.rawValue || event.tags.contains(where: { $0.lowercased().contains("study") }) },
+             ["\(event.title) at \(loc). Pull up if you're cramming or doing homework.",
+              "Study grind at \(loc). Bring your laptop and lock in.",
+              "Locking in at \(loc). Come through if you're grinding."]),
             
-            if calendar.isDateInToday(start) {
-                parts.append("Kicking off today at \(formatter.string(from: start)) - see you there! 🎉")
-            } else if calendar.isDateInTomorrow(start) {
-                parts.append("Mark your calendar for tomorrow at \(formatter.string(from: start)) - it's going to be epic! ⭐")
-            } else {
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateStyle = .medium
-                dateFormatter.timeStyle = .short
-                parts.append("Save the date: \(dateFormatter.string(from: start)) - you won't want to miss this! 📅")
+            // Party/Social
+            ({ event.category == EventCategory.party.rawValue || event.tags.contains(where: { ["party", "parties", "nightlife"].contains($0.lowercased()) }) },
+             ["Pull up to \(loc). Good vibes only.",
+              "We outside at \(loc). Come through.",
+              "Vibes at \(loc). Don't miss out."]),
+            
+            // Chill
+            ({ event.tags.contains(where: { $0.lowercased().contains("chill") }) },
+             ["Chill crowd at \(loc). No pressure, just vibes.",
+              "Lowkey hangout at \(loc). Pull up.",
+              "Chilling at \(loc). Come vibe with us."]),
+            
+            // Sports/Gym
+            ({ event.tags.contains(where: { ["gym", "basketball", "football", "soccer", "sports", "running"].contains($0.lowercased()) }) },
+             ["Running it at \(loc). Pull up if you're trying to play.",
+              "Active at \(loc). Come get a workout in.",
+              "Hooping at \(loc). We need more people."]),
+            
+            // Food/Coffee
+            ({ event.tags.contains(where: { ["food", "coffee", "foodie", "eats"].contains($0.lowercased()) }) },
+             ["Grabbing food at \(loc). Come eat with us.",
+              "Food run at \(loc). You hungry?",
+              "Coffee and convo at \(loc). Pull up."])
+        ]
+        
+        // Find matching vibe template
+        for (check, templates) in vibeTemplates {
+            if check(), let template = templates.randomElement() {
+                return template
             }
         }
         
-        // Add category/tag context with fun phrasing
-        if let category = event.category, let cat = EventCategory(rawValue: category) {
-            let categoryContext = cat.rawValue.lowercased()
-            let funEndings = [
-                "Perfect for \(categoryContext) enthusiasts!",
-                "A \(categoryContext) experience you'll love!",
-                "Calling all \(categoryContext) fans!",
-                "The ultimate \(categoryContext) gathering!"
-            ]
-            parts.append(funEndings.randomElement() ?? "A \(categoryContext) event you'll love!")
-        } else if !event.tags.isEmpty {
-            let tagContext = event.tags.prefix(2).joined(separator: " and ")
-            let funTagEndings = [
-                "Perfect for anyone into \(tagContext)!",
-                "If you love \(tagContext), this is for you!",
-                "Calling all \(tagContext) enthusiasts!",
-                "A must-attend for \(tagContext) fans!"
-            ]
-            parts.append(funTagEndings.randomElement() ?? "Perfect for anyone interested in \(tagContext)!")
-        }
-        
-        return parts.joined(separator: " ")
+        // Default fallback
+        let defaults = [
+            "\(event.title) at \(loc). Come through.",
+            "Crowd at \(loc). Pull up and vibe.",
+            "Hanging at \(loc). You're invited."
+        ]
+        return defaults.randomElement() ?? "\(event.title) at \(loc)."
     }
     
+    private func generateVibeChips(tags: [String], title: String, description: String?) -> [String] {
+        // Comprehensive tag-to-chips mapping
+        let tagMapping: [String: [String]] = [
+            // Study/Academic
+            "study": ["Exam prep", "Quiet grind"],
+            "academic": ["Exam prep", "Quiet grind"],
+            "Study Sessions": ["Exam prep", "Quiet grind"],
+            
+            // Chill
+            "chillHangout": ["Chill crowd", "Low-pressure hang"],
+            "Chill Spots": ["Chill crowd", "Low-pressure hang"],
+            
+            // Party/Nightlife
+            "party": ["Meet new people", "Late-night vibe"],
+            "parties": ["Meet new people", "Late-night vibe"],
+            "Parties": ["Meet new people", "Late-night vibe"],
+            "Nightlife": ["Meet new people", "Late-night vibe"],
+            
+            // Sports
+            "gym": ["Run it back", "Pickup runs"],
+            "Gym Life": ["Run it back", "Pickup runs"],
+            "Basketball": ["Run it back", "Pickup runs"],
+            "Football": ["Run it back", "Pickup runs"],
+            "Soccer": ["Run it back", "Pickup runs"],
+            "Tennis": ["Run it back", "Pickup runs"],
+            "Running": ["Run it back", "Pickup runs"],
+            
+            // Gaming
+            "Gaming": ["Gamers welcome", "Squad up"],
+            "Esports": ["Gamers welcome", "Squad up"],
+            "Retro Games": ["Gamers welcome", "Squad up"],
+            
+            // Startups/Business
+            "Startups": ["Builders & founders", "Talk ideas"],
+            "Entrepreneurship": ["Builders & founders", "Talk ideas"],
+            "Business": ["Builders & founders", "Talk ideas"],
+            "Investing": ["Builders & founders", "Talk ideas"],
+            
+            // Tech
+            "AI & Tech": ["Tech crowd", "Laptop gang"],
+            "Coding": ["Tech crowd", "Laptop gang"],
+            
+            // Music/Arts
+            "Music": ["Creative vibes", "Artists welcome"],
+            "Singing": ["Creative vibes", "Artists welcome"],
+            "Guitar": ["Creative vibes", "Artists welcome"],
+            "Band Life": ["Creative vibes", "Artists welcome"],
+            "Dance": ["Creative vibes", "Artists welcome"],
+            "Theatre": ["Creative vibes", "Artists welcome"],
+            "Art & Design": ["Creative vibes", "Artists welcome"],
+            "Photography": ["Creative vibes", "Artists welcome"],
+            "Filmmaking": ["Creative vibes", "Artists welcome"],
+            "Writing": ["Creative vibes", "Artists welcome"],
+            "Graphic Design": ["Creative vibes", "Artists welcome"],
+            
+            // Food/Coffee
+            "Coffee Runs": ["Foodies unite", "Good eats"],
+            "Foodie": ["Foodies unite", "Good eats"],
+            "Late-Night Eats": ["Foodies unite", "Good eats"],
+            "Cooking": ["Foodies unite", "Good eats"],
+            
+            // Outdoor/Adventure
+            "Adventure": ["Adventure seekers", "Outdoor crew"],
+            "Biking": ["Adventure seekers", "Outdoor crew"],
+            "Travel": ["Adventure seekers", "Outdoor crew"],
+            "Beach Days": ["Adventure seekers", "Outdoor crew"],
+            "Camping": ["Adventure seekers", "Outdoor crew"],
+            
+            // Social/Media
+            "Public Speaking": ["Content creators", "Networkers"],
+            "Podcasts": ["Content creators", "Networkers"],
+            "Social Media": ["Content creators", "Networkers"],
+            "Campus News": ["Content creators", "Networkers"],
+            "Campus Events": ["Content creators", "Networkers"],
+            
+            // Wellness
+            "Wellness": ["Self-care crew", "Mindful vibes"],
+            
+            // Pets
+            "Pets": ["Pet lovers", "Bring your furry friend"],
+            
+            // Dating/Social
+            "Dating & Friends": ["Meet new people", "Chill hangout"],
+            "social": ["Meet new people", "Chill hangout"],
+            
+            // Culture/Sustainability
+            "Culture": ["Culture enthusiasts", "Expand your horizons"],
+            "Sustainability": ["Eco-conscious crew", "Green vibes"],
+            "Science": ["Curious minds", "Learn something new"]
+        ]
+        
+        // All InterestsView titles for direct pass-through
+        let interestTitles: Set<String> = [
+            "Gaming", "Basketball", "Soccer", "Tennis", "Football", "Wellness",
+            "Music", "Singing", "Guitar", "Band Life", "Dance", "Theatre",
+            "Art & Design", "Photography", "Filmmaking", "Coding", "AI & Tech",
+            "Science", "Study Sessions", "Coffee Runs", "Foodie", "Late-Night Eats",
+            "Gym Life", "Running", "Adventure", "Biking", "Travel", "Beach Days",
+            "Camping", "Chill Spots", "Parties", "Esports", "Startups",
+            "Entrepreneurship", "Business", "Investing", "Public Speaking",
+            "Podcasts", "Campus News", "Social Media", "Retro Games", "Cooking",
+            "Pets", "Nightlife", "Dating & Friends", "Writing", "Graphic Design",
+            "Culture", "Sustainability", "Campus Events"
+        ]
+        
+        var chips: [String] = []
+        var addedChipSets: Set<String> = [] // Track which chip sets we've added to avoid duplicates
+        
+        for tag in tags {
+            // Check if tag is in mapping
+            if let mappedChips = tagMapping[tag] {
+                let chipSetKey = mappedChips.joined(separator: "|")
+                if !addedChipSets.contains(chipSetKey) {
+                    chips.append(contentsOf: mappedChips)
+                    addedChipSets.insert(chipSetKey)
+                }
+            } else if interestTitles.contains(tag) {
+                // If tag matches an InterestsView title exactly but isn't in dictionary, use it directly
+                if !chips.contains(tag) {
+                    chips.append(tag)
+                }
+            }
+            
+            // Stop if we have enough chips
+            if chips.count >= 3 {
+                break
+            }
+        }
+        
+        // If chips from tags are less than 3, derive more from title/description
+        if chips.count < 3 {
+            let titleLower = title.lowercased()
+            let descLower = (description ?? "").lowercased()
+            let combined = titleLower + " " + descLower
+            
+            if chips.count < 3 && (combined.contains("csci") || combined.contains("computer science")) {
+                chips.append("For CSCI majors")
+            }
+            if chips.count < 3 && (combined.contains("review") || combined.contains("midterm") || combined.contains("final")) {
+                chips.append("Midterm prep")
+            }
+            if chips.count < 3 && (combined.contains("workout") || combined.contains("lift")) {
+                chips.append("Fitness crew")
+            }
+        }
+        
+        // Generic fallbacks to ensure minimum 3 chips
+        let genericFallbacks = ["Chill crowd", "Good vibes", "All welcome"]
+        var fallbackIndex = 0
+        while chips.count < 3 && fallbackIndex < genericFallbacks.count {
+            if !chips.contains(genericFallbacks[fallbackIndex]) {
+                chips.append(genericFallbacks[fallbackIndex])
+            }
+            fallbackIndex += 1
+        }
+        
+        return Array(chips.prefix(3))
+    }
+    
+    private func vibeChipColor(for index: Int) -> ComponentColor {
+        let colors: [ComponentColor] = [.success, .accent, .warning]
+        return colors[index % colors.count]
+    }
     
     private func leaveEvent() {
         Task {
@@ -429,6 +688,17 @@ struct EventDetailView: View {
                 }
             }
         }
+    }
+    
+    private func toggleFollowHost() {
+        if isFollowingHost {
+            FollowService.shared.unfollow(hostId: event.hostId)
+            NotificationService.shared.unsubscribeFromHost(hostId: event.hostId)
+        } else {
+            FollowService.shared.follow(hostId: event.hostId)
+            NotificationService.shared.subscribeToHost(hostId: event.hostId)
+        }
+        isFollowingHost.toggle()
     }
     
     private func cancelEvent() {
@@ -599,3 +869,99 @@ struct FlowLayout: Layout {
     }
 }
 
+// MARK: - Follow Button
+
+struct FollowButton: View {
+    let isFollowing: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(isFollowing ? "Following" : "Follow")
+                    .font(.system(size: 13, weight: .semibold))
+                if isFollowing {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+            }
+            .foregroundColor(isFollowing ? Color(hex: 0xD4A017) : Color(hex: 0x02853E))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(isFollowing ? Color(hex: 0xD4A017).opacity(0.15) : Color(hex: 0x02853E).opacity(0.15))
+            )
+        }
+    }
+}
+
+// MARK: - Host Avatar View
+
+struct HostAvatarView: View {
+    let host: UserProfile?
+    let fallbackName: String
+    
+    private var initials: String {
+        let name = host?.displayName ?? fallbackName
+        let parts = name.split(separator: " ")
+        if parts.count >= 2 {
+            return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
+        }
+        return String(name.prefix(2)).uppercased()
+    }
+    
+    private var avatarColor: Color {
+        host?.avatarColor ?? Color.gray
+    }
+    
+    var body: some View {
+        if let imageURL = host?.profileImageURL, !imageURL.isEmpty {
+            AsyncImage(url: URL(string: imageURL)) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                initialsView
+            }
+            .frame(width: 36, height: 36)
+            .clipShape(Circle())
+        } else {
+            initialsView
+        }
+    }
+    
+    private var initialsView: some View {
+        Circle()
+            .fill(avatarColor)
+            .frame(width: 36, height: 36)
+            .overlay(
+                Text(initials)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+            )
+    }
+}
+
+// MARK: - Preview
+#Preview {
+    EventDetailView(event: CrowdEvent(
+        id: "preview-event-1",
+        title: "Study Session at Library",
+        hostId: "preview-host-123",
+        hostName: "Alex Johnson",
+        latitude: 33.2099,
+        longitude: -97.1515,
+        radiusMeters: 60,
+        startsAt: Date().addingTimeInterval(3600),
+        endsAt: Date().addingTimeInterval(7200),
+        createdAt: Date(),
+        signalStrength: 4,
+        attendeeCount: 8,
+        tags: ["study", "academic"],
+        category: EventCategory.studySession.rawValue,
+        description: "Come join us for a productive study session!",
+        rawLocationName: "Willis Library"
+    ))
+    .environmentObject(AppState())
+}

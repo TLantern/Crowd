@@ -90,12 +90,16 @@ struct HostEventSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: 18) {
                     hostCard
                     titleCard
                     locationCard
                     timeAndTypeCard
-                    descriptionCard
+                    
+                    Spacer()
+                        .frame(height: 8)
+                    
+                    descriptionHintCard
                 }
                 .frame(maxWidth: 700)
                 .frame(maxWidth: .infinity)
@@ -607,25 +611,24 @@ struct HostEventSheet: View {
                 } else {
                     Text("Starting immediately")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                 }
             }
         }
     }
     
-    private var descriptionCard: some View {
+    private var descriptionHintCard: some View {
         SUCard(model: cardModel) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Crowd is generating a description...")
+                Text("(Optional) Description:")
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 
-                TextEditor(text: $displayedDescription)
-                    .frame(minHeight: 80)
-                    .font(.system(size: 13))
-                    .scrollContentBackground(.hidden)
-                    .foregroundStyle(.primary)
+                Text("Add details...")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.tertiary)
             }
+            .frame(maxWidth: .infinity, minHeight: 80, alignment: .topLeading)
         }
     }
 }
@@ -873,4 +876,12 @@ struct Star: Shape {
         path.closeSubpath()
         return path
     }
+}
+
+// MARK: - Preview
+#Preview {
+    HostEventSheet(defaultRegion: .mainCampus) { event in
+        print("Preview: Created event - \(event.title)")
+    }
+    .environmentObject(AppState())
 }
