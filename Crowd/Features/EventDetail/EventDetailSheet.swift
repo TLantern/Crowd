@@ -28,7 +28,6 @@ struct EventDetailView: View {
     @State private var liveAttendeeCount: Int = 0
     @State private var attendees: [UserProfile] = []
     @State private var eventListener: ListenerRegistration?
-    @State private var displayDescription: String?
     @State private var isFollowingHost = false
     @State private var shareButtonScale: CGFloat = 0.9
     
@@ -75,70 +74,26 @@ struct EventDetailView: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Header: Emoji + Title (centered) with Share button on right
-                        HStack(spacing: 8) {
-                            // Invisible spacer to balance the share button
-                            Color.clear
-                                .frame(width: 44, height: 44)
+                        // Header: Compact (one row) or expanded (title below) based on title length
+                        ViewThatFits(in: .horizontal) {
+                            // Compact: Everything on one row
+                            headerRow(includeTitle: true)
                             
-                            Spacer()
-                            
-                            Text(emoji)
-                                .font(.system(size: 40))
-                            
-                            Text(event.title)
-                                .font(.system(size: 24, weight: .bold))
-                            
-                            Spacer()
-                            
-                            // Share button
-                            Button(action: shareEvent) {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .frame(width: 44, height: 44)
-                                    .background(
-                                        Circle()
-                                            .fill(Color(.systemGray6))
-                                    )
-                            }
-                            .scaleEffect(shareButtonScale)
-                            .onAppear {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                                    shareButtonScale = 1.0
+                            // Expanded: Title moves below
+                            VStack(spacing: 12) {
+                                headerRow(includeTitle: false)
+                                
+                                HStack(spacing: 8) {
+                                    Text(emoji)
+                                        .font(.system(size: 32))
+                                    Text(event.title)
+                                        .font(.system(size: 22, weight: .bold))
+                                        .multilineTextAlignment(.center)
                                 }
                             }
                         }
                         .padding(.horizontal)
                         .padding(.top, (isHost || hasJoined) ? 0 : 20)
-                    
-                    // Host info with follow button
-                    if viewModel.isLoadingHost {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        HStack {
-                            HStack(spacing: 8) {
-                                HostAvatarView(host: viewModel.hostProfile, fallbackName: event.hostName)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Hosted by")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
-                                    Text(viewModel.hostProfile?.displayName ?? event.hostName)
-                                        .font(.system(size: 15, weight: .semibold))
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            if !isHost {
-                                FollowButton(isFollowing: isFollowingHost) {
-                                    toggleFollowHost()
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
                     
                     Divider()
                         .padding(.horizontal)
@@ -193,8 +148,8 @@ struct EventDetailView: View {
                             }
                         }
                         
-                        // Description - only show if displayDescription has text
-                        if let description = displayDescription, !description.isEmpty {
+                        // Description - only show if user added one during creation
+                        if let description = event.description, !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             VStack(spacing: 8) {
                                 Text("Description")
                                     .font(.system(size: 14, weight: .semibold))
@@ -214,7 +169,7 @@ struct EventDetailView: View {
                         let chips = generateVibeChips(
                             tags: event.tags,
                             title: event.title,
-                            description: displayDescription
+                            description: event.description
                         )
                         if !chips.isEmpty {
                             VStack(alignment: .center, spacing: 6) {
@@ -365,15 +320,6 @@ struct EventDetailView: View {
             
             // Check if following host
             isFollowingHost = FollowService.shared.isFollowing(hostId: event.hostId)
-            
-            // Always prioritize event's description field (from HostEventSheet or other sources)
-            // Only generate a new description if the event doesn't have one
-            if let existingDescription = event.description, !existingDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                displayDescription = existingDescription
-            } else {
-                // Only generate if no description exists
-                generateDescription()
-            }
         }
         .onDisappear {
             eventListener?.remove()
@@ -403,6 +349,69 @@ struct EventDetailView: View {
         }
         .fullScreenCover(isPresented: $showNavigationModal) {
             EventNavigationModal(event: event)
+        }
+    }
+    
+    @ViewBuilder
+    private func headerRow(includeTitle: Bool) -> some View {
+        HStack(spacing: 12) {
+            // Host avatar and info
+            if viewModel.isLoadingHost {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 36, height: 36)
+            } else {
+                HStack(spacing: 8) {
+                    HostAvatarView(host: viewModel.hostProfile, fallbackName: event.hostName)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hosted by")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Text(viewModel.hostProfile?.displayName ?? event.hostName)
+                            .font(.system(size: 15, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                }
+            }
+            
+            if includeTitle {
+                Spacer(minLength: 8)
+                
+                HStack(spacing: 6) {
+                    Text(emoji)
+                        .font(.system(size: 28))
+                    Text(event.title)
+                        .font(.system(size: 20, weight: .bold))
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer(minLength: 8)
+            
+            // Follow button (if not host)
+            if !isHost && !viewModel.isLoadingHost {
+                FollowButton(isFollowing: isFollowingHost) {
+                    toggleFollowHost()
+                }
+            }
+            
+            // Share button
+            Button(action: shareEvent) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(Color(.systemGray6))
+                    )
+            }
+            .scaleEffect(shareButtonScale)
+            .onAppear {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                    shareButtonScale = 1.0
+                }
+            }
         }
     }
     
@@ -448,70 +457,6 @@ struct EventDetailView: View {
         }
         
         return "\(dayPrefix) · \(formatTimeComponent(start)) – \(formatTimeComponent(end))"
-    }
-    
-    private func generateDescription() {
-        let location: String? = {
-            if let raw = event.rawLocationName, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return raw
-            }
-            return findClosestLocationName(for: event.coordinates)
-        }()
-        
-        let generated = autoGenerateDescription(for: event, location: location)
-        displayDescription = generated.isEmpty ? nil : generated
-    }
-    
-    private func autoGenerateDescription(for event: CrowdEvent, location: String?) -> String {
-        let loc = location ?? "campus"
-        
-        // Vibe templates based on category/tags
-        let vibeTemplates: [(check: () -> Bool, templates: [String])] = [
-            // Study
-            ({ event.category == EventCategory.studySession.rawValue || event.tags.contains(where: { $0.lowercased().contains("study") }) },
-             ["\(event.title) at \(loc). Pull up if you're cramming or doing homework.",
-              "Study grind at \(loc). Bring your laptop and lock in.",
-              "Locking in at \(loc). Come through if you're grinding."]),
-            
-            // Party/Social
-            ({ event.category == EventCategory.party.rawValue || event.tags.contains(where: { ["party", "parties", "nightlife"].contains($0.lowercased()) }) },
-             ["Pull up to \(loc). Good vibes only.",
-              "We outside at \(loc). Come through.",
-              "Vibes at \(loc). Don't miss out."]),
-            
-            // Chill
-            ({ event.tags.contains(where: { $0.lowercased().contains("chill") }) },
-             ["Chill crowd at \(loc). No pressure, just vibes.",
-              "Lowkey hangout at \(loc). Pull up.",
-              "Chilling at \(loc). Come vibe with us."]),
-            
-            // Sports/Gym
-            ({ event.tags.contains(where: { ["gym", "basketball", "football", "soccer", "sports", "running"].contains($0.lowercased()) }) },
-             ["Running it at \(loc). Pull up if you're trying to play.",
-              "Active at \(loc). Come get a workout in.",
-              "Hooping at \(loc). We need more people."]),
-            
-            // Food/Coffee
-            ({ event.tags.contains(where: { ["food", "coffee", "foodie", "eats"].contains($0.lowercased()) }) },
-             ["Grabbing food at \(loc). Come eat with us.",
-              "Food run at \(loc). You hungry?",
-              "Coffee and convo at \(loc). Pull up."])
-        ]
-        
-        // Find matching vibe template
-        for (check, templates) in vibeTemplates {
-            if check(), let template = templates.randomElement() {
-                return template
-            }
-        }
-        
-        // Default fallback
-        let defaults = [
-            "\(event.title) at \(loc). Come through.",
-            "Crowd at \(loc). Pull up and vibe.",
-            "Hanging at \(loc). You're invited."
-        ]
-        return defaults.randomElement() ?? "\(event.title) at \(loc)."
     }
     
     private func generateVibeChips(tags: [String], title: String, description: String?) -> [String] {
@@ -947,7 +892,7 @@ struct HostAvatarView: View {
 #Preview {
     EventDetailView(event: CrowdEvent(
         id: "preview-event-1",
-        title: "Study Session at Library",
+        title: "Study Session",
         hostId: "preview-host-123",
         hostName: "Alex Johnson",
         latitude: 33.2099,

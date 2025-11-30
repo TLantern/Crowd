@@ -10,8 +10,6 @@ import ComponentsKit
 
 struct InterestsView: View {
     @State private var selectedInterests: Set<String> = []
-    @State private var currentRow = 0
-    @State private var autoScrollTimer: Timer?
     
     let progress: CGFloat
     let onNext: ([String]) -> Void
@@ -70,11 +68,6 @@ struct InterestsView: View {
         ("🔥", "Campus Events")
     ]
     
-    // Calculate number of rows (3 columns per row)
-    var numberOfRows: Int {
-        (interests.count + 2) / 3 // Round up division
-    }
-    
     var body: some View {
         ZStack {
             Image("Background")
@@ -99,56 +92,31 @@ struct InterestsView: View {
                                 .foregroundColor(.black.opacity(0.7))
                             
                             // Vertical carousel of interest chips
-                            ScrollViewReader { proxy in
-                                ScrollView(.vertical, showsIndicators: true) {
-                                    LazyVGrid(columns: [
-                                        GridItem(.flexible()),
-                                        GridItem(.flexible()),
-                                        GridItem(.flexible())
-                                    ], spacing: 12) {
-                                        ForEach(Array(interests.enumerated()), id: \.element.title) { index, interest in
-                                            InterestChip(
-                                                emoji: interest.emoji,
-                                                name: interest.title,
-                                                isSelected: selectedInterests.contains(interest.title)
-                                            ) {
-                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                    if selectedInterests.contains(interest.title) {
-                                                        selectedInterests.remove(interest.title)
-                                                    } else {
-                                                        selectedInterests.insert(interest.title)
-                                                    }
-                                                }
-                                            }
-                                            .id("interest-\(index)")
-                                        }
-                                    }
-                                    .padding(.horizontal, 4)
-                                }
-                                .scrollTargetBehavior(.paging)
-                                .frame(height: 350)
-                                .onAppear {
-                                    // Trigger tiny scroll to make indicator visible from start
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                        // Scroll down slightly to show indicator
-                                        if interests.count > 3 {
-                                            withAnimation(.linear(duration: 0.1)) {
-                                                proxy.scrollTo("interest-3", anchor: .top)
-                                            }
-                                            // Scroll back to top immediately
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                                withAnimation(.linear(duration: 0.1)) {
-                                                    proxy.scrollTo("interest-0", anchor: .top)
+                            ScrollView(.vertical, showsIndicators: true) {
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible())
+                                ], spacing: 12) {
+                                    ForEach(interests, id: \.title) { interest in
+                                        InterestChip(
+                                            emoji: interest.emoji,
+                                            name: interest.title,
+                                            isSelected: selectedInterests.contains(interest.title)
+                                        ) {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                if selectedInterests.contains(interest.title) {
+                                                    selectedInterests.remove(interest.title)
+                                                } else {
+                                                    selectedInterests.insert(interest.title)
                                                 }
                                             }
                                         }
                                     }
-                                    startAutoScroll(proxy: proxy)
                                 }
-                                .onDisappear {
-                                    stopAutoScroll()
-                                }
+                                .padding(.horizontal, 4)
                             }
+                            .frame(height: 350)
                             
                             HStack(spacing: 12) {
                                 // Back Button
@@ -206,29 +174,6 @@ struct InterestsView: View {
                 Spacer()
             }
         }
-    }
-    
-    // MARK: - Auto Scroll
-    private func startAutoScroll(proxy: ScrollViewProxy) {
-        // Stop any existing timer
-        stopAutoScroll()
-        
-        // Start minimal auto-scroll (every 9 seconds, scroll by one row)
-        autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 9.0, repeats: true) { _ in
-            let nextRow = (currentRow + 1) % numberOfRows
-            let interestIndex = min(nextRow * 3, interests.count - 1)
-            
-            withAnimation(.easeInOut(duration: 1.0)) {
-                proxy.scrollTo("interest-\(interestIndex)", anchor: .top)
-            }
-            
-            currentRow = nextRow
-        }
-    }
-    
-    private func stopAutoScroll() {
-        autoScrollTimer?.invalidate()
-        autoScrollTimer = nil
     }
 }
 

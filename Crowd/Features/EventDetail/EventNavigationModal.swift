@@ -52,7 +52,6 @@ struct EventNavigationModal: View {
     let event: CrowdEvent
     
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var appState: AppState
     
     @StateObject private var locationService = AppEnvironment.current.location
     @StateObject private var motionManager = MotionManager()
@@ -76,8 +75,6 @@ struct EventNavigationModal: View {
     @State private var isSendingMessage = false
     @State private var showOnboarding = false
     @State private var onboardingStep: OnboardingStep = .chat
-    @StateObject private var viewModel = EventDetailViewModel()
-    @State private var isLeaving = false
     
     enum TabSelection {
         case map
@@ -139,23 +136,6 @@ struct EventNavigationModal: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             
                             Spacer()
-                            
-                            // Leave button (right)
-                            if AttendedEventsService.shared.isAttendingEvent(event.id) {
-                                Button(action: { leaveEvent() }) {
-                                    Image("door")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 28, height: 28)
-                                        .foregroundColor(.black)
-                                        .background(Color.white)
-                                        .clipShape(Circle())
-                                }
-                                .disabled(isLeaving)
-                            } else {
-                                // Invisible spacer to balance layout
-                                Color.clear.frame(width: 28, height: 28)
-                            }
                         }
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
@@ -507,24 +487,6 @@ struct EventNavigationModal: View {
         showOnboarding = false
     }
     
-    // MARK: - Leave Event
-    
-    private func leaveEvent() {
-        isLeaving = true
-        Task {
-            let success = await viewModel.leaveEvent(event: event)
-            if success {
-                // Clear currentJoinedEvent if it matches
-                if appState.currentJoinedEvent?.id == event.id {
-                    appState.currentJoinedEvent = nil
-                }
-                // Dismiss the modal after leaving
-                dismiss()
-            }
-            isLeaving = false
-        }
-    }
-    
     // MARK: - Chat
     
     private func sendMessage() {
@@ -743,11 +705,14 @@ struct ChatTabView: View {
                                 hasMessages: !chatService.messages.isEmpty,
                                 onSelect: { prompt in
                                     messageText = prompt
+                                    sendMessage()
                                 }
                             )
                             
                             ReactionBar(onReact: { emoji in
                                 triggerFloatingEmoji(emoji)
+                                messageText = emoji
+                                sendMessage()
                             })
                         }
                         
@@ -943,24 +908,36 @@ struct PeopleHereNowView: View {
         Button(action: onTap) {
             HStack(spacing: -12) {
                 ForEach(0..<displayCount, id: \.self) { index in
-                    if index < attendees.count {
-                        // Real attendee
-                        realAvatarView(attendees[index])
-                    } else {
-                        // Placeholder with unique color
-                        placeholderView(at: index)
+                    Group {
+                        if index < attendees.count {
+                            realAvatarView(attendees[index])
+                        } else {
+                            placeholderView(at: index)
+                        }
                     }
+                    .zIndex(Double(displayCount - index))
                 }
                 
                 if totalCount > displayCount {
-                    Text("+\(totalCount - displayCount)")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .padding(.leading, 8)
+                    overflowBubble
+                        .zIndex(0)
                 }
             }
         }
         .buttonStyle(.plain)
+    }
+    
+    private var overflowBubble: some View {
+        Circle()
+            .fill(Color(.systemGray5))
+            .frame(width: avatarSize, height: avatarSize)
+            .overlay(
+                Text("+\(totalCount - displayCount)")
+                    .font(.system(size: avatarSize * 0.35, weight: .semibold))
+                    .foregroundColor(.primary)
+            )
+            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            .shadow(color: .black.opacity(0.15), radius: 6, x: 0, y: 2)
     }
     
     private func realAvatarView(_ profile: UserProfile) -> some View {
@@ -1593,5 +1570,4 @@ struct EventNavigationOnboardingCard: View {
             tags: ["tailgate", "sports"]
         )
     )
-    .environmentObject(AppState())
 }

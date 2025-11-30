@@ -70,10 +70,8 @@ struct HostEventSheet: View {
     @State private var searchText: String = ""
     @State private var firestoreLocations: [PredefinedLocation] = []
     
-    // AI description with typewriter effect
-    @State private var aiDescription: String = ""
-    @State private var displayedDescription: String = ""
-    @State private var typewriterTask: Task<Void, Never>?
+    // User description
+    @State private var eventDescription: String = ""
     
     // Confetti celebration
     @State private var showConfetti = false
@@ -129,20 +127,6 @@ struct HostEventSheet: View {
                     selectedLocationId = nil // No dropdown selection, will show "Current Location" text
                 }
             }
-            .onChange(of: title) { _, _ in
-                debouncedGenerateDescription()
-            }
-            .onChange(of: category) { _, _ in
-                generateDescription()
-            }
-            .onChange(of: timeMode) { _, _ in
-                generateDescription()
-            }
-            .onChange(of: startDate) { _, _ in
-                if timeMode == .planAhead {
-                    generateDescription()
-                }
-            }
             .onChange(of: locationName) { oldValue, newValue in
                 print("📝 locationName changed from '\(oldValue)' to '\(newValue)'")
                 print("📝 Current coord: lat=\(coord.latitude), lon=\(coord.longitude)")
@@ -152,7 +136,6 @@ struct HostEventSheet: View {
                 } else if newValue.isEmpty {
                     selectedLocationId = nil // Show "Current Location" text below
                 }
-                generateDescription()
             }
         }
         .overlay(
@@ -245,82 +228,6 @@ struct HostEventSheet: View {
         }
     }
     
-    // MARK: - Description Generation
-    
-    private func generateDescription() {
-        // Only generate if title is not empty
-        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            displayedDescription = ""
-            return
-        }
-        
-        // Cancel any existing typewriter animation
-        typewriterTask?.cancel()
-        
-        // Generate the description text
-        let location = locationName.isEmpty ? "Current Location" : locationName
-        let timeText: String
-        
-        if timeMode == .now {
-            timeText = "Starting now"
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            timeText = "Starting \(formatter.string(from: startDate))"
-        }
-        
-        // Format with emojis and bullet points
-        aiDescription = """
-        📍 \(location)
-        ⏰ \(timeText)
-        \(category.emoji) \(title)
-        """
-        
-        // Start typewriter effect
-        displayedDescription = ""
-        typewriterTask = Task {
-            await animateTypewriter()
-        }
-    }
-    
-    private func debouncedGenerateDescription() {
-        // Cancel previous task
-        typewriterTask?.cancel()
-        
-        // Wait 500ms before regenerating (increased debounce for better performance)
-        typewriterTask = Task {
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            if !Task.isCancelled {
-                await MainActor.run {
-                    generateDescription()
-                }
-            }
-        }
-    }
-    
-    private func animateTypewriter() async {
-        let characters = Array(aiDescription)
-        // Batch updates: update every 3 characters instead of every character for better performance
-        let batchSize = 3
-        var currentIndex = 0
-        
-        while currentIndex < characters.count && !Task.isCancelled {
-            let endIndex = min(currentIndex + batchSize, characters.count)
-            let text = String(characters[0..<endIndex])
-            
-            await MainActor.run {
-                displayedDescription = text
-            }
-            
-            currentIndex = endIndex
-            
-            // Slightly faster batch updates (30-50ms per batch)
-            let delay = UInt64.random(in: 30_000_000...50_000_000)
-            try? await Task.sleep(nanoseconds: delay)
-        }
-    }
-    
     // MARK: - Create Event
     
     private func createEvent() {
@@ -349,7 +256,7 @@ struct HostEventSheet: View {
             hostId: appState.sessionUser?.id ?? "anon",
             hostName: appState.sessionUser?.displayName ?? "Guest",
             category: category.rawValue,
-            description: displayedDescription,
+            description: eventDescription.isEmpty ? nil : eventDescription,
             startsAt: finalStartsAt,
             endsAt: finalEndsAt,
             tags: tags
@@ -624,9 +531,9 @@ struct HostEventSheet: View {
                     .font(.headline)
                     .foregroundStyle(.secondary)
                 
-                Text("Add details...")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.tertiary)
+                TextField("Add details...", text: $eventDescription, axis: .vertical)
+                    .font(.system(size: 16))
+                    .lineLimit(3...6)
             }
             .frame(maxWidth: .infinity, minHeight: 80, alignment: .topLeading)
         }
