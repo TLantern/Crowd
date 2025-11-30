@@ -1335,7 +1335,7 @@ struct CrowdHomeView: View {
                         } label: {
                             GlassPill(height: 24, horizontalPadding: 14) {
                                 HStack(spacing: 6) {
-                                    Text(sourceFilter == .user ? "Student Created" : (sourceFilter == .school ? "Official Events" : "Sort"))
+                                    Text(sourceFilter == .user ? "Student Crowds" : (sourceFilter == .school ? "Official Events" : "Sort"))
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundStyle(.primary)
                                         .lineLimit(1)

@@ -298,6 +298,15 @@ struct EventNavigationModal: View {
         .onChange(of: bearingToEvent) { _, _ in
             updateCompassRotation()
         }
+        .gesture(
+            DragGesture(minimumDistance: 50)
+                .onEnded { value in
+                    // Swipe from left edge to right (standard iOS back gesture)
+                    if value.translation.width > 100 && abs(value.translation.height) < 100 {
+                        dismiss()
+                    }
+                }
+        )
     } // ← THIS closes body
     
     // -------------------------

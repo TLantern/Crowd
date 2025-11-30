@@ -51,49 +51,66 @@ struct EventDetailView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                // X button in top right for hosts (cancel) or joined users (leave)
-                if isHost || hasJoined {
-                    HStack {
-                        Spacer()
-                        Button {
-                            if isHost {
-                                showCancelConfirmation = true
-                            } else {
-                                leaveEvent()
-                            }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundColor(.red)
-                                .background(Circle().fill(Color(.systemBackground)))
-                        }
-                        .padding(.trailing, 16)
-                        .padding(.top, 8)
-                    }
-                }
-                
                 ScrollView {
                     VStack(spacing: 24) {
-                        // Header: Compact (one row) or expanded (title below) based on title length
-                        ViewThatFits(in: .horizontal) {
-                            // Compact: Everything on one row
-                            headerRow(includeTitle: true)
-                            
-                            // Expanded: Title moves below
-                            VStack(spacing: 12) {
-                                headerRow(includeTitle: false)
-                                
-                                HStack(spacing: 8) {
-                                    Text(emoji)
-                                        .font(.system(size: 32))
-                                    Text(event.title)
-                                        .font(.system(size: 22, weight: .bold))
-                                        .multilineTextAlignment(.center)
+                        // Top row: Share (left) | Title (center) | X (right)
+                        HStack {
+                            // Share button (left)
+                            Button(action: shareEvent) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 36, height: 36)
+                                    .background(
+                                        Circle()
+                                            .fill(Color(.systemGray6))
+                                    )
+                            }
+                            .scaleEffect(shareButtonScale)
+                            .onAppear {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
+                                    shareButtonScale = 1.0
                                 }
+                            }
+                            
+                            Spacer()
+                            
+                            // Centered title
+                            HStack(spacing: 6) {
+                                Text(emoji)
+                                    .font(.system(size: 28))
+                                Text(event.title)
+                                    .font(.system(size: 20, weight: .bold))
+                                    .lineLimit(1)
+                            }
+                            
+                            Spacer()
+                            
+                            // X button (right) - only for hosts or joined users
+                            if isHost || hasJoined {
+                                Button {
+                                    if isHost {
+                                        showCancelConfirmation = true
+                                    } else {
+                                        leaveEvent()
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 28))
+                                        .foregroundColor(.red)
+                                        .background(Circle().fill(Color(.systemBackground)))
+                                }
+                            } else {
+                                // Invisible spacer to balance layout
+                                Color.clear.frame(width: 36, height: 36)
                             }
                         }
                         .padding(.horizontal)
-                        .padding(.top, (isHost || hasJoined) ? 0 : 20)
+                        .padding(.top, 16)
+                        
+                        // Host info row
+                        headerRow()
+                        .padding(.horizontal)
                     
                     Divider()
                         .padding(.horizontal)
@@ -229,7 +246,8 @@ struct EventDetailView: View {
                 // Join/Joined button
                 Button {
                     if hasJoined {
-                        // Already joined - button is disabled
+                        // Already joined - open navigation modal
+                        showNavigationModal = true
                     } else {
                         // Prepare haptic for instant feedback
                         let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -300,7 +318,7 @@ struct EventDetailView: View {
                     .cornerRadius(22)
                     .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
                 }
-                .disabled(viewModel.isJoining || hasJoined)
+                .disabled(viewModel.isJoining)
             }
             .padding(.horizontal)
             .padding(.bottom, 20)
@@ -353,7 +371,7 @@ struct EventDetailView: View {
     }
     
     @ViewBuilder
-    private func headerRow(includeTitle: Bool) -> some View {
+    private func headerRow() -> some View {
         HStack(spacing: 12) {
             // Host avatar and info
             if viewModel.isLoadingHost {
@@ -374,42 +392,12 @@ struct EventDetailView: View {
                 }
             }
             
-            if includeTitle {
-                Spacer(minLength: 8)
-                
-                HStack(spacing: 6) {
-                    Text(emoji)
-                        .font(.system(size: 28))
-                    Text(event.title)
-                        .font(.system(size: 20, weight: .bold))
-                        .lineLimit(1)
-                }
-            }
-            
-            Spacer(minLength: 8)
+            Spacer()
             
             // Follow button (if not host)
             if !isHost && !viewModel.isLoadingHost {
                 FollowButton(isFollowing: isFollowingHost) {
                     toggleFollowHost()
-                }
-            }
-            
-            // Share button
-            Button(action: shareEvent) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 36, height: 36)
-                    .background(
-                        Circle()
-                            .fill(Color(.systemGray6))
-                    )
-            }
-            .scaleEffect(shareButtonScale)
-            .onAppear {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                    shareButtonScale = 1.0
                 }
             }
         }
