@@ -1910,3 +1910,490 @@ exports.aggregateDailyDAU = functions.pubsub
     }
   });
 
+// === Content Moderation: Process Flagged Content Reports ===
+// Scheduled function that runs every hour to check for reports older than 24 hours
+// Automatically removes content and ejects users if not manually reviewed
+exports.processFlaggedContent = functions.pubsub
+  .schedule('every 60 minutes')
+  .timeZone('Etc/UTC')
+  .onRun(async (context) => {
+    console.log('🚨 Starting flagged content review process...');
+    
+    const now = admin.firestore.Timestamp.now();
+    const nowSeconds = now.seconds || Math.floor(Date.now() / 1000);
+    const twentyFourHoursAgo = nowSeconds - (24 * 60 * 60); // 24 hours in seconds
+    const cutoffTimestamp = admin.firestore.Timestamp.fromSeconds(twentyFourHoursAgo);
+    
+    try {
+      // Process flagged events
+      const flaggedEventsSnapshot = await db.collection('flaggedEvents')
+        .where('status', '==', 'pending')
+        .where('createdAt', '<=', cutoffTimestamp)
+        .get();
+      
+      console.log(`📋 Found ${flaggedEventsSnapshot.size} flagged event(s) older than 24 hours`);
+      
+      for (const flagDoc of flaggedEventsSnapshot.docs) {
+        const flagData = flagDoc.data();
+        const eventId = flagData.eventId;
+        const reportedBy = flagData.reportedBy;
+        const reason = flagData.reason || 'No reason provided';
+        
+        console.log(`🚨 Processing flagged event: ${eventId} (reported by: ${reportedBy})`);
+        
+        // Get the event to find the host
+        let eventDoc = await db.collection('events').doc(eventId).get();
+        let eventCollection = 'events';
+        
+        if (!eventDoc.exists) {
+          eventDoc = await db.collection('userEvents').doc(eventId).get();
+          eventCollection = 'userEvents';
+        }
+        
+        if (!eventDoc.exists) {
+          console.log(`⚠️ Event ${eventId} not found, marking flag as resolved`);
+          await flagDoc.ref.update({
+            status: 'resolved',
+            resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+            resolution: 'event_not_found',
+            resolvedBy: 'system'
+          });
+          continue;
+        }
+        
+        const event = eventDoc.data();
+        const hostId = event.hostId;
+        
+        // Remove the event
+        console.log(`🗑️ Removing event: ${eventId}`);
+        await db.collection(eventCollection).doc(eventId).delete();
+        
+        // Delete related data
+        // Delete signals
+        const signalsSnapshot = await db.collection('signals')
+          .where('eventId', '==', eventId)
+          .get();
+        if (!signalsSnapshot.empty) {
+          const batch = db.batch();
+          signalsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          console.log(`   🗑️ Deleted ${signalsSnapshot.size} signal(s)`);
+        }
+        
+        // Delete attendances
+        const attendancesSnapshot = await db.collection('userAttendances')
+          .where('eventId', '==', eventId)
+          .get();
+        if (!attendancesSnapshot.empty) {
+          const batch = db.batch();
+          attendancesSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          console.log(`   🗑️ Deleted ${attendancesSnapshot.size} attendance(s)`);
+        }
+        
+        // Delete chat messages
+        const messagesRef = db.collection('eventChats').doc(eventId).collection('messages');
+        let deletedMessages = 0;
+        while (true) {
+          const messagesSnap = await messagesRef.limit(500).get();
+          if (messagesSnap.empty) break;
+          const batch = db.batch();
+          messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          deletedMessages += messagesSnap.size;
+          if (messagesSnap.size < 500) break;
+        }
+        await db.collection('eventChats').doc(eventId).delete().catch(() => {});
+        if (deletedMessages > 0) {
+          console.log(`   🗑️ Deleted ${deletedMessages} chat message(s)`);
+        }
+        
+        // Eject the user (ban them)
+        if (hostId) {
+          console.log(`👢 Ejecting user: ${hostId}`);
+          
+          // Mark user as banned
+          await db.collection('users').doc(hostId).update({
+            banned: true,
+            bannedAt: admin.firestore.FieldValue.serverTimestamp(),
+            banReason: `Content violation: ${reason}`,
+            bannedBy: 'system_auto_moderation'
+          });
+          
+          // Delete all events created by this user
+          const userEventsSnapshot = await db.collection('events')
+            .where('hostId', '==', hostId)
+            .get();
+          const userEventsSnapshot2 = await db.collection('userEvents')
+            .where('hostId', '==', hostId)
+            .get();
+          
+          const allUserEvents = [...userEventsSnapshot.docs, ...userEventsSnapshot2.docs];
+          if (allUserEvents.length > 0) {
+            console.log(`   🗑️ Deleting ${allUserEvents.length} event(s) created by banned user`);
+            for (const eventDoc of allUserEvents) {
+              await eventDoc.ref.delete();
+            }
+          }
+          
+          // Remove all signals from this user
+          const userSignalsSnapshot = await db.collection('signals')
+            .where('userId', '==', hostId)
+            .get();
+          if (!userSignalsSnapshot.empty) {
+            const batch = db.batch();
+            userSignalsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            console.log(`   🗑️ Deleted ${userSignalsSnapshot.size} signal(s) from banned user`);
+          }
+        }
+        
+        // Mark flag as resolved
+        await flagDoc.ref.update({
+          status: 'resolved',
+          resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+          resolution: 'content_removed_user_ejected',
+          resolvedBy: 'system_auto_moderation',
+          eventRemoved: true,
+          userEjected: hostId || null
+        });
+        
+        console.log(`✅ Processed flagged event ${eventId}: content removed, user ${hostId} ejected`);
+      }
+      
+      // Process flagged users
+      const flaggedUsersSnapshot = await db.collection('flaggedUsers')
+        .where('status', '==', 'pending')
+        .where('createdAt', '<=', cutoffTimestamp)
+        .get();
+      
+      console.log(`📋 Found ${flaggedUsersSnapshot.size} flagged user(s) older than 24 hours`);
+      
+      for (const flagDoc of flaggedUsersSnapshot.docs) {
+        const flagData = flagDoc.data();
+        const userId = flagData.userId;
+        const reportedBy = flagData.reportedBy;
+        const reason = flagData.reason || 'No reason provided';
+        
+        console.log(`🚨 Processing flagged user: ${userId} (reported by: ${reportedBy})`);
+        
+        // Check if user exists
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (!userDoc.exists) {
+          console.log(`⚠️ User ${userId} not found, marking flag as resolved`);
+          await flagDoc.ref.update({
+            status: 'resolved',
+            resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+            resolution: 'user_not_found',
+            resolvedBy: 'system'
+          });
+          continue;
+        }
+        
+        // Ban the user
+        console.log(`👢 Banning user: ${userId}`);
+        await db.collection('users').doc(userId).update({
+          banned: true,
+          bannedAt: admin.firestore.FieldValue.serverTimestamp(),
+          banReason: `User violation: ${reason}`,
+          bannedBy: 'system_auto_moderation'
+        });
+        
+        // Delete all events created by this user
+        const userEventsSnapshot = await db.collection('events')
+          .where('hostId', '==', userId)
+          .get();
+        const userEventsSnapshot2 = await db.collection('userEvents')
+          .where('hostId', '==', userId)
+          .get();
+        
+        const allUserEvents = [...userEventsSnapshot.docs, ...userEventsSnapshot2.docs];
+        if (allUserEvents.length > 0) {
+          console.log(`   🗑️ Deleting ${allUserEvents.length} event(s) created by banned user`);
+          for (const eventDoc of allUserEvents) {
+            const eventId = eventDoc.id;
+            await eventDoc.ref.delete();
+            
+            // Clean up related data
+            const signalsSnapshot = await db.collection('signals')
+              .where('eventId', '==', eventId)
+              .get();
+            if (!signalsSnapshot.empty) {
+              const batch = db.batch();
+              signalsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+              await batch.commit();
+            }
+          }
+        }
+        
+        // Remove all signals from this user
+        const userSignalsSnapshot = await db.collection('signals')
+          .where('userId', '==', userId)
+          .get();
+        if (!userSignalsSnapshot.empty) {
+          const batch = db.batch();
+          userSignalsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          console.log(`   🗑️ Deleted ${userSignalsSnapshot.size} signal(s) from banned user`);
+        }
+        
+        // Mark flag as resolved
+        await flagDoc.ref.update({
+          status: 'resolved',
+          resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+          resolution: 'user_banned',
+          resolvedBy: 'system_auto_moderation',
+          userBanned: true
+        });
+        
+        console.log(`✅ Processed flagged user ${userId}: user banned, all content removed`);
+      }
+      
+      const totalProcessed = flaggedEventsSnapshot.size + flaggedUsersSnapshot.size;
+      console.log(`✅ Flagged content review complete: ${totalProcessed} report(s) processed`);
+      
+      return { success: true, eventsProcessed: flaggedEventsSnapshot.size, usersProcessed: flaggedUsersSnapshot.size };
+    } catch (error) {
+      console.error('❌ Error processing flagged content:', error);
+      return null;
+    }
+  });
+
+// === Account Deletion: Permanently delete user account and all data ===
+// Per App Store requirements: complete deletion, not deactivation
+exports.deleteUserAccount = functions.https.onCall(async (data, context) => {
+  // Require authentication
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+  
+  const userId = context.auth.uid;
+  console.log(`🗑️ Starting account deletion for user: ${userId}`);
+  
+  try {
+    // 1. Delete all events created by the user
+    const eventsSnapshot = await db.collection('events')
+      .where('hostId', '==', userId)
+      .get();
+    
+    for (const doc of eventsSnapshot.docs) {
+      const eventId = doc.id;
+      
+      // Delete related signals
+      const signalsSnapshot = await db.collection('signals')
+        .where('eventId', '==', eventId)
+        .get();
+      if (!signalsSnapshot.empty) {
+        const batch = db.batch();
+        signalsSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+      }
+      
+      // Delete related chat messages
+      const messagesRef = db.collection('eventChats').doc(eventId).collection('messages');
+      while (true) {
+        const messagesSnap = await messagesRef.limit(500).get();
+        if (messagesSnap.empty) break;
+        const batch = db.batch();
+        messagesSnap.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        if (messagesSnap.size < 500) break;
+      }
+      await db.collection('eventChats').doc(eventId).delete().catch(() => {});
+      
+      // Delete the event
+      await doc.ref.delete();
+    }
+    console.log(`   ✓ Deleted ${eventsSnapshot.size} events`);
+    
+    // Delete from userEvents collection
+    const userEventsSnapshot = await db.collection('userEvents')
+      .where('hostId', '==', userId)
+      .get();
+    
+    for (const doc of userEventsSnapshot.docs) {
+      await doc.ref.delete();
+    }
+    console.log(`   ✓ Deleted ${userEventsSnapshot.size} userEvents`);
+    
+    // 2. Delete all signals from this user
+    const userSignalsSnapshot = await db.collection('signals')
+      .where('userId', '==', userId)
+      .get();
+    
+    for (const doc of userSignalsSnapshot.docs) {
+      // Decrement attendee count on the event
+      const eventId = doc.data().eventId;
+      if (eventId) {
+        await db.collection('events').doc(eventId).update({
+          attendeeCount: admin.firestore.FieldValue.increment(-1)
+        }).catch(() => {});
+        await db.collection('userEvents').doc(eventId).update({
+          attendeeCount: admin.firestore.FieldValue.increment(-1)
+        }).catch(() => {});
+      }
+      await doc.ref.delete();
+    }
+    console.log(`   ✓ Deleted ${userSignalsSnapshot.size} signals`);
+    
+    // 3. Delete user attendances
+    const attendancesSnapshot = await db.collection('userAttendances')
+      .where('userId', '==', userId)
+      .get();
+    
+    for (const doc of attendancesSnapshot.docs) {
+      await doc.ref.delete();
+    }
+    console.log(`   ✓ Deleted ${attendancesSnapshot.size} attendances`);
+    
+    // 4. Delete chat messages from this user
+    const eventChatsSnapshot = await db.collection('eventChats').get();
+    let deletedMessages = 0;
+    for (const chatDoc of eventChatsSnapshot.docs) {
+      const messagesSnapshot = await chatDoc.ref.collection('messages')
+        .where('senderId', '==', userId)
+        .get();
+      
+      for (const messageDoc of messagesSnapshot.docs) {
+        await messageDoc.ref.delete();
+        deletedMessages++;
+      }
+    }
+    console.log(`   ✓ Deleted ${deletedMessages} chat messages`);
+    
+    // 5. Delete hidden events records
+    const hiddenSnapshot = await db.collection('hiddenEvents')
+      .where('userId', '==', userId)
+      .get();
+    
+    for (const doc of hiddenSnapshot.docs) {
+      await doc.ref.delete();
+    }
+    console.log(`   ✓ Deleted ${hiddenSnapshot.size} hidden events records`);
+    
+    // 6. Delete flag reports made by this user
+    const eventFlagsSnapshot = await db.collection('flaggedEvents')
+      .where('reportedBy', '==', userId)
+      .get();
+    
+    for (const doc of eventFlagsSnapshot.docs) {
+      await doc.ref.delete();
+    }
+    
+    const userFlagsSnapshot = await db.collection('flaggedUsers')
+      .where('reportedBy', '==', userId)
+      .get();
+    
+    for (const doc of userFlagsSnapshot.docs) {
+      await doc.ref.delete();
+    }
+    console.log(`   ✓ Deleted flag reports`);
+    
+    // 7. Delete user profile
+    await db.collection('users').doc(userId).delete();
+    console.log(`   ✓ Deleted user profile`);
+    
+    // 8. Delete Firebase Auth account
+    await admin.auth().deleteUser(userId);
+    console.log(`   ✓ Deleted Firebase Auth account`);
+    
+    console.log(`✅ Account deletion complete for user: ${userId}`);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error deleting account:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// === Manual Review Function: Allow admins to manually process reports ===
+exports.manualReviewReport = functions.https.onCall(async (data, context) => {
+  // Note: In production, add admin authentication check here
+  // if (!context.auth || !isAdmin(context.auth.uid)) {
+  //   throw new functions.https.HttpsError('permission-denied', 'Admin access required');
+  // }
+  
+  try {
+    const { flagId, type, action } = data; // type: 'event' or 'user', action: 'approve' or 'reject'
+    
+    if (!flagId || !type || !action) {
+      throw new functions.https.HttpsError('invalid-argument', 'flagId, type, and action are required');
+    }
+    
+    const collectionName = type === 'event' ? 'flaggedEvents' : 'flaggedUsers';
+    const flagDoc = await db.collection(collectionName).doc(flagId).get();
+    
+    if (!flagDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Flag not found');
+    }
+    
+    const flagData = flagDoc.data();
+    
+    if (action === 'approve') {
+      // Same logic as automatic processing
+      if (type === 'event') {
+        const eventId = flagData.eventId;
+        let eventDoc = await db.collection('events').doc(eventId).get();
+        let eventCollection = 'events';
+        if (!eventDoc.exists) {
+          eventDoc = await db.collection('userEvents').doc(eventId).get();
+          eventCollection = 'userEvents';
+        }
+        const hostId = eventDoc.exists ? eventDoc.data().hostId : null;
+        
+        if (eventDoc.exists) {
+          await db.collection(eventCollection).doc(eventId).delete();
+        }
+        
+        if (hostId) {
+          await db.collection('users').doc(hostId).update({
+            banned: true,
+            bannedAt: admin.firestore.FieldValue.serverTimestamp(),
+            banReason: `Content violation: ${flagData.reason || 'Manual review'}`,
+            bannedBy: context.auth?.uid || 'admin'
+          });
+        }
+        
+        await flagDoc.ref.update({
+          status: 'resolved',
+          resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+          resolution: 'content_removed_user_ejected',
+          resolvedBy: context.auth?.uid || 'admin',
+          eventRemoved: true,
+          userEjected: hostId || null
+        });
+      } else {
+        // Ban user
+        const userId = flagData.userId;
+        await db.collection('users').doc(userId).update({
+          banned: true,
+          bannedAt: admin.firestore.FieldValue.serverTimestamp(),
+          banReason: `User violation: ${flagData.reason || 'Manual review'}`,
+          bannedBy: context.auth?.uid || 'admin'
+        });
+        
+        await flagDoc.ref.update({
+          status: 'resolved',
+          resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+          resolution: 'user_banned',
+          resolvedBy: context.auth?.uid || 'admin',
+          userBanned: true
+        });
+      }
+    } else {
+      // Reject - mark as false positive
+      await flagDoc.ref.update({
+        status: 'resolved',
+        resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        resolution: 'false_positive',
+        resolvedBy: context.auth?.uid || 'admin'
+      });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error in manual review:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+

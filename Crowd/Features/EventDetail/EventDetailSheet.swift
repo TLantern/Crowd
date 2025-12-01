@@ -375,6 +375,14 @@ struct EventDetailView: View {
                 }
             }
             
+            // Moderation menu (if not host)
+            if !isHost {
+                EventModerationMenu(
+                    event: event,
+                    hostName: viewModel.hostProfile?.displayName ?? event.hostName
+                )
+            }
+            
             // Share button
             Button(action: shareEvent) {
                 Image(systemName: "square.and.arrow.up")

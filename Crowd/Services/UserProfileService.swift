@@ -61,7 +61,8 @@ final class UserProfileService {
             joinedCount: 0,
             friendsCount: 0,
             lastActive: Date(),
-            createdAt: Date()
+            createdAt: Date(),
+            termsAccepted: false
         )
         
         print("🔧 UserProfileService: Profile object created, calling saveProfile...")
@@ -283,6 +284,9 @@ final class UserProfileService {
             lastLocationUpdate = nil
         }
         
+        let termsAccepted = data["termsAccepted"] as? Bool ?? false
+        let blockedUsers = data["blockedUsers"] as? [String]
+        
         return UserProfile(
             id: userId,
             displayName: displayName,
@@ -303,10 +307,36 @@ final class UserProfileService {
             latitude: latitude,
             longitude: longitude,
             geohash: geohash,
-            lastLocationUpdate: lastLocationUpdate
+            lastLocationUpdate: lastLocationUpdate,
+            termsAccepted: termsAccepted,
+            blockedUsers: blockedUsers
         )
     }
     
+    
+    // MARK: - Terms Acceptance
+    
+    func checkTermsAccepted(userId: String) async throws -> Bool {
+        let document = try await db.collection("users").document(userId).getDocument()
+        guard document.exists, let data = document.data() else {
+            return false
+        }
+        return data["termsAccepted"] as? Bool ?? false
+    }
+    
+    func acceptTerms(userId: String) async throws {
+        try await db.collection("users").document(userId).updateData([
+            "termsAccepted": true
+        ])
+        
+        // Update cache if exists
+        if var cached = profileCache[userId] {
+            cached.termsAccepted = true
+            profileCache[userId] = cached
+        }
+        
+        print("✅ Terms accepted for user: \(userId)")
+    }
     
     // MARK: - Utility
     

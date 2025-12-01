@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 import FirebaseFunctions
 import ComponentsKit
 import CoreLocation
@@ -52,6 +53,9 @@ struct ProfileView: View {
     @State private var toastMessage = ""
     @State private var carouselOffset: CGFloat = 0
     @State private var interestCarouselTimer: Timer?
+    @State private var showDeleteAccountAlert = false
+    @State private var showDeleteConfirmation = false
+    @State private var isDeletingAccount = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -63,6 +67,7 @@ struct ProfileView: View {
                         identityCard
                         tagsCard
                         statsCard
+                        accountManagementCard
                     }
                     .padding(16)
                 }
@@ -312,6 +317,119 @@ struct ProfileView: View {
                 carouselOffset = 0
             } else if !viewModel.isEditMode {
                 startInterestCarousel()
+            }
+        }
+    }
+    
+    // MARK: - Account Management Card
+    private var accountManagementCard: some View {
+        SUCard(model: cardModel) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Account")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                
+                VStack(spacing: 12) {
+                    // Delete Account Button
+                    Button(action: {
+                        showDeleteAccountAlert = true
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "trash.fill")
+                                .foregroundColor(.red)
+                                .font(.system(size: 16))
+                            
+                            Text("Delete Account")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.red)
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.gray)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(Color.red.opacity(0.08))
+                        .cornerRadius(12)
+                    }
+                    .disabled(isDeletingAccount)
+                    
+                    Text("Permanently delete your account and all associated data. This action cannot be undone.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
+        .alert("Delete Account", isPresented: $showDeleteAccountAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Continue", role: .destructive) {
+                showDeleteConfirmation = true
+            }
+        } message: {
+            Text("Are you sure you want to delete your account? This will permanently remove:\n\n• Your profile and personal data\n• All events you've created\n• Your attendance history\n• All chat messages\n\nThis action cannot be undone.")
+        }
+        .alert("Final Confirmation", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete My Account", role: .destructive) {
+                deleteAccount()
+            }
+        } message: {
+            Text("This is your final confirmation. Your account will be permanently deleted immediately.")
+        }
+        .overlay {
+            if isDeletingAccount {
+                ZStack {
+                    Color.black.opacity(0.4)
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.2)
+                        Text("Deleting account...")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(24)
+                    .background(Color(.systemGray5).opacity(0.9))
+                    .cornerRadius(16)
+                }
+                .ignoresSafeArea()
+            }
+        }
+    }
+    
+    // MARK: - Delete Account
+    private func deleteAccount() {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
+        
+        isDeletingAccount = true
+        
+        Task {
+            do {
+                try await AccountDeletionService.shared.deleteAccount(userId: userId)
+                
+                await MainActor.run {
+                    isDeletingAccount = false
+                    // Clear local data and reset app state
+                    UserDefaults.standard.set(false, forKey: "hasSeenOnboarding")
+                    UserDefaults.standard.synchronize()
+                    
+                    // Sign out from Firebase
+                    try? FirebaseManager.shared.auth.signOut()
+                    
+                    // Notify app to reset
+                    NotificationCenter.default.post(name: .accountDeleted, object: nil)
+                }
+            } catch {
+                await MainActor.run {
+                    isDeletingAccount = false
+                    toastMessage = "Failed to delete account: \(error.localizedDescription)"
+                    showToast = true
+                }
             }
         }
     }

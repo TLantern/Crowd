@@ -247,6 +247,11 @@ struct CrowdHomeView: View {
         )
     }
     
+    // MARK: - Moderation State
+    @State private var blockedUserIds: Set<String> = []
+    @State private var hiddenEventIds: Set<String> = []
+    @State private var bannedUserIds: Set<String> = []
+    
     // MARK: - Computed
     var allEvents: [CrowdEvent] {
         let now = Date()
@@ -256,9 +261,19 @@ struct CrowdHomeView: View {
         let combined = officialEvents + allUserEvents + upcomingEvents
         
         // Filter out expired events (events that have ended)
-        return combined.filter { event in
+        let activeEvents = combined.filter { event in
             guard let endsAt = event.endsAt else { return true }
             return endsAt >= now
+        }
+        
+        // Filter out blocked/hidden/banned/objectionable content
+        return activeEvents.filter { event in
+            !ContentModerationService.shared.shouldFilterEvent(
+                event,
+                blockedUserIds: blockedUserIds,
+                hiddenEventIds: hiddenEventIds,
+                bannedUserIds: bannedUserIds
+            )
         }
     }
     
@@ -850,6 +865,9 @@ struct CrowdHomeView: View {
                     await loadFirebaseEvents()
                     await loadUpcomingEvents()
                     
+                    // Load moderation data
+                    await loadModerationData()
+                    
                     // Load anchors
                     await anchorService.loadAnchors()
                     anchorService.startPeriodicUpdates()
@@ -912,6 +930,20 @@ struct CrowdHomeView: View {
                     if let event = notification.object as? CrowdEvent {
                         newEventBanner = event
                         startBannerDismissTimer()
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .userBlocked)) { notification in
+                    if let blockedUserId = notification.object as? String {
+                        Task {
+                            await loadModerationData()
+                        }
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .eventHidden)) { notification in
+                    if let hiddenEventId = notification.object as? String {
+                        Task {
+                            await loadModerationData()
+                        }
                     }
                 }
                 .fullScreenCover(isPresented: $showCalendar) { CalenderView() }
@@ -1821,6 +1853,29 @@ struct CrowdHomeView: View {
             print("✅ Loaded \(upcomingEvents.count) upcoming events")
         }
         campusEventsVM.stop()
+    }
+    
+    // MARK: - Moderation Data Loading
+    
+    private func loadModerationData() async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
+        
+        do {
+            async let blocked = ContentModerationService.shared.getBlockedUsers(userId: userId)
+            async let hidden = ContentModerationService.shared.getHiddenEvents(userId: userId)
+            async let banned = ContentModerationService.shared.getBannedUsers()
+            
+            let (blockedResult, hiddenResult, bannedResult) = try await (blocked, hidden, banned)
+            
+            await MainActor.run {
+                blockedUserIds = blockedResult
+                hiddenEventIds = hiddenResult
+                bannedUserIds = bannedResult
+                print("✅ Loaded moderation data: \(blockedResult.count) blocked, \(hiddenResult.count) hidden, \(bannedResult.count) banned")
+            }
+        } catch {
+            print("⚠️ Failed to load moderation data: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - Event Cleanup

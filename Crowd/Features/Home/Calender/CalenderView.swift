@@ -25,17 +25,31 @@ struct CalenderView: View {
         case schoolEvents
     }
     
+    @State private var blockedUserIds: Set<String> = []
+    @State private var hiddenEventIds: Set<String> = []
+    @State private var bannedUserIds: Set<String> = []
+    
     // Filtered events based on selected categories
     var filteredEvents: [CrowdEvent] {
-        if selectedCategories.isEmpty {
-            return campusEventsVM.crowdEvents
+        var events = campusEventsVM.crowdEvents
+        
+        // Apply category filter
+        if !selectedCategories.isEmpty {
+            events = events.filter { event in
+                selectedCategories.contains { category in
+                    category.matchesTags(event.tags)
+                }
+            }
         }
         
-        return campusEventsVM.crowdEvents.filter { event in
-            // Check if event tags match any of the selected categories
-            return selectedCategories.contains { category in
-                category.matchesTags(event.tags)
-            }
+        // Apply moderation filters
+        return events.filter { event in
+            !ContentModerationService.shared.shouldFilterEvent(
+                event,
+                blockedUserIds: blockedUserIds,
+                hiddenEventIds: hiddenEventIds,
+                bannedUserIds: bannedUserIds
+            )
         }
     }
     
@@ -151,6 +165,9 @@ struct CalenderView: View {
                     }
                 }
             }
+            .task {
+                await loadModerationData()
+            }
             .onAppear {
                 // Fetch fresh data each time calendar opens, then set up live updates
                 Task {
@@ -163,6 +180,16 @@ struct CalenderView: View {
                 AttendedEventsService.shared.refreshAttendedEvents()
             }
             .onDisappear { campusEventsVM.stop() }
+            .onReceive(NotificationCenter.default.publisher(for: .userBlocked)) { _ in
+                Task {
+                    await loadModerationData()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .eventHidden)) { _ in
+                Task {
+                    await loadModerationData()
+                }
+            }
             .onChange(of: selectedCategories) { _, _ in
                 // Reset pagination when filter changes
                 displayedEventCount = eventsPerPage
@@ -184,6 +211,28 @@ struct CalenderView: View {
             } catch {
                 print("❌ geocodeEventIfNeeded failed for \(ev.id): \(error)")
             }
+        }
+    }
+    
+    // MARK: - Moderation Data Loading
+    
+    private func loadModerationData() async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
+        
+        do {
+            async let blocked = ContentModerationService.shared.getBlockedUsers(userId: userId)
+            async let hidden = ContentModerationService.shared.getHiddenEvents(userId: userId)
+            async let banned = ContentModerationService.shared.getBannedUsers()
+            
+            let (blockedResult, hiddenResult, bannedResult) = try await (blocked, hidden, banned)
+            
+            await MainActor.run {
+                blockedUserIds = blockedResult
+                hiddenEventIds = hiddenResult
+                bannedUserIds = bannedResult
+            }
+        } catch {
+            print("⚠️ Failed to load moderation data: \(error.localizedDescription)")
         }
     }
 }

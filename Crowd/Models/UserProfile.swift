@@ -42,6 +42,12 @@ struct UserProfile: Codable, Equatable, Identifiable {
     // Event status - stores party event IDs user is going to
     var eventStatus: [String]? // Array of party event IDs
     
+    // Terms acceptance
+    var termsAccepted: Bool
+    
+    // Blocked users
+    var blockedUsers: [String]?
+    
     // Computed property (not encoded/decoded)
     var avatarColor: Color {
         Color(hexString: avatarColorHex)
@@ -71,6 +77,8 @@ struct UserProfile: Codable, Equatable, Identifiable {
         case notificationCooldowns
         case lastNotificationSent
         case eventStatus
+        case termsAccepted
+        case blockedUsers
     }
 
     static let anonymous = UserProfile(
@@ -96,6 +104,8 @@ struct UserProfile: Codable, Equatable, Identifiable {
         lastLocationUpdate: nil,
         notificationCooldowns: nil,
         lastNotificationSent: nil,
-        eventStatus: nil
+        eventStatus: nil,
+        termsAccepted: false,
+        blockedUsers: nil
     )
 }
