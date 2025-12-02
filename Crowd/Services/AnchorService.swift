@@ -20,25 +20,34 @@ final class AnchorService: ObservableObject {
     private let db = FirebaseManager.shared.db
     private var coordinateCache: [String: CLLocationCoordinate2D] = [:]
     private let fallbackCoord = CLLocationCoordinate2D(latitude: 33.2100, longitude: -97.1500)
+    private var anchorsListener: ListenerRegistration?
     
     private init() {}
     
     // MARK: - Load Anchors
     
     func loadAnchors() async {
-        // Try loading from local JSON first
-        if let localAnchors = await loadAnchorsFromJSON() {
-            await MainActor.run {
-                self.anchors = localAnchors
+        // Try loading from Firebase first (allows dynamic updates without app rebuild)
+        let firebaseAnchors = await loadAnchorsFromFirebase()
+        
+        if firebaseAnchors.isEmpty {
+            // Fallback to local JSON if Firebase is empty or fails
+            if let localAnchors = await loadAnchorsFromJSON() {
+                await MainActor.run {
+                    self.anchors = localAnchors
+                }
+                await geocodeAnchors()
+                await syncWithFirebase()
             }
-            await geocodeAnchors()
-            await syncWithFirebase()
         } else {
-            // Fallback to Firebase if local file doesn't exist
-            await loadAnchorsFromFirebase()
+            // Firebase loaded successfully
+            await geocodeAnchors()
         }
         
         await updateActiveAnchors()
+        
+        // Set up real-time listener for Firebase changes
+        setupFirebaseListener()
     }
     
     private func loadAnchorsFromJSON() async -> [Anchor]? {
@@ -75,7 +84,7 @@ final class AnchorService: ObservableObject {
         }
     }
     
-    private func loadAnchorsFromFirebase() async {
+    private func loadAnchorsFromFirebase() async -> [Anchor] {
         do {
             let snapshot = try await db.collection("anchors").getDocuments()
             var firebaseAnchors: [Anchor] = []
@@ -92,9 +101,10 @@ final class AnchorService: ObservableObject {
             }
             
             print("✅ AnchorService: Loaded \(firebaseAnchors.count) anchors from Firebase")
-            await geocodeAnchors()
+            return firebaseAnchors
         } catch {
             print("❌ AnchorService: Failed to load anchors from Firebase - \(error)")
+            return []
         }
     }
     
@@ -282,6 +292,60 @@ final class AnchorService: ObservableObject {
         Task {
             await AnchorNotificationService.shared.scheduleNotifications(for: anchors)
         }
+    }
+    
+    // MARK: - Firebase Listener
+    
+    private func setupFirebaseListener() {
+        // Remove existing listener if any
+        anchorsListener?.remove()
+        
+        // Set up real-time listener for anchor changes
+        anchorsListener = db.collection("anchors").addSnapshotListener { [weak self] snapshot, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("❌ AnchorService: Firebase listener error - \(error)")
+                return
+            }
+            
+            guard let snapshot = snapshot, !snapshot.documents.isEmpty else {
+                print("⚠️ AnchorService: Firebase listener returned empty snapshot")
+                return
+            }
+            
+            Task {
+                var updatedAnchors: [Anchor] = []
+                
+                for document in snapshot.documents {
+                    let data = document.data()
+                    if let anchor = try? self.parseAnchor(from: data) {
+                        updatedAnchors.append(anchor)
+                    }
+                }
+                
+                if !updatedAnchors.isEmpty {
+                    await MainActor.run {
+                        self.anchors = updatedAnchors
+                    }
+                    
+                    print("✅ AnchorService: Updated \(updatedAnchors.count) anchors from Firebase listener")
+                    await self.geocodeAnchors()
+                    await self.updateActiveAnchors()
+                }
+            }
+        }
+    }
+    
+    func stopListening() {
+        anchorsListener?.remove()
+        anchorsListener = nil
+    }
+    
+    // MARK: - Reload anchors (useful for testing or manual refresh)
+    
+    func reloadAnchors() async {
+        await loadAnchors()
     }
 }
 
