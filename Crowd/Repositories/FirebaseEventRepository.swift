@@ -104,6 +104,10 @@ final class FirebaseEventRepository: EventRepository {
         var parties: [CrowdEvent] = []
         var parseErrors = 0
         
+        // Get start of today for filtering
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        
         for document in partiesSnapshot.documents {
             let data = document.data()
             print("📄 Document ID: \(document.documentID)")
@@ -111,7 +115,18 @@ final class FirebaseEventRepository: EventRepository {
             
             do {
                 let party = try await parseParty(from: data, documentId: document.documentID)
-                parties.append(party)
+                
+                // Only include upcoming parties (today or future)
+                if let startsAt = party.startsAt {
+                    if startsAt >= startOfToday {
+                        parties.append(party)
+                    } else {
+                        print("⏭️ Skipping past party: \(party.title) (date: \(startsAt))")
+                    }
+                } else {
+                    // Include parties without a date (they might be ongoing/TBD)
+                    parties.append(party)
+                }
             } catch {
                 parseErrors += 1
                 print("⚠️ Failed to parse party document \(document.documentID): \(error.localizedDescription)")
@@ -119,7 +134,13 @@ final class FirebaseEventRepository: EventRepository {
             }
         }
         
-        print("✅ Successfully parsed \(parties.count) parties, \(parseErrors) failed")
+        print("✅ Successfully parsed \(parties.count) upcoming parties, \(parseErrors) failed")
+        
+        // Trigger background cleanup of expired parties
+        Task {
+            await deleteExpiredParties()
+        }
+        
         return parties
     }
     
@@ -153,12 +174,14 @@ final class FirebaseEventRepository: EventRepository {
                      data["where"] as? String
         print("📄 Address: \(address ?? "nil")")
         
-        // Image URL - Check multiple possible field names
-        let imageURL = data["uploadedImageUrl"] as? String ?? 
-                      data["imageURL"] as? String ?? 
+        // Image URL - Check multiple possible field names (prioritize imageURL/imageUrl)
+        let imageURL = data["imageURL"] as? String ?? 
                       data["imageUrl"] as? String ??
+                      data["uploadedImageUrl"] as? String ?? 
                       data["image"] as? String ??
-                      data["uploadedImage"] as? String
+                      data["uploadedImage"] as? String ??
+                      data["flyerUrl"] as? String ??
+                      data["flyer"] as? String
         print("📄 Image URL: \(imageURL ?? "nil")")
         
         // Ticket URL - Check multiple field name variations
@@ -344,6 +367,77 @@ final class FirebaseEventRepository: EventRepository {
                 let count = snapshot?.documents.count ?? 0
                 onChange(count)
             }
+    }
+    
+    /// Delete expired parties from events_from_linktree_raw collection
+    func deleteExpiredParties() async {
+        print("🧹 Starting cleanup of expired parties...")
+        
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        
+        do {
+            let partiesSnapshot = try await db.collection("events_from_linktree_raw").getDocuments()
+            var deletedCount = 0
+            
+            for document in partiesSnapshot.documents {
+                let data = document.data()
+                
+                // Try to parse the date from the document
+                var partyDate: Date?
+                
+                // Check dateTime field in various formats
+                if let dateTimeString = data["dateTime"] as? String {
+                    partyDate = parseDateTimeString(dateTimeString)
+                } else if let dateTimeTimestamp = data["dateTime"] as? Timestamp {
+                    partyDate = dateTimeTimestamp.dateValue()
+                } else if let dateTimeSeconds = data["dateTime"] as? TimeInterval {
+                    partyDate = Date(timeIntervalSince1970: dateTimeSeconds)
+                } else if let dateTimeMillis = data["dateTime"] as? Double {
+                    if dateTimeMillis > 10000000000 {
+                        partyDate = Date(timeIntervalSince1970: dateTimeMillis / 1000)
+                    } else {
+                        partyDate = Date(timeIntervalSince1970: dateTimeMillis)
+                    }
+                }
+                
+                // Try alternative date field names
+                if partyDate == nil {
+                    if let dateString = data["date"] as? String {
+                        partyDate = parseDateTimeString(dateString)
+                    } else if let startTimeString = data["startTime"] as? String {
+                        partyDate = parseDateTimeString(startTimeString)
+                    } else if let eventDateString = data["eventDate"] as? String {
+                        partyDate = parseDateTimeString(eventDateString)
+                    }
+                }
+                
+                // Try to extract from description if no date field
+                if partyDate == nil, let description = data["description"] as? String {
+                    partyDate = extractDateFromDescription(description)
+                }
+                
+                // Delete if party date is before today
+                if let date = partyDate, date < startOfToday {
+                    try await document.reference.delete()
+                    deletedCount += 1
+                    print("🗑️ Deleted expired party: \(document.documentID)")
+                    
+                    // Also delete any associated partyGoing records
+                    let goingRecords = try await db.collection("partyGoing")
+                        .whereField("partyId", isEqualTo: document.documentID)
+                        .getDocuments()
+                    
+                    for goingDoc in goingRecords.documents {
+                        try await goingDoc.reference.delete()
+                    }
+                }
+            }
+            
+            print("✅ Party cleanup complete: Deleted \(deletedCount) expired parties")
+        } catch {
+            print("❌ Error during party cleanup: \(error.localizedDescription)")
+        }
     }
     
     /// Parse dateTime string in various formats
