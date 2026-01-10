@@ -28,6 +28,7 @@ struct CalenderView: View {
     @State private var blockedUserIds: Set<String> = []
     @State private var hiddenEventIds: Set<String> = []
     @State private var bannedUserIds: Set<String> = []
+    @State private var showEventCreationFlow = false
     
     // Filtered events based on selected categories
     var filteredEvents: [CrowdEvent] {
@@ -79,32 +80,30 @@ struct CalenderView: View {
                     HStack {
                         Spacer()
                         
-                        VStack(alignment: .center, spacing: 4) {
-                            HStack(spacing: 4) {
-                                Text(selectedTab == .schoolEvents ? "School Events" : "Parties")
+                        HStack(spacing: 12) {
+                            VStack(alignment: .center, spacing: 4) {
+                                Text("Events")
                                     .font(.system(size: 24, weight: .bold))
                                     .foregroundStyle(.primary)
-                                if selectedTab == .parties {
-                                    Text("🎉")
-                                        .font(.system(size: 24))
+                                
+                                if selectedTab == .schoolEvents {
+                                    Text("\(displayedEvents.count) of \(filteredEvents.count) events")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                             
                             if selectedTab == .schoolEvents {
-                                Text("\(displayedEvents.count) of \(filteredEvents.count) events")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.secondary)
+                                CategoryFilterDropdown(selectedCategories: $selectedCategories)
+                                    .padding(.leading, 8)
+                                    .padding(.top, 4)
                             }
                         }
                         
                         Spacer()
-                        
-                        if selectedTab == .schoolEvents {
-                            CategoryFilterDropdown(selectedCategories: $selectedCategories)
-                        }
                     }
                 }
-                .padding(.top, 10)
+                .padding(.top, -44)
                 .padding(.horizontal, 20)
                 
                 // Tab SwitcherP
@@ -131,7 +130,7 @@ struct CalenderView: View {
                 }
                 .frame(height: 48)
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
+                .padding(.top, 16)
                 .padding(.bottom, 8)
                 
                 // Tab Content
@@ -152,7 +151,6 @@ struct CalenderView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ultraThinMaterial)
-            .navigationTitle("Calendar")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -162,6 +160,17 @@ struct CalenderView: View {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 24))
                             .foregroundStyle(.secondary)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showEventCreationFlow = true
+                        }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.primary)
                     }
                 }
             }
@@ -193,6 +202,10 @@ struct CalenderView: View {
             .onChange(of: selectedCategories) { _, _ in
                 // Reset pagination when filter changes
                 displayedEventCount = eventsPerPage
+            }
+            .fullScreenCover(isPresented: $showEventCreationFlow) {
+                EventCreationFlowView()
+                    .transition(.opacity)
             }
         }
     }
@@ -1379,6 +1392,647 @@ struct PartyDetailView: View {
             }
             
             topController.present(activityViewController, animated: true)
+        }
+    }
+}
+
+// MARK: - Three Step Progress Bar
+struct ThreeStepProgressBar: View {
+    let currentStep: Int
+    let totalSteps: Int
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(1...totalSteps, id: \.self) { step in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(step <= currentStep ? Color.white : Color.white.opacity(0.3))
+                    .frame(width: 30, height: 4)
+            }
+        }
+    }
+}
+
+// MARK: - Event Type Enum
+enum EventCreationType {
+    case ticketed
+    case rsvp
+}
+
+// MARK: - Event Creation Flow
+struct EventCreationFlowView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var eventType: EventCreationType?
+    @State private var currentStep = 0
+    private let totalSteps = 3
+    
+    var body: some View {
+        ZStack {
+            if currentStep == 0 {
+                // Step 0: Event Type Selection
+                EventTypeSelectionView(
+                    currentStep: $currentStep,
+                    eventType: $eventType,
+                    dismiss: dismiss
+                )
+                .transition(.opacity)
+            } else if currentStep == 1 {
+                // Step 1: Event Details Form
+                EventDetailsFormView(
+                    currentStep: $currentStep,
+                    eventType: eventType ?? .ticketed,
+                    dismiss: dismiss
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: currentStep)
+    }
+}
+
+// MARK: - Event Type Selection View (Step 0)
+struct EventTypeSelectionView: View {
+    @Binding var currentStep: Int
+    @Binding var eventType: EventCreationType?
+    let dismiss: DismissAction
+    
+    var body: some View {
+        ZStack {
+            Color.black
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Top bar with back button and centered progress indicator
+                ZStack {
+                    // Back button - left aligned
+                    HStack {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                dismiss()
+                            }
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.leading, 20)
+                        
+                        Spacer()
+                    }
+                    
+                    // Progress indicator - centered
+                    ThreeStepProgressBar(currentStep: 0, totalSteps: 3)
+                }
+                .padding(.top, 60)
+                
+                Spacer()
+                
+                // Title
+                Text("Let's launch your next event")
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 60)
+                
+                // Event Type Cards
+                HStack(spacing: 16) {
+                    // Sell tickets card
+                    EventTypeCard(
+                        icon: "dollarsign",
+                        title: "Sell tickets",
+                        action: {
+                            eventType = .ticketed
+                            currentStep = 1
+                        }
+                    )
+                    
+                    // RSVP Only card
+                    EventTypeCard(
+                        icon: "hand.wave.fill",
+                        title: "RSVP Only",
+                        action: {
+                            eventType = .rsvp
+                            currentStep = 1
+                        }
+                    )
+                }
+                .padding(.horizontal, 20)
+                
+                Spacer()
+                
+                // Join a Kickoff Session link
+                Button {
+                    // Open Kickoff Session URL
+                    if let url = URL(string: "https://calendly.com/your-kickoff-link") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("Join a Kickoff Session")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(.white)
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .padding(.bottom, 60)
+            }
+        }
+    }
+}
+
+// MARK: - Event Details Form View (Step 1)
+struct EventDetailsFormView: View {
+    @Binding var currentStep: Int
+    let eventType: EventCreationType
+    let dismiss: DismissAction
+    
+    @State private var eventTitle = ""
+    @State private var startDate = Date()
+    @State private var endDate = Date()
+    @State private var venueName = ""
+    @State private var address = ""
+    @State private var eventSummary = ""
+    @State private var showOnExplore = true
+    @State private var passwordProtected = false
+    @State private var enableActivity = true
+    @State private var activityType = ActivityType.socialFeed
+    @State private var selectedTab: DesignTab = .flyer
+    @State private var eventImage: UIImage?
+    @State private var showImagePicker = false
+    
+    enum ActivityType {
+        case socialFeed
+        case updatesOnly
+    }
+    
+    enum DesignTab {
+        case flyer, video, font, theme
+    }
+    
+    var body: some View {
+        ZStack {
+            Color.black
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Top bar with back button and centered progress indicator
+                ZStack {
+                    // Back button - left aligned
+                    HStack {
+                        Button {
+                            currentStep = 0
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.leading, 20)
+                        
+                        Spacer()
+                    }
+                    
+                    // Progress indicator - centered
+                    ThreeStepProgressBar(currentStep: 1, totalSteps: 3)
+                }
+                .padding(.top, 60)
+                
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // Event Image Upload Box
+                        Button {
+                            showImagePicker = true
+                        } label: {
+                            ZStack {
+                                if let image = eventImage {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 120)
+                                        .clipped()
+                                } else {
+                                    VStack(spacing: 6) {
+                                        Image(systemName: "photo.on.rectangle.angled")
+                                            .font(.system(size: 28))
+                                            .foregroundStyle(.gray)
+                                        Text("Upload Event Image")
+                                            .font(.system(size: 12, weight: .medium))
+                                            .foregroundStyle(.gray)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 120)
+                                    .background(Color.white.opacity(0.05))
+                                }
+                            }
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            )
+                        }
+                        .padding(.top, 12)
+                        
+                        // Design tabs at top
+                        HStack(spacing: 0) {
+                            DesignTabButton(title: "Flyer", icon: "photo", isSelected: selectedTab == .flyer) {
+                                selectedTab = .flyer
+                            }
+                            DesignTabButton(title: "Video", icon: "video.fill", isSelected: selectedTab == .video) {
+                                selectedTab = .video
+                            }
+                            DesignTabButton(title: "Font", icon: "textformat", isSelected: selectedTab == .font) {
+                                selectedTab = .font
+                            }
+                            DesignTabButton(title: "Theme", icon: "paintpalette.fill", isSelected: selectedTab == .theme) {
+                                selectedTab = .theme
+                            }
+                        }
+                        .frame(height: 50)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(12)
+                        .padding(.top, 8)
+                        
+                        // Event Details Card
+                        VStack(spacing: 0) {
+                            // Event Title
+                            VStack(alignment: .leading, spacing: 8) {
+                                TextField("", text: $eventTitle, prompt: Text("My Event*").foregroundColor(.gray))
+                                    .font(.system(size: 24, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.vertical, 16)
+                            }
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                            
+                            // Start and End Date
+                            HStack(spacing: 0) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Start*")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(.gray)
+                                    DatePicker("", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
+                                        .labelsHidden()
+                                        .colorScheme(.dark)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 12)
+                                
+                                Divider()
+                                    .frame(height: 60)
+                                    .background(Color.white.opacity(0.1))
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text("End*")
+                                            .font(.system(size: 16))
+                                            .foregroundStyle(.gray)
+                                        Spacer()
+                                        Button {
+                                            // Toggle visibility
+                                        } label: {
+                                            Image(systemName: "eye")
+                                                .foregroundStyle(.gray)
+                                        }
+                                    }
+                                    DatePicker("", selection: $endDate, displayedComponents: [.date, .hourAndMinute])
+                                        .labelsHidden()
+                                        .colorScheme(.dark)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 12)
+                            }
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                            
+                            // Repeats
+                            HStack {
+                                Text("Repeats")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.gray)
+                                Spacer()
+                                Text("Never")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.white)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.gray)
+                            }
+                            .padding(.vertical, 16)
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                            
+                            // Venue Name
+                            TextField("", text: $venueName, prompt: Text("Venue Name*").foregroundColor(.gray))
+                                .font(.system(size: 16))
+                                .foregroundStyle(.white)
+                                .padding(.vertical, 16)
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                            
+                            // Address
+                            HStack {
+                                TextField("", text: $address, prompt: Text("Address*").foregroundColor(.gray))
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.white)
+                                Button {
+                                    // Toggle address visibility
+                                } label: {
+                                    Image(systemName: "eye")
+                                        .foregroundStyle(.gray)
+                                }
+                            }
+                            .padding(.vertical, 16)
+                        }
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(16)
+                        .padding(.top, 16)
+                        
+                        // Additional Details Section
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Additional Details")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.gray)
+                                .padding(.top, 24)
+                            
+                            // Event Summary
+                            TextEditor(text: $eventSummary)
+                                .frame(height: 120)
+                                .scrollContentBackground(.hidden)
+                                .font(.system(size: 16))
+                                .foregroundStyle(.white)
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(12)
+                                .overlay(
+                                    Group {
+                                        if eventSummary.isEmpty {
+                                            Text("Event Summary (optional)")
+                                                .font(.system(size: 16))
+                                                .foregroundStyle(.gray)
+                                                .padding(.leading, 20)
+                                                .padding(.top, 8)
+                                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                                .allowsHitTesting(false)
+                                        }
+                                    }
+                                )
+                            
+                            // Toggles
+                            VStack(spacing: 0) {
+                                SettingToggleRow(
+                                    title: "Show on Explore",
+                                    hasInfo: true,
+                                    isOn: $showOnExplore
+                                )
+                                
+                                Divider()
+                                    .background(Color.white.opacity(0.1))
+                                
+                                SettingToggleRow(
+                                    title: "Password Protected Event",
+                                    hasInfo: true,
+                                    isOn: $passwordProtected
+                                )
+                                
+                                Divider()
+                                    .background(Color.white.opacity(0.1))
+                                
+                                SettingToggleRow(
+                                    title: "Enable Event Activity",
+                                    hasInfo: true,
+                                    isOn: $enableActivity
+                                )
+                                
+                                if enableActivity {
+                                    VStack(spacing: 12) {
+                                        RadioOption(
+                                            title: "Social feed",
+                                            subtitle: "Organizers and attendees can post, reply, and react in the activity feed.",
+                                            isSelected: activityType == .socialFeed
+                                        ) {
+                                            activityType = .socialFeed
+                                        }
+                                        
+                                        RadioOption(
+                                            title: "Updates only",
+                                            subtitle: "Only organizers can post updates. Attendees can't comment or react.",
+                                            isSelected: activityType == .updatesOnly
+                                        ) {
+                                            activityType = .updatesOnly
+                                        }
+                                    }
+                                    .padding(.vertical, 16)
+                                }
+                            }
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(16)
+                        }
+                        
+                        // Tickets Section (if ticketed event)
+                        if eventType == .ticketed {
+                            VStack(alignment: .leading, spacing: 16) {
+                                HStack {
+                                    Text("Tickets")
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundStyle(.gray)
+                                    Spacer()
+                                    Button {
+                                        // Add ticket
+                                    } label: {
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.system(size: 24))
+                                            .foregroundStyle(.white)
+                                    }
+                                }
+                                .padding(.top, 24)
+                                
+                                HStack {
+                                    Text("Default Ticket")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    Text("$10.00")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(.white)
+                                    Button {
+                                        // Edit ticket
+                                    } label: {
+                                        Image(systemName: "ellipsis")
+                                            .foregroundStyle(.gray)
+                                    }
+                                }
+                                .padding(.vertical, 16)
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(12)
+                            }
+                        }
+                        
+                        // Show Advanced Settings
+                        Button {
+                            // Show advanced settings
+                        } label: {
+                            Text("Show Advanced Settings")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                        }
+                        .padding(.top, 24)
+                        
+                        // Back Button
+                        Button {
+                            currentStep = 0
+                        } label: {
+                            Text("Back")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color.white.opacity(0.1))
+                                .cornerRadius(12)
+                        }
+                        .padding(.top, 16)
+                        .padding(.bottom, 40)
+                    }
+                    .padding(.leading, 22)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Design Tab Button
+struct DesignTabButton: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .foregroundStyle(isSelected ? .white : .gray)
+                Text(title)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isSelected ? .white : .gray)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+// MARK: - Setting Toggle Row
+struct SettingToggleRow: View {
+    let title: String
+    let hasInfo: Bool
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 16))
+                .foregroundStyle(.white)
+            if hasInfo {
+                Button {
+                    // Show info
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.gray)
+                }
+            }
+            Spacer()
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .tint(.white)
+        }
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Radio Option
+struct RadioOption: View {
+    let title: String
+    let subtitle: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: isSelected ? "circle.inset.filled" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(isSelected ? .white : .gray)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(.white)
+                    Text(subtitle)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.gray)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                Spacer()
+            }
+        }
+    }
+}
+
+// MARK: - Event Type Card
+struct EventTypeCard: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 20) {
+                // Icon with circular background
+                ZStack {
+                    Circle()
+                        .fill(Color(red: 0.7, green: 0.85, blue: 0.3))
+                        .frame(width: 100, height: 100)
+                    
+                    if icon == "hand.wave.fill" {
+                        Image(systemName: icon)
+                            .font(.system(size: 40))
+                            .foregroundStyle(.white)
+                    } else {
+                        ZStack {
+                            // Dollar sign with circular progress indicator
+                            Circle()
+                                .trim(from: 0, to: 0.6)
+                                .stroke(Color.black, lineWidth: 8)
+                                .frame(width: 60, height: 60)
+                                .rotationEffect(.degrees(-90))
+                            
+                            Text("$")
+                                .font(.system(size: 40, weight: .bold))
+                                .foregroundStyle(.black)
+                        }
+                    }
+                }
+                
+                // Title
+                Text(title)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 220)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color.white.opacity(0.1))
+            )
         }
     }
 }
