@@ -50,7 +50,7 @@ struct PartiesOnboardingView: View {
         .onAppear {
             viewModel.loadEvents()
             
-            AnalyticsService.shared.screenView("parties_onboarding")
+            AnalyticsService.shared.trackScreenView("parties_onboarding")
         }
         // Show intent CTA after swiping through events
         .onChange(of: currentIndex) { oldVal, newVal in

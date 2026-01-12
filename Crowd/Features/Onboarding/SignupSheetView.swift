@@ -79,7 +79,7 @@ struct SignupSheetView: View {
             .disabled(isLoading)
         }
         .onAppear {
-            AnalyticsService.shared.screenView("signup_sheet")
+            AnalyticsService.shared.trackScreenView("signup_sheet")
         }
     }
     
@@ -338,10 +338,10 @@ struct SignupSheetView: View {
             
             Task {
                 do {
-                    let credential = OAuthProvider.credential(
-                        providerID: AuthProviderID.apple,
-                        idToken: tokenString,
-                        rawNonce: nil
+                    let credential = OAuthProvider.appleCredential(
+                        withIDToken: tokenString,
+                        rawNonce: nil,
+                        fullName: appleIDCredential.fullName
                     )
                     
                     let authResult = try await FirebaseManager.shared.auth.signIn(with: credential)
