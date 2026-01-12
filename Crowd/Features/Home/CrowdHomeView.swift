@@ -64,10 +64,6 @@ struct CrowdHomeView: View {
     @State private var initialEventTitle: String? = nil
     @FocusState private var isSearchFocused: Bool
     
-    // MARK: - Source filter (mini navbar)
-    private enum SourceFilter { case user, school }
-    @State private var sourceFilter: SourceFilter? = .user
-    
     // MARK: - Joined Event Indicator
     @State private var liveAttendeeCount: Int = 0
     @State private var eventListener: ListenerRegistration?
@@ -346,23 +342,12 @@ struct CrowdHomeView: View {
             return calendar.isDateInToday(s)
         }
         
-        let inputEvents: [CrowdEvent]
-        switch sourceFilter {
-        case .user:
-            // Only user-created events (local + firebase, deduplicated) - today only
-            let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
-            inputEvents = filterEventsForToday(allUserEvents)
-        case .school:
-            // Only official school events + upcoming school events - today only
-            let filteredOfficial = filterEventsForToday(officialEvents)
-            inputEvents = filteredOfficial + filteredUpcoming
-        case .none:
-            // All events (deduplicated user events) - today only
-            let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
-            let filteredOfficial = filterEventsForToday(officialEvents)
-            let filteredUser = filterEventsForToday(allUserEvents)
-            inputEvents = filteredOfficial + filteredUser + filteredUpcoming
-        }
+        // Combine all events (deduplicated user events + official + upcoming) - today only
+        let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
+        let filteredOfficial = filterEventsForToday(officialEvents)
+        let filteredUser = filterEventsForToday(allUserEvents)
+        let inputEvents = filteredOfficial + filteredUser + filteredUpcoming
+        
         return EventClusteringService.clusterEvents(inputEvents)
     }
     
@@ -546,7 +531,6 @@ struct CrowdHomeView: View {
     
     // Compute combined groups and standalone groups
     private var combinedGroups: [CombinedGroup] {
-        guard sourceFilter == .user else { return [] }
         let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
         let clusters = currentEventsClusters
         var processedClusters = Set<String>()
@@ -575,7 +559,6 @@ struct CrowdHomeView: View {
     
     // Compute standalone anchor groups (not overlapping with clusters)
     private var standaloneAnchorGroups: [StandaloneAnchorGroup] {
-        guard sourceFilter == .user else { return [] }
         let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
         let clusters = currentEventsClusters
         var processedAnchorIndices = Set<Int>()
@@ -604,32 +587,30 @@ struct CrowdHomeView: View {
     
     @MapContentBuilder
     private func anchorAnnotations() -> some MapContent {
-        if sourceFilter == .user {
-            // Render combined groups (anchors + events at same location)
-            ForEach(combinedGroups) { combinedGroup in
-                let isExpanded = expandedCombinedGroupId == combinedGroup.id
-                
-                if isExpanded {
-                    combinedGroupExpandedAnnotations(
-                        anchorGroup: combinedGroup.anchorGroup,
-                        cluster: combinedGroup.cluster,
-                        center: combinedGroup.center,
-                        groupId: combinedGroup.id
-                    )
-                } else {
-                    combinedGroupCollapsedAnnotation(
-                        anchorGroup: combinedGroup.anchorGroup,
-                        cluster: combinedGroup.cluster,
-                        center: combinedGroup.center,
-                        groupId: combinedGroup.id
-                    )
-                }
-            }
+        // Render combined groups (anchors + events at same location)
+        ForEach(combinedGroups) { combinedGroup in
+            let isExpanded = expandedCombinedGroupId == combinedGroup.id
             
-            // Render standalone anchor groups (not overlapping with clusters)
-            ForEach(standaloneAnchorGroups) { standaloneGroup in
-                anchorGroupAnnotations(group: standaloneGroup.group)
+            if isExpanded {
+                combinedGroupExpandedAnnotations(
+                    anchorGroup: combinedGroup.anchorGroup,
+                    cluster: combinedGroup.cluster,
+                    center: combinedGroup.center,
+                    groupId: combinedGroup.id
+                )
+            } else {
+                combinedGroupCollapsedAnnotation(
+                    anchorGroup: combinedGroup.anchorGroup,
+                    cluster: combinedGroup.cluster,
+                    center: combinedGroup.center,
+                    groupId: combinedGroup.id
+                )
             }
+        }
+        
+        // Render standalone anchor groups (not overlapping with clusters)
+        ForEach(standaloneAnchorGroups) { standaloneGroup in
+            anchorGroupAnnotations(group: standaloneGroup.group)
         }
     }
     
@@ -710,7 +691,6 @@ struct CrowdHomeView: View {
     
     // Compute clusters that don't overlap with anchors
     private var standaloneClusters: [EventCluster] {
-        guard sourceFilter == .user else { return currentEventsClusters }
         let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
         let clusters = currentEventsClusters
         var processedClusters = Set<String>()
@@ -1325,7 +1305,7 @@ struct CrowdHomeView: View {
                 let panelHeight: CGFloat = 140
 
                 VStack(spacing: 0) {
-                    // === Centered main navbar (region) with smaller Type filter below ===
+                    // === Centered main navbar (region picker) ===
                     VStack(spacing: 8) {
                         // Main region picker (centered)
                         Menu {
@@ -1353,32 +1333,6 @@ struct CrowdHomeView: View {
                         }
                         .fixedSize()
                         .frame(maxWidth: geo.size.width * 0.9)
-
-                        // Small type filter (half height of main pill) centered below
-                        Menu {
-                            Button("Student Crowds") {
-                                sourceFilter = .user
-                                AnalyticsService.shared.trackFilterChanged(filterType: "source", value: "user")
-                            }
-                            Button("Official Events") {
-                                sourceFilter = .school
-                                AnalyticsService.shared.trackFilterChanged(filterType: "source", value: "school")
-                            }
-                        } label: {
-                            GlassPill(height: 24, horizontalPadding: 14) {
-                                HStack(spacing: 6) {
-                                    Text(sourceFilter == .user ? "Student Crowds" : (sourceFilter == .school ? "Official Events" : "Sort"))
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.primary.opacity(0.8))
-                                }
-                                .padding(.horizontal, 8)
-                            }
-                        }
-                        .fixedSize()
                     }
                     .padding(.top, 0)
                     .offset(y: -18)
