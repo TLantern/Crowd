@@ -13,8 +13,13 @@ import FirebaseFirestore
 struct CrowdHomeView: View {
     @Environment(\.appEnvironment) var env
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var onboardingCoordinator: OnboardingCoordinator
     @ObservedObject private var locationService = AppEnvironment.current.location
     @ObservedObject private var chatNotificationService = ChatNotificationService.shared
+    
+    // MARK: - Onboarding & Campus Selection
+    @AppStorage("selectedCampusId") private var selectedCampusId: String = "UNT"
+    @AppStorage("hasCompletedPartiesOnboarding") private var hasCompletedPartiesOnboarding: Bool = false
     
     // MARK: - Region & camera
     @State private var selectedRegion: CampusRegion = .mainCampus
@@ -956,9 +961,18 @@ struct CrowdHomeView: View {
                         startEventListener(for: joinedEvent)
                     }
                     startEventEndCheckTimer()
+                    
+                    // Sync selected region with stored campus ID
+                    syncRegionWithCampus()
                 }
                 .onDisappear {
                     stopEventEndCheckTimer()
+                }
+                // Listen for campus changes from onboarding
+                .onReceive(NotificationCenter.default.publisher(for: .campusChanged)) { notification in
+                    if let newCampusId = notification.object as? String {
+                        handleCampusChange(newCampusId)
+                    }
                 }
         }
     }
@@ -2052,6 +2066,40 @@ struct CrowdHomeView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 expandedCombinedGroupId = nil
             }
+        }
+    }
+    
+    // MARK: - Campus Selection Integration
+    
+    /// Sync the map region with the stored campus selection
+    private func syncRegionWithCampus() {
+        // Map campus ID to CampusRegion
+        // Currently only UNT is supported with multiple regions
+        // Other campuses will use the default region for now
+        switch selectedCampusId {
+        case "UNT":
+            // Keep current region if already UNT
+            break
+        default:
+            // Default to main campus for other (unsupported) campuses
+            selectedRegion = .mainCampus
+        }
+    }
+    
+    /// Handle campus change from onboarding or settings
+    private func handleCampusChange(_ newCampusId: String) {
+        print("📍 CrowdHomeView: Campus changed to \(newCampusId)")
+        
+        // Update stored campus
+        selectedCampusId = newCampusId
+        
+        // Refresh map region
+        syncRegionWithCampus()
+        
+        // Reload events for new campus
+        Task {
+            await loadFirebaseEvents()
+            await loadUpcomingEvents()
         }
     }
     
