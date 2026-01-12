@@ -29,6 +29,7 @@ struct CalenderView: View {
     @State private var hiddenEventIds: Set<String> = []
     @State private var bannedUserIds: Set<String> = []
     @State private var showEventCreationFlow = false
+    @State private var currentPartyImageURL: String?
     
     // Filtered events based on selected categories
     var filteredEvents: [CrowdEvent] {
@@ -71,86 +72,119 @@ struct CalenderView: View {
     var hasMoreEvents: Bool {
         displayedEventCount < filteredEvents.count
     }
+
+    private var headerView: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Spacer()
+                
+                HStack(spacing: 12) {
+                    VStack(alignment: .center, spacing: 4) {
+                        Text("Events")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(.primary)
+                        
+                        if selectedTab == .schoolEvents {
+                            Text("\(displayedEvents.count) of \(filteredEvents.count) events")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    if selectedTab == .schoolEvents {
+                        CategoryFilterDropdown(selectedCategories: $selectedCategories)
+                            .padding(.leading, 8)
+                            .padding(.top, 4)
+                    }
+                }
+                
+                Spacer()
+            }
+        }
+        .padding(.top, -44)
+        .padding(.horizontal, 20)
+    }
+    
+    private var tabSwitcher: some View {
+        HStack(spacing: 0) {
+            CalendarTabButton(
+                title: "Parties",
+                isSelected: selectedTab == .parties,
+                action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = .parties
+                    }
+                }
+            )
+            
+            CalendarTabButton(
+                title: "School Events",
+                isSelected: selectedTab == .schoolEvents,
+                action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = .schoolEvents
+                    }
+                }
+            )
+        }
+        .frame(height: 48)
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
+    
+    private var tabContent: some View {
+        Group {
+            if selectedTab == .parties {
+                PartiesView(currentPartyImageURL: $currentPartyImageURL)
+            } else {
+                SchoolEventsView(
+                    filteredEvents: filteredEvents,
+                    displayedEvents: displayedEvents,
+                    hasMoreEvents: hasMoreEvents,
+                    selectedCategories: selectedCategories,
+                    displayedEventCount: $displayedEventCount,
+                    eventsPerPage: eventsPerPage
+                )
+            }
+        }
+    }
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Header
-                VStack(spacing: 12) {
-                    HStack {
-                        Spacer()
-                        
-                        HStack(spacing: 12) {
-                            VStack(alignment: .center, spacing: 4) {
-                                Text("Events")
-                                    .font(.system(size: 24, weight: .bold))
-                                    .foregroundStyle(.primary)
-                                
-                                if selectedTab == .schoolEvents {
-                                    Text("\(displayedEvents.count) of \(filteredEvents.count) events")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundStyle(.secondary)
+            ZStack {
+                // Blurred background image - full page (only for parties tab)
+                if selectedTab == .parties {
+                    GeometryReader { geometry in
+                        if let imageURL = currentPartyImageURL {
+                            AsyncImage(url: URL(string: imageURL)) { phase in
+                                if case .success(let image) = phase {
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: geometry.size.width, height: geometry.size.height)
+                                        .clipped()
+                                        .blur(radius: 30)
+                                        .opacity(1)
+                                } else {
+                                    Color.clear
                                 }
                             }
-                            
-                            if selectedTab == .schoolEvents {
-                                CategoryFilterDropdown(selectedCategories: $selectedCategories)
-                                    .padding(.leading, 8)
-                                    .padding(.top, 4)
-                            }
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .ignoresSafeArea(edges: .all)
                         }
-                        
-                        Spacer()
                     }
+                    .ignoresSafeArea(edges: .all)
                 }
-                .padding(.top, -44)
-                .padding(.horizontal, 20)
                 
-                // Tab SwitcherP
-                HStack(spacing: 0) {
-                    CalendarTabButton(
-                        title: "Parties",
-                        isSelected: selectedTab == .parties,
-                        action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedTab = .parties
-                            }
-                        }
-                    )
-                    
-                    CalendarTabButton(
-                        title: "School Events",
-                        isSelected: selectedTab == .schoolEvents,
-                        action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedTab = .schoolEvents
-                            }
-                        }
-                    )
+                VStack(spacing: 0) {
+                    headerView
+                    tabSwitcher
+                    tabContent
                 }
-                .frame(height: 48)
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-                
-                // Tab Content
-                Group {
-                    if selectedTab == .parties {
-                        PartiesView()
-                    } else {
-                        SchoolEventsView(
-                            filteredEvents: filteredEvents,
-                            displayedEvents: displayedEvents,
-                            hasMoreEvents: hasMoreEvents,
-                            selectedCategories: selectedCategories,
-                            displayedEventCount: $displayedEventCount,
-                            eventsPerPage: eventsPerPage
-                        )
-                    }
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(selectedTab == .parties ? Color.clear : Color.white)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.ultraThinMaterial)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -178,17 +212,16 @@ struct CalenderView: View {
                 await loadModerationData()
             }
             .onAppear {
-                // Fetch fresh data each time calendar opens, then set up live updates
                 Task {
-                    // Always fetch fresh data when calendar opens
                     await campusEventsVM.fetchOnce(limit: 25)
                     campusEventsVM.start()
                     await geocodeTodaysEventsIfNeeded()
                 }
-                // Refresh attended events to clean up expired ones
                 AttendedEventsService.shared.refreshAttendedEvents()
             }
-            .onDisappear { campusEventsVM.stop() }
+            .onDisappear {
+                campusEventsVM.stop()
+            }
             .onReceive(NotificationCenter.default.publisher(for: .userBlocked)) { _ in
                 Task {
                     await loadModerationData()
@@ -200,7 +233,6 @@ struct CalenderView: View {
                 }
             }
             .onChange(of: selectedCategories) { _, _ in
-                // Reset pagination when filter changes
                 displayedEventCount = eventsPerPage
             }
             .fullScreenCover(isPresented: $showEventCreationFlow) {
@@ -652,6 +684,8 @@ struct PartiesView: View {
     @State private var parties: [CrowdEvent] = []
     @State private var isLoading = false
     @State private var selectedParty: CrowdEvent? = nil
+    @State private var currentPartyIndex: Int = 0
+    @Binding var currentPartyImageURL: String?
     
     var body: some View {
         Group {
@@ -682,20 +716,32 @@ struct PartiesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, 60)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        ForEach(parties) { party in
-                            Button(action: {
-                                print("🎉 Party card tapped: \(party.title)")
-                                selectedParty = party
-                            }) {
-                                PartyCardView(party: party)
+                GeometryReader { geometry in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(parties.enumerated()), id: \.element.id) { index, party in
+                                Button(action: {
+                                    print("🎉 Party card tapped: \(party.title)")
+                                    selectedParty = party
+                                }) {
+                                    PartyCardView(party: party)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .frame(height: geometry.size.height)
+                                .frame(maxWidth: .infinity)
+                                .contentShape(Rectangle())
+                                .id(index)
+                                .onAppear {
+                                    currentPartyIndex = index
+                                    if index < parties.count {
+                                        currentPartyImageURL = parties[index].imageURL
+                                    }
+                                }
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
+                        .padding(.horizontal, 15)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
+                    .scrollTargetBehavior(.paging)
                 }
             }
         }
@@ -745,6 +791,7 @@ struct PartiesView: View {
             // Update UI on main thread
             await MainActor.run {
                 parties = sortedParties
+                currentPartyIndex = 0
                 isLoading = false
             }
         } catch {
@@ -762,90 +809,104 @@ struct PartyCardView: View {
     let party: CrowdEvent
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Title + Host Name (biggest)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(party.title)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                
-                if !party.hostName.isEmpty && party.hostName != "Party Host" {
-                    Text(party.hostName)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
+        VStack(spacing: 0) {
+            // Event Image - Top to Middle
+            CachedEventImage(
+                imageURL: party.imageURL,
+                height: 300,
+                contentMode: .fill
+            )
             
-            // Time with emoji
-            if let startsAt = party.startsAt {
-                HStack(spacing: 6) {
-                    Text("📅")
-                        .font(.system(size: 14))
-                    Text(formatEventTime(startsAt))
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            
-            // Address with emoji
-            if let address = party.rawLocationName, !address.isEmpty {
-                HStack(spacing: 6) {
-                    Text("📍")
-                        .font(.system(size: 14))
-                    Text(address)
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+            // Details Section - Bottom
+            VStack(alignment: .leading, spacing: 12) {
+                // Title + Host Name
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(party.title)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
-                }
-            }
-            
-            // Going count badge
-            if party.attendeeCount > 0 {
-                HStack(spacing: 4) {
-                    Text("\(party.attendeeCount >= 50 ? "50+" : "\(party.attendeeCount)")")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                    Text("going")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 4)
-            }
-            
-            // Buy Ticket Button
-            if let ticketURL = party.ticketURL {
-                Button(action: {
-                    if let url = URL(string: ticketURL) {
-                        UIApplication.shared.open(url)
+                    
+                    if !party.hostName.isEmpty && party.hostName != "Party Host" {
+                        Text(party.hostName)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
-                }) {
-                    HStack {
-                        Image(systemName: "ticket.fill")
+                }
+                
+                // Time with emoji
+                if let startsAt = party.startsAt {
+                    HStack(spacing: 6) {
+                        Text("📅")
                             .font(.system(size: 14))
-                        Text("Buy Ticket")
-                            .font(.system(size: 14, weight: .semibold))
+                        Text(formatEventTime(startsAt))
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.black)
-                    )
                 }
-                .padding(.top, 8)
+                
+                // Address with emoji
+                if let address = party.rawLocationName, !address.isEmpty {
+                    HStack(spacing: 6) {
+                        Text("📍")
+                            .font(.system(size: 14))
+                        Text(address)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                
+                // Going count badge
+                if party.attendeeCount > 0 {
+                    HStack(spacing: 4) {
+                        Text("\(party.attendeeCount >= 50 ? "50+" : "\(party.attendeeCount)")")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                        Text("going")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 4)
+                }
+                
+                // Buy Ticket Button
+                if let ticketURL = party.ticketURL {
+                    Button(action: {
+                        if let url = URL(string: ticketURL) {
+                            UIApplication.shared.open(url)
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "ticket.fill")
+                                .font(.system(size: 14))
+                            Text("Buy Ticket")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.black)
+                        )
+                    }
+                    .padding(.top, 8)
+                }
             }
+            .padding(16)
         }
-        .padding(16)
-        .background(.ultraThinMaterial)
+        .frame(minHeight: 450)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white)
+        )
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(.primary.opacity(0.1), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
     }
     
     private func formatEventTime(_ date: Date) -> String {
@@ -894,43 +955,11 @@ struct PartyDetailView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         // Party Image - Full Width
-                        if let imageURL = displayParty.imageURL, let url = URL(string: imageURL) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .empty:
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(height: 400)
-                                    .overlay(ProgressView())
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(height: 400)
-                                    .clipped()
-                            case .failure:
-                                Rectangle()
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(height: 400)
-                                    .overlay(
-                                        Image(systemName: "photo")
-                                            .font(.system(size: 40))
-                                            .foregroundStyle(.gray)
-                                    )
-                            @unknown default:
-                                EmptyView()
-                            }
-                        }
-                    } else {
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 400)
-                            .overlay(
-                                Image(systemName: "photo")
-                                    .font(.system(size: 40))
-                                    .foregroundStyle(.gray)
-                            )
-                    }
+                        CachedEventImage(
+                            imageURL: displayParty.imageURL,
+                            height: 400,
+                            contentMode: .fill
+                        )
                     
                     // Content Section
                     VStack(alignment: .leading, spacing: 20) {
