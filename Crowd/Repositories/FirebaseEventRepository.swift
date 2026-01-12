@@ -151,37 +151,53 @@ final class FirebaseEventRepository: EventRepository {
         print("📄 Parsing party document: \(documentId)")
         print("📄 Available fields: \(data.keys.sorted())")
         
-        guard let title = data["title"] as? String else {
+        // Extract nested dictionaries
+        let normalized = data["normalized"] as? [String: Any]
+        let eventDetails = data["eventDetails"] as? [String: Any]
+        
+        // Title - check top level first, then eventDetails
+        guard let title = data["title"] as? String ?? eventDetails?["title"] as? String else {
             print("❌ Missing required 'title' field")
             throw CrowdError.invalidResponse
         }
         
         let id = documentId
         
-        // Description - Check multiple field name variations
+        // Description - Check multiple field name variations (including nested)
         let description = data["description"] as? String ?? 
+                         normalized?["description"] as? String ??
+                         eventDetails?["description"] as? String ??
                          data["desc"] as? String ?? 
                          data["details"] as? String ?? 
                          data["about"] as? String ?? 
                          data["info"] as? String ?? ""
         print("📄 Description: \(description.isEmpty ? "empty" : String(description.prefix(50)))")
         
-        // Address - Check multiple field name variations
-        let address = data["address"] as? String ?? 
-                     data["location"] as? String ?? 
-                     data["venue"] as? String ?? 
-                     data["place"] as? String ?? 
-                     data["where"] as? String
+        // Address - Check multiple field name variations (including nested)
+        var address: String?
+        if let addr = data["address"] as? String { address = addr }
+        else if let addr = eventDetails?["address"] as? String { address = addr }
+        else if let addr = normalized?["address"] as? String { address = addr }
+        else if let addr = data["location"] as? String { address = addr }
+        else if let addr = eventDetails?["venue"] as? String { address = addr }
+        else if let addr = normalized?["locationName"] as? String { address = addr }
+        else if let addr = data["venue"] as? String { address = addr }
+        else if let addr = data["place"] as? String { address = addr }
+        else { address = data["where"] as? String }
         print("📄 Address: \(address ?? "nil")")
         
-        // Image URL - Check multiple possible field names (prioritize imageURL/imageUrl)
-        let imageURL = data["imageURL"] as? String ?? 
-                      data["imageUrl"] as? String ??
-                      data["uploadedImageUrl"] as? String ?? 
-                      data["image"] as? String ??
-                      data["uploadedImage"] as? String ??
-                      data["flyerUrl"] as? String ??
-                      data["flyer"] as? String
+        // Image URL - Check multiple possible field names (including nested)
+        var imageURL: String?
+        if let url = data["imageURL"] as? String { imageURL = url }
+        else if let url = data["imageUrl"] as? String { imageURL = url }
+        else if let url = normalized?["imageUrl"] as? String { imageURL = url }
+        else if let url = eventDetails?["imageUrl"] as? String { imageURL = url }
+        else if let url = eventDetails?["primaryImage"] as? String { imageURL = url }
+        else if let url = data["uploadedImageUrl"] as? String { imageURL = url }
+        else if let url = data["image"] as? String { imageURL = url }
+        else if let url = data["uploadedImage"] as? String { imageURL = url }
+        else if let url = data["flyerUrl"] as? String { imageURL = url }
+        else { imageURL = data["flyer"] as? String }
         print("📄 Image URL: \(imageURL ?? "nil")")
         
         // Ticket URL - Check multiple field name variations
@@ -194,16 +210,19 @@ final class FirebaseEventRepository: EventRepository {
                        data["url"] as? String
         print("📄 Ticket URL: \(ticketURL ?? "nil")")
         
-        // Check for host/group name in multiple possible field names
-        let hostName = data["hostName"] as? String ??
-                      data["host_name"] as? String ??
-                      data["groupName"] as? String ??
-                      data["group_name"] as? String ??
-                      data["organization"] as? String ??
-                      data["org"] as? String ??
-                      data["host"] as? String ??
-                      data["organizer"] as? String ??
-                      "Party Host"
+        // Check for host/group name in multiple possible field names (including nested)
+        var hostName: String = "Party Host"
+        if let name = data["hostName"] as? String { hostName = name }
+        else if let name = normalized?["locationName"] as? String { hostName = name }
+        else if let name = eventDetails?["venue"] as? String { hostName = name }
+        else if let name = data["host_name"] as? String { hostName = name }
+        else if let name = data["groupName"] as? String { hostName = name }
+        else if let name = data["group_name"] as? String { hostName = name }
+        else if let name = normalized?["sourceOrg"] as? String { hostName = name }
+        else if let name = data["organization"] as? String { hostName = name }
+        else if let name = data["org"] as? String { hostName = name }
+        else if let name = data["host"] as? String { hostName = name }
+        else if let name = data["organizer"] as? String { hostName = name }
         print("📄 Host Name: \(hostName)")
         
         // Try to get date from multiple field name variations
@@ -229,9 +248,9 @@ final class FirebaseEventRepository: EventRepository {
             }
         }
         
-        // Try alternative date field names
+        // Try alternative date field names (including nested)
         if startsAt == nil {
-            if let dateString = data["date"] as? String {
+            if let dateString = data["date"] as? String ?? eventDetails?["dateTime"] as? String {
                 print("📄 Found date string: \(dateString)")
                 startsAt = parseDateTimeString(dateString)
             } else if let timeString = data["time"] as? String {
@@ -246,6 +265,12 @@ final class FirebaseEventRepository: EventRepository {
             } else if let startString = data["start"] as? String {
                 print("📄 Found start string: \(startString)")
                 startsAt = parseDateTimeString(startString)
+            } else if let normalizedStartTime = normalized?["startTimeLocal"] as? String {
+                print("📄 Found normalized startTimeLocal: \(normalizedStartTime)")
+                startsAt = parseDateTimeString(normalizedStartTime)
+            } else if let normalizedStartTimeISO = normalized?["startTimeISO"] as? String {
+                print("📄 Found normalized startTimeISO: \(normalizedStartTimeISO)")
+                startsAt = parseDateTimeString(normalizedStartTimeISO)
             }
         }
         

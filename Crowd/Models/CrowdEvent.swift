@@ -79,7 +79,8 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
         endsAt: Date? = nil,
         tags: [String] = [],
         sourceURL: String? = nil,
-        rawLocationName: String? = nil
+        rawLocationName: String? = nil,
+        imageURL: String? = nil
     ) -> Self {
         // Ensure category is never nil - default to "Chill Hangout"
         let finalCategory = category ?? EventCategory.chillHangout.rawValue
@@ -112,7 +113,7 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             description: description,
             sourceURL: sourceURL,
             rawLocationName: rawLocationName,
-            imageURL: nil,
+            imageURL: imageURL,
             ticketURL: nil
         )
     }

@@ -32,6 +32,7 @@
 		357849892EAC89AB005A3934 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 357849882EAC89AB005A3934 /* FirebaseStorage */; };
 		3578498B2EAC89AB005A3934 /* FirebaseStorageCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = 3578498A2EAC89AB005A3934 /* FirebaseStorageCombine-Community */; };
 		35A1B2C3D4E5F6789012345 /* ComponentsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 35A1B2C3D4E5F6789012346 /* ComponentsKit */; };
+		35E5B3142F135AAE009F2E3E /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 35E5B3132F135AAE009F2E3E /* SDWebImageSwiftUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -92,6 +93,7 @@
 				357849712EAC89AB005A3934 /* FirebaseAuth in Frameworks */,
 				357849632EAC84C6005A3934 /* FirebaseFunctions in Frameworks */,
 				357849692EAC89AB005A3934 /* FirebaseAnalyticsCore in Frameworks */,
+				35E5B3142F135AAE009F2E3E /* SDWebImageSwiftUI in Frameworks */,
 				357849652EAC89AB005A3934 /* FirebaseAI in Frameworks */,
 				3578496B2EAC89AB005A3934 /* FirebaseAnalyticsIdentitySupport in Frameworks */,
 				357849732EAC89AB005A3934 /* FirebaseAuthCombine-Community in Frameworks */,
@@ -210,6 +212,7 @@
 				3578498A2EAC89AB005A3934 /* FirebaseStorageCombine-Community */,
 				3517C53D2EC6AD670038156F /* SuperwallKit */,
 				35A1B2C3D4E5F6789012346 /* ComponentsKit */,
+				35E5B3132F135AAE009F2E3E /* SDWebImageSwiftUI */,
 			);
 			productName = Crowd;
 			productReference = 3549F83E2EA49FED00AADFB0 /* Crowd.app */;
@@ -294,6 +297,7 @@
 				3578495D2EAC84C6005A3934 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				3517C53C2EC6AD670038156F /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
 				35A1B2C3D4E5F6789012347 /* XCRemoteSwiftPackageReference "ComponentsKit" */,
+				35E5B3122F135AAE009F2E3E /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3549F83F2EA49FED00AADFB0 /* Products */;
@@ -753,6 +757,14 @@
 				minimumVersion = 1.5.0;
 			};
 		};
+		35E5B3122F135AAE009F2E3E /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SDWebImage/SDWebImageSwiftUI";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.4;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -880,6 +892,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 35A1B2C3D4E5F6789012347 /* XCRemoteSwiftPackageReference "ComponentsKit" */;
 			productName = ComponentsKit;
+		};
+		35E5B3132F135AAE009F2E3E /* SDWebImageSwiftUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 35E5B3122F135AAE009F2E3E /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */;
+			productName = SDWebImageSwiftUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

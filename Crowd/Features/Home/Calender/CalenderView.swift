@@ -30,6 +30,7 @@ struct CalenderView: View {
     @State private var bannedUserIds: Set<String> = []
     @State private var showEventCreationFlow = false
     @State private var currentPartyImageURL: String?
+    @State private var currentSchoolEventImageURL: String?
     
     // Filtered events based on selected categories
     var filteredEvents: [CrowdEvent] {
@@ -79,58 +80,68 @@ struct CalenderView: View {
                 Spacer()
                 
                 HStack(spacing: 12) {
-                    VStack(alignment: .center, spacing: 4) {
-                        Text("Events")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(.primary)
+                    VStack(alignment: .center, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedTab = .parties
+                                }
+                            } label: {
+                                VStack(spacing: 8) {
+                                    Text("Parties")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(selectedTab == .parties ? .white : .white.opacity(0.3))
+                                    
+                                    ZStack {
+                                        if selectedTab == .parties {
+                                            Capsule()
+                                                .fill(.white)
+                                                .frame(width: 22, height: 3)
+                                        }
+                                    }
+                                    .frame(height: 3)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedTab = .schoolEvents
+                                }
+                            } label: {
+                                VStack(spacing: 6) {
+                                    Text("School Events")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(selectedTab == .schoolEvents ? .white : .white.opacity(0.3))
+                                    
+                                    ZStack {
+                                        if selectedTab == .schoolEvents {
+                                            Capsule()
+                                                .fill(.white)
+                                                .frame(width: 22, height: 3)
+                                        }
+                                    }
+                                    .frame(height: 3)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
                         
                         if selectedTab == .schoolEvents {
-                            Text("\(displayedEvents.count) of \(filteredEvents.count) events")
+                            Text("\(filteredEvents.count) events")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(.secondary)
                         }
-                    }
-                    
-                    if selectedTab == .schoolEvents {
-                        CategoryFilterDropdown(selectedCategories: $selectedCategories)
-                            .padding(.leading, 8)
-                            .padding(.top, 4)
                     }
                 }
                 
                 Spacer()
             }
         }
-        .padding(.top, -44)
+        .padding(.top, 5)
         .padding(.horizontal, 20)
-    }
-    
-    private var tabSwitcher: some View {
-        HStack(spacing: 0) {
-            CalendarTabButton(
-                title: "Parties",
-                isSelected: selectedTab == .parties,
-                action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedTab = .parties
-                    }
-                }
-            )
-            
-            CalendarTabButton(
-                title: "School Events",
-                isSelected: selectedTab == .schoolEvents,
-                action: {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedTab = .schoolEvents
-                    }
-                }
-            )
-        }
-        .frame(height: 48)
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
     }
     
     private var tabContent: some View {
@@ -138,14 +149,19 @@ struct CalenderView: View {
             if selectedTab == .parties {
                 PartiesView(currentPartyImageURL: $currentPartyImageURL)
             } else {
+                VStack(spacing: 0) {
+                    if selectedTab == .schoolEvents {
+                        CategoryFilterDropdown(selectedCategories: $selectedCategories)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
+                            .padding(.bottom, 8)
+                    }
                 SchoolEventsView(
                     filteredEvents: filteredEvents,
-                    displayedEvents: displayedEvents,
-                    hasMoreEvents: hasMoreEvents,
                     selectedCategories: selectedCategories,
-                    displayedEventCount: $displayedEventCount,
-                    eventsPerPage: eventsPerPage
+                    currentSchoolEventImageURL: $currentSchoolEventImageURL
                 )
+                }
             }
         }
     }
@@ -153,10 +169,10 @@ struct CalenderView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Blurred background image - full page (only for parties tab)
-                if selectedTab == .parties {
-                    GeometryReader { geometry in
-                        if let imageURL = currentPartyImageURL {
+                // Blurred background image - full page (for both parties and school events tabs)
+                GeometryReader { geometry in
+                    ZStack {
+                        if let imageURL = selectedTab == .parties ? currentPartyImageURL : currentSchoolEventImageURL {
                             AsyncImage(url: URL(string: imageURL)) { phase in
                                 if case .success(let image) = phase {
                                     image
@@ -164,7 +180,6 @@ struct CalenderView: View {
                                         .scaledToFill()
                                         .frame(width: geometry.size.width, height: geometry.size.height)
                                         .clipped()
-                                        .blur(radius: 30)
                                         .opacity(1)
                                 } else {
                                     Color.clear
@@ -172,42 +187,70 @@ struct CalenderView: View {
                             }
                             .frame(width: geometry.size.width, height: geometry.size.height)
                             .ignoresSafeArea(edges: .all)
+                            
+                            // Glass background overlay
+                            Color.clear
+                                .background(.ultraThinMaterial)
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .ignoresSafeArea(edges: .all)
                         }
                     }
-                    .ignoresSafeArea(edges: .all)
                 }
+                .ignoresSafeArea(edges: .all)
+                .allowsHitTesting(false)
                 
                 VStack(spacing: 0) {
                     headerView
-                    tabSwitcher
                     tabContent
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(selectedTab == .parties ? Color.clear : Color.white)
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showEventCreationFlow = true
+                .zIndex(1)
+                
+                // Custom navigation bar
+                VStack(spacing: 0) {
+                    HStack {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundStyle(.white)
                         }
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundStyle(.primary)
+                        .padding(.leading, 20)
+                        
+                        Spacer()
+                        
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showEventCreationFlow = true
+                            }
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(.white)
+                                    .frame(width: 28, height: 28)
+                                Image(systemName: "plus")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(.black)
+                            }
+                        }
+                        .padding(.trailing, 20)
                     }
+                    .frame(height: 44)
+                    Spacer()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .zIndex(2)
             }
+            .gesture(
+                DragGesture()
+                    .onEnded { value in
+                        if value.startLocation.x < 20 && value.translation.width > 100 {
+                            dismiss()
+                        }
+                    }
+            )
             .task {
                 await loadModerationData()
             }
@@ -290,17 +333,22 @@ struct CalendarTabButton: View {
     
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 16, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? .primary : .secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(
-                    isSelected
-                    ? Color.primary.opacity(0.1)
-                    : Color.clear
-                )
-                .cornerRadius(12)
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 16))
+                    .foregroundColor(isSelected ? .white : .white.opacity(0.6))
+                
+                ZStack {
+                    if isSelected {
+                        Capsule()
+                            .fill(.white)
+                            .frame(width: 22, height: 3)
+                    }
+                }
+                .frame(height: 3)
+            }
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -616,64 +664,580 @@ struct EventCardView: View {
 // MARK: - School Events View
 struct SchoolEventsView: View {
     let filteredEvents: [CrowdEvent]
-    let displayedEvents: [CrowdEvent]
-    let hasMoreEvents: Bool
     let selectedCategories: Set<EventCategory>
-    @Binding var displayedEventCount: Int
-    let eventsPerPage: Int
+    @Binding var currentSchoolEventImageURL: String?
+    
+    @State private var selectedEvent: CrowdEvent? = nil
+    @State private var currentEventIndex: Int = 0
+    @State private var visibleIndices: Set<Int> = []
+    @StateObject private var imageLoader = OptimizedImageLoader.shared
+    
+    // Only show first 8 images initially, then load more as needed
+    private let initialLoadCount = 8
     
     var body: some View {
-        if filteredEvents.isEmpty {
-            VStack(spacing: 20) {
-                Image(systemName: "calendar.badge.clock")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.gray.opacity(0.5))
-                
-                Text(selectedCategories.isEmpty ? "No upcoming events" : "No events match selected categories")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(.secondary)
-                
-                Text(selectedCategories.isEmpty ? "Check back later for new campus events" : "Try selecting different categories or clear the filter")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+        Group {
+            if filteredEvents.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.gray.opacity(0.5))
+                    
+                    Text(selectedCategories.isEmpty ? "No upcoming events" : "No events match selected categories")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    
+                    Text(selectedCategories.isEmpty ? "Check back later for new campus events" : "Try selecting different categories or clear the filter")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 60)
+            } else {
+                GeometryReader { geometry in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(filteredEvents.enumerated()), id: \.element.id) { index, event in
+                                Button(action: {
+                                    print("🎉 School event card tapped: \(event.title)")
+                                    selectedEvent = event
+                                }) {
+                                    SchoolEventCardView(
+                                        event: event,
+                                        index: index,
+                                        isVisible: visibleIndices.contains(index),
+                                        priority: index < initialLoadCount
+                                    )
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .frame(width: geometry.size.width - 30, height: geometry.size.height)
+                                .containerRelativeFrame(.vertical)
+                                .contentShape(Rectangle())
+                                .id(index)
+                                .onAppear {
+                                    handleViewportAppear(index: index, geometry: geometry)
+                                }
+                                .onDisappear {
+                                    handleViewportDisappear(index: index)
+                                }
+                            }
+                        }
+                        .scrollTargetLayout()
+                        .padding(.horizontal, 15)
+                    }
+                    .scrollTargetBehavior(.paging)
+                    .scrollIndicators(.hidden)
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.top, 60)
-        } else {
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    ForEach(displayedEvents) { event in
-                        EventCardView(event: event)
+        }
+        .onAppear {
+            print("🎉 School events view appeared - \(filteredEvents.count) events")
+            // Preload first 8 images immediately
+            Task {
+                await preloadInitialImages()
+            }
+            if !filteredEvents.isEmpty {
+                currentSchoolEventImageURL = filteredEvents[0].imageURL
+                print("📸 Set initial school event image URL: \(filteredEvents[0].imageURL ?? "nil")")
+            }
+        }
+        .onChange(of: currentEventIndex) { oldValue, newValue in
+            if newValue >= 0 && newValue < filteredEvents.count {
+                currentSchoolEventImageURL = filteredEvents[newValue].imageURL
+                print("📸 School event index changed to \(newValue), image URL: \(filteredEvents[newValue].imageURL ?? "nil")")
+            }
+        }
+        .onChange(of: filteredEvents) { oldValue, newValue in
+            print("🔄 Filtered school events changed: \(oldValue.count) -> \(newValue.count)")
+            // Update image URL when filtered events change
+            if !newValue.isEmpty && (currentEventIndex >= newValue.count || currentSchoolEventImageURL == nil) {
+                currentSchoolEventImageURL = newValue[0].imageURL
+                print("📸 Updated school event image URL after filter: \(newValue[0].imageURL ?? "nil")")
+            }
+        }
+        .onChange(of: selectedEvent) { oldValue, newValue in
+            if newValue != nil {
+                print("🎉 Selected school event changed: \(newValue?.title ?? "nil")")
+            }
+        }
+        .fullScreenCover(item: $selectedEvent) { event in
+            SchoolEventDetailView(event: event)
+        }
+    }
+    
+    private func handleViewportAppear(index: Int, geometry: GeometryProxy) {
+        currentEventIndex = index
+        if index < filteredEvents.count {
+            let event = filteredEvents[index]
+            currentSchoolEventImageURL = event.imageURL
+            print("📸 School event card appeared at index \(index): \(event.title), image URL: \(event.imageURL ?? "nil")")
+        }
+        
+        // Add to visible indices
+        visibleIndices.insert(index)
+        
+        // Update viewport tracking
+        updateViewportIndices()
+    }
+    
+    private func handleViewportDisappear(index: Int) {
+        visibleIndices.remove(index)
+        // Don't update immediately on disappear to avoid thrashing
+        // The next appear will update the viewport
+    }
+    
+    private func updateViewportIndices() {
+        // Calculate viewport range (current index ± 2 screens)
+        let viewportSize = 2
+        guard let currentIndex = visibleIndices.min() else { return }
+        
+        let expandedIndices = visibleIndices.flatMap { index in
+            (max(0, index - viewportSize)...min(filteredEvents.count - 1, index + viewportSize)).map { $0 }
+        }
+        let viewportSet = Set(expandedIndices)
+        
+        // Update image loader viewport
+        imageLoader.updateViewport(
+            visibleIndices: viewportSet,
+            allEvents: filteredEvents,
+            viewportSize: viewportSize
+        )
+    }
+    
+    private func preloadInitialImages() async {
+        // Preload first 8 images with priority
+        let preloadRange = min(initialLoadCount, filteredEvents.count)
+        print("🎉 Starting school event image preload for \(preloadRange) images")
+        for index in 0..<preloadRange {
+            guard let imageURL = filteredEvents[index].imageURL else { continue }
+            let eventTitle = filteredEvents[index].title
+            print("📸 Preloading school event image \(index + 1)/\(preloadRange): \(eventTitle)")
+            _ = await imageLoader.loadPlaceholder(for: imageURL, width: 350, height: 450)
+            _ = await imageLoader.loadImage(for: imageURL, width: 350, height: 450, priority: true)
+            print("✅ Preloaded school event image \(index + 1)/\(preloadRange): \(eventTitle)")
+        }
+        print("✅ Completed school event image preload for \(preloadRange) images")
+    }
+}
+
+// MARK: - School Event Card View
+struct SchoolEventCardView: View {
+    let event: CrowdEvent
+    let index: Int
+    let isVisible: Bool
+    let priority: Bool
+    
+    @State private var isAttending = false
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Event Image - Top to Middle (Optimized)
+            OptimizedEventImage(
+                imageURL: event.imageURL,
+                width: 350,
+                height: 450,
+                contentMode: .fill,
+                priority: priority
+            )
+            .frame(maxWidth: .infinity)
+            .clipped()
+            
+            // Details Section - Bottom
+            VStack(alignment: .leading, spacing: 12) {
+                // Title
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(event.title)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                }
+                
+                // Description
+                if let description = event.description {
+                    let lines = description.components(separatedBy: "\n")
+                    if let first = lines.first, !first.isEmpty {
+                        Text(first)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                
+                // Time with emoji
+                if let startsAt = event.startsAt {
+                    HStack(spacing: 6) {
+                        Text("📅")
+                            .font(.system(size: 14))
+                        Text(formatEventTime(startsAt))
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                // Address with emoji
+                if let address = event.rawLocationName, !address.isEmpty {
+                    HStack(spacing: 6) {
+                        Text("📍")
+                            .font(.system(size: 14))
+                        Text(address)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                
+                // Action Buttons
+                VStack(spacing: 12) {
+                    // I'm Attending Button
+                    Button(action: {
+                        Task {
+                            if !isAttending {
+                                await MainActor.run {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        isAttending = true
+                                        AttendedEventsService.shared.addAttendedEvent(event)
+                                    }
+                                }
+                            } else {
+                                await MainActor.run {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        isAttending = false
+                                        AttendedEventsService.shared.removeAttendedEvent(event.id)
+                                    }
+                                }
+                            }
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: isAttending ? "checkmark.circle.fill" : "hand.thumbsup.fill")
+                                .font(.system(size: 14))
+                            Text(isAttending ? "Attending" : "I'm Attending")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(isAttending ? Color.green : Color.accentColor)
+                        )
                     }
                     
-                    // Load more button
-                    if hasMoreEvents {
+                    // More Info Button
+                    if let sourceURL = event.sourceURL {
                         Button(action: {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                displayedEventCount += eventsPerPage
+                            if let url = URL(string: sourceURL) {
+                                UIApplication.shared.open(url)
                             }
                         }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "arrow.down.circle.fill")
-                                    .font(.system(size: 16))
-                                Text("Load More Events")
-                                    .font(.system(size: 16, weight: .medium))
+                            HStack {
+                                Image(systemName: "link")
+                                    .font(.system(size: 14))
+                                Text("More Info")
+                                    .font(.system(size: 14, weight: .semibold))
                             }
                             .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
                             .background(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(Color.accentColor)
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.black)
                             )
+                        }
+                    }
+                }
+                .padding(.top, 8)
+            }
+            .padding(16)
+        }
+        .frame(maxWidth: 350, minHeight: 600)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white)
+        )
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(.primary.opacity(0.1), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+        .onAppear {
+            isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
+        }
+    }
+    
+    private func formatEventTime(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        
+        if calendar.isDateInToday(date) {
+            return "Today at \(formatter.string(from: date))"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow at \(formatter.string(from: date))"
+        } else {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .medium
+            dateFormatter.timeStyle = .short
+            return dateFormatter.string(from: date)
+        }
+    }
+}
+
+// MARK: - School Event Detail View
+struct SchoolEventDetailView: View {
+    let event: CrowdEvent
+    @Environment(\.dismiss) private var dismiss
+    @State private var isAttending = false
+    
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Event Image - Full Width (Optimized)
+                    OptimizedEventImage(
+                        imageURL: event.imageURL,
+                        width: UIScreen.main.bounds.width,
+                        height: 400,
+                        contentMode: .fill,
+                        priority: true
+                    )
+                
+                    // Content Section
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Title
+                        Text(event.title)
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .padding(.top, 20)
+                        
+                        // Description
+                        if let description = event.description, !description.isEmpty {
+                            Text(description)
+                                .font(.system(size: 16))
+                                .foregroundStyle(.secondary)
+                                .lineSpacing(4)
+                                .padding(.top, 8)
+                        }
+                        
+                        // Date
+                        if let startsAt = event.startsAt {
+                            HStack(spacing: 4) {
+                                Text("Date:")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Text("📅")
+                                    .font(.system(size: 18))
+                                Text(formatFullDate(startsAt))
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                            }
+                        }
+                        
+                        // Location
+                        if let location = event.rawLocationName, !location.isEmpty {
+                            HStack(spacing: 4) {
+                                Text("Location:")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Button(action: {
+                                    openLocationInMaps(address: location, coordinate: event.coordinates)
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Text(location)
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundStyle(.blue)
+                                            .underline()
+                                        Image(systemName: "arrow.up.right.square")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(.blue)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                        
+                        // Action Buttons
+                        VStack(spacing: 12) {
+                            // More Info Button
+                            if let sourceURL = event.sourceURL {
+                                Button(action: {
+                                    if let url = URL(string: sourceURL) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: "link")
+                                            .font(.system(size: 18))
+                                        Text("More Info")
+                                            .font(.system(size: 17, weight: .semibold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(Color.black)
+                                    )
+                                }
+                            }
+                            
+                            // I'm Attending Button
+                            Button(action: {
+                                Task {
+                                    if !isAttending {
+                                        await MainActor.run {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                isAttending = true
+                                                AttendedEventsService.shared.addAttendedEvent(event)
+                                            }
+                                        }
+                                    } else {
+                                        await MainActor.run {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                isAttending = false
+                                                AttendedEventsService.shared.removeAttendedEvent(event.id)
+                                            }
+                                        }
+                                    }
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: isAttending ? "checkmark.circle.fill" : "hand.thumbsup.fill")
+                                        .font(.system(size: 18))
+                                    Text(isAttending ? "Attending" : "I'm Attending")
+                                        .font(.system(size: 17, weight: .semibold))
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(isAttending ? Color.green : Color.accentColor)
+                                )
+                            }
+                            
+                            // Share Button
+                            Button(action: {
+                                shareEvent()
+                            }) {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 18))
+                                    Text("Share")
+                                        .font(.system(size: 17, weight: .semibold))
+                                }
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(Color(.systemGray6))
+                                )
+                            }
                         }
                         .padding(.top, 8)
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
             }
+            
+            // Close Button - Floating at top
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 32))
+                            .background(Circle().fill(Color.black.opacity(0.3)).frame(width: 36, height: 36))
+                    }
+                    .padding(.trailing, 20)
+                    .padding(.top, 16)
+                }
+                Spacer()
+            }
+        }
+        .onAppear {
+            isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
+        }
+    }
+    
+    private func openLocationInMaps(address: String, coordinate: CLLocationCoordinate2D) {
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        mapItem.name = address
+        mapItem.openInMaps(launchOptions: [
+            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+        ])
+    }
+    
+    private func formatFullDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE MMM d, yyyy"
+        return formatter.string(from: date)
+    }
+    
+    private func shareEvent() {
+        AnalyticsService.shared.track("invite_sent", props: [
+            "event_id": event.id,
+            "title": event.title
+        ])
+        let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+        let zone = coordinate.geohash(precision: 4)
+        AnalyticsService.shared.logToFirestore(
+            eventName: "invite_sent",
+            properties: [
+                "event_id": event.id,
+                "title": event.title
+            ],
+            zone: zone
+        )
+        
+        var shareItems: [Any] = []
+        shareItems.append(event.title)
+        
+        if let description = event.description {
+            shareItems.append(description)
+        }
+        
+        if let startsAt = event.startsAt {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            shareItems.append("Time: \(formatter.string(from: startsAt))")
+        }
+        
+        if let sourceURL = event.sourceURL {
+            shareItems.append(sourceURL)
+        }
+        
+        let activityViewController = UIActivityViewController(
+            activityItems: shareItems,
+            applicationActivities: nil
+        )
+        
+        if let popover = activityViewController.popoverPresentationController {
+            popover.sourceView = UIApplication.shared.windows.first
+            popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height / 2, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootViewController = window.rootViewController {
+            var topController = rootViewController
+            while let presentedController = topController.presentedViewController {
+                topController = presentedController
+            }
+            topController.present(activityViewController, animated: true)
         }
     }
 }
@@ -727,8 +1291,9 @@ struct PartiesView: View {
                                     PartyCardView(party: party)
                                 }
                                 .buttonStyle(PlainButtonStyle())
+                                .frame(width: geometry.size.width - 30)
                                 .frame(height: geometry.size.height)
-                                .frame(maxWidth: .infinity)
+                                .containerRelativeFrame(.vertical)
                                 .contentShape(Rectangle())
                                 .id(index)
                                 .onAppear {
@@ -739,9 +1304,11 @@ struct PartiesView: View {
                                 }
                             }
                         }
+                        .scrollTargetLayout()
                         .padding(.horizontal, 15)
                     }
                     .scrollTargetBehavior(.paging)
+                    .scrollIndicators(.hidden)
                 }
             }
         }
@@ -756,6 +1323,11 @@ struct PartiesView: View {
         .onChange(of: selectedParty) { oldValue, newValue in
             if newValue != nil {
                 print("🎉 Selected party changed: \(newValue?.title ?? "nil")")
+            }
+        }
+        .onChange(of: currentPartyIndex) { oldValue, newValue in
+            if newValue >= 0 && newValue < parties.count {
+                currentPartyImageURL = parties[newValue].imageURL
             }
         }
     }
@@ -792,6 +1364,10 @@ struct PartiesView: View {
             await MainActor.run {
                 parties = sortedParties
                 currentPartyIndex = 0
+                // Set initial background image to first party
+                if !sortedParties.isEmpty {
+                    currentPartyImageURL = sortedParties[0].imageURL
+                }
                 isLoading = false
             }
         } catch {
@@ -813,9 +1389,11 @@ struct PartyCardView: View {
             // Event Image - Top to Middle
             CachedEventImage(
                 imageURL: party.imageURL,
-                height: 300,
+                height: 450,
                 contentMode: .fill
             )
+            .frame(maxWidth: .infinity)
+            .clipped()
             
             // Details Section - Bottom
             VStack(alignment: .leading, spacing: 12) {
@@ -896,7 +1474,7 @@ struct PartyCardView: View {
             }
             .padding(16)
         }
-        .frame(minHeight: 450)
+        .frame(maxWidth: 350, minHeight: 600)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)
@@ -1129,7 +1707,6 @@ struct PartyDetailView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 32))
-                            .foregroundStyle(.white)
                             .background(Circle().fill(Color.black.opacity(0.3)).frame(width: 36, height: 36))
                     }
                     .padding(.trailing, 20)

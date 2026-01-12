@@ -20,6 +20,7 @@ struct CampusEventLive: Codable, Identifiable {
     let sourceOrg: String         // "bsu_unt" or "UNT Official"
     let sourceUrl: String
     let tags: [String]?           // Tags from Firebase
+    let imageUrl: String?         // Image URL from Firestore (note: lowercase 'u' in Url)
 
     let confidence: Double?
     let createdAt: Timestamp?

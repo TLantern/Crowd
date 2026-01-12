@@ -166,6 +166,14 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
         return fallbackCoord
     }()
 
+    // Extract image URL from Firestore (handles both imageUrl and imageURL)
+    let imageURL: String? = {
+        if let url = live.imageUrl, !url.isEmpty {
+            return url.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return nil
+    }()
+    
     var ev = CrowdEvent.newDraft(
         at: coord,
         title: displayTitle,
@@ -177,7 +185,8 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
         endsAt: endsAtDate,
         tags: tags,
         sourceURL: validSource,
-        rawLocationName: (live.locationName?.isEmpty == false ? live.locationName : live.location)
+        rawLocationName: (live.locationName?.isEmpty == false ? live.locationName : live.location),
+        imageURL: imageURL
     )
     // Use source document id when available so the same event keeps a stable id across fetches
     if let liveId = live.id, !liveId.isEmpty { ev.id = liveId }
