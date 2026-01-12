@@ -8,7 +8,6 @@
 import SwiftUI
 import FirebaseCore
 import FirebaseAnalytics
-import SDWebImage
 
 @main
 struct CrowdApp: App {
@@ -24,31 +23,8 @@ struct CrowdApp: App {
         // Initialize Firebase and connect to emulators
         _ = FirebaseManager.shared
         
-        // Configure SDWebImage cache
-        configureImageCache()
-        
         // Configure push notifications
         NotificationService.shared.configure()
-    }
-    
-    private func configureImageCache() {
-        let cache = SDImageCache.shared
-        
-        // Memory cache: 200 MB
-        cache.config.maxMemoryCost = 200 * 1024 * 1024
-        cache.config.maxMemoryCount = 150
-        
-        // Disk cache: 2 GB (handles thousands of event images)
-        cache.config.maxDiskSize = 2 * 1024 * 1024 * 1024
-        
-        // Cache lifetime: 30 days (persistent across sessions)
-        cache.config.maxDiskAge = 60 * 60 * 24 * 30
-        
-        // Memory caching enabled
-        cache.config.shouldCacheImagesInMemory = true
-        
-        // Disk cache format: prefer speed over space
-        cache.config.diskCacheExpireType = .modificationDate
     }
 
     var body: some Scene {

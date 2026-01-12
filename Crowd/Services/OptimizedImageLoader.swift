@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SDWebImage
 import Combine
 
 @MainActor
@@ -16,7 +15,7 @@ final class OptimizedImageLoader: ObservableObject {
     @Published var loadedImages: [String: UIImage] = [:]
     @Published var placeholderImages: [String: UIImage] = [:]
     
-    private let cache = SDImageCache.shared
+    private var memoryCache = NSCache<NSString, UIImage>()
     private var loadingTasks: [String: Task<Void, Never>] = [:]
     private var viewportIndices: Set<Int> = []
     private var prefetchQueue: Set<String> = []
@@ -27,11 +26,8 @@ final class OptimizedImageLoader: ObservableObject {
     
     private func configureCache() {
         // Optimize cache for performance
-        cache.config.maxMemoryCost = 150 * 1024 * 1024 // 150MB memory
-        cache.config.maxMemoryCount = 50 // Limit concurrent images in memory
-        cache.config.maxDiskSize = 2 * 1024 * 1024 * 1024 // 2GB disk
-        cache.config.shouldCacheImagesInMemory = true
-        cache.config.shouldUseWeakMemoryCache = true
+        memoryCache.countLimit = 100 // Limit concurrent images in memory
+        memoryCache.totalCostLimit = 150 * 1024 * 1024 // 150MB memory
     }
     
     /// Generate optimized URL (no CDN parameters, use raw URL like parties)
@@ -59,9 +55,9 @@ final class OptimizedImageLoader: ObservableObject {
             return cached
         }
         
-        let key = cacheKey(for: urlString, isPlaceholder: true)
-        // Check SDWebImage memory cache
-        if let cached = cache.imageFromMemoryCache(forKey: key) {
+        let key = cacheKey(for: urlString, isPlaceholder: true) as NSString
+        // Check NSCache
+        if let cached = memoryCache.object(forKey: key) {
             placeholderImages[urlString] = cached
             return cached
         }
@@ -76,7 +72,7 @@ final class OptimizedImageLoader: ObservableObject {
             return cached
         }
         
-        let key = cacheKey(for: urlString, isPlaceholder: true)
+        let key = cacheKey(for: urlString, isPlaceholder: true) as NSString
         
         guard let url = placeholderURL(from: urlString) else { return nil }
         
@@ -86,7 +82,7 @@ final class OptimizedImageLoader: ObservableObject {
                 // Resize to match target size
                 let resized = image.resized(to: CGSize(width: width, height: height))
                 placeholderImages[urlString] = resized
-                cache.store(resized, forKey: key, completion: nil)
+                memoryCache.setObject(resized, forKey: key)
                 return resized
             }
         } catch {
@@ -98,15 +94,15 @@ final class OptimizedImageLoader: ObservableObject {
     
     /// Load high-res image with caching
     func loadImage(for urlString: String, width: CGFloat, height: CGFloat, priority: Bool = false) async -> UIImage? {
-        let key = cacheKey(for: urlString, isPlaceholder: false)
+        let key = cacheKey(for: urlString, isPlaceholder: false) as NSString
         
         // Check memory cache first
         if let cached = loadedImages[urlString] {
             return cached
         }
         
-        // Check disk cache
-        if let cached = cache.imageFromMemoryCache(forKey: key) {
+        // Check NSCache
+        if let cached = memoryCache.object(forKey: key) {
             loadedImages[urlString] = cached
             return cached
         }
@@ -118,15 +114,6 @@ final class OptimizedImageLoader: ObservableObject {
         
         let task = Task { [weak self] in
             guard let self = self else { return }
-            
-            // Check disk cache (synchronous check)
-            let diskImage = self.cache.imageFromDiskCache(forKey: key)
-            if let disk = diskImage {
-                await MainActor.run {
-                    self.loadedImages[urlString] = disk
-                }
-                return
-            }
             
             guard let url = self.optimizedURL(from: urlString, width: width, height: height),
                   !Task.isCancelled else { return }
@@ -146,7 +133,7 @@ final class OptimizedImageLoader: ObservableObject {
                     }
                     
                     // Store in cache
-                    self.cache.store(finalImage, forKey: key, toDisk: true, completion: nil)
+                    self.memoryCache.setObject(finalImage, forKey: key)
                 }
             } catch {
                 // Silent failure
@@ -232,4 +219,3 @@ extension UIImage {
         }
     }
 }
-

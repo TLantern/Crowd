@@ -2,11 +2,10 @@
 //  CachedEventImage.swift
 //  Crowd
 //
-//  Reusable cached event image component using SDWebImage
+//  Reusable cached event image component using native SwiftUI AsyncImage
 //
 
 import SwiftUI
-import SDWebImageSwiftUI
 
 struct CachedEventImage: View {
     let url: URL?
@@ -24,22 +23,28 @@ struct CachedEventImage: View {
     }
     
     var body: some View {
-        WebImage(url: url) { image in
-            image
-                .resizable()
-                .aspectRatio(contentMode: contentMode)
-        } placeholder: {
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .overlay(ProgressView())
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .empty:
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .overlay(ProgressView())
+            case .success(let image):
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+            case .failure:
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .overlay(
+                        Image(systemName: "photo")
+                            .foregroundStyle(.gray)
+                    )
+            @unknown default:
+                EmptyView()
+            }
         }
-        .onFailure { error in
-            print("❌ Failed to load event image: \(error.localizedDescription)")
-        }
-        .indicator(.activity)
-        .transition(.fade(duration: 0.3))
         .frame(height: height)
         .clipped()
     }
 }
-
