@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct PartiesOnboardingView: View {
     @EnvironmentObject var appState: AppState
@@ -381,7 +382,7 @@ struct EventOnboardingCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // Event image
             ZStack(alignment: .topTrailing) {
-                if let imageUrl = event.imageUrl, let url = URL(string: imageUrl) {
+                if let imageUrl = event.imageURL, let url = URL(string: imageUrl) {
                     AsyncImage(url: url) { phase in
                         switch phase {
                         case .success(let image):
@@ -406,7 +407,8 @@ struct EventOnboardingCard: View {
                 }
                 
                 // Category badge
-                if let category = event.category {
+                if let categoryStr = event.category, 
+                   let category = EventCategory(rawValue: categoryStr) {
                     Text(category.emoji)
                         .font(.system(size: 24))
                         .padding(8)
@@ -437,7 +439,7 @@ struct EventOnboardingCard: View {
                 }
                 
                 // Location
-                if let location = event.locationName {
+                if let location = event.rawLocationName {
                     HStack(spacing: 6) {
                         Image(systemName: "mappin")
                             .font(.system(size: 14))
@@ -452,18 +454,7 @@ struct EventOnboardingCard: View {
                 
                 // Social proof row
                 HStack(spacing: 16) {
-                    // View count
-                    if event.viewCount > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "eye.fill")
-                                .font(.system(size: 12))
-                            Text("\(event.viewCount) views")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .foregroundColor(.gray)
-                    }
-                    
-                    // Interest count
+                    // Interest count (attendee count)
                     if event.attendeeCount > 0 {
                         HStack(spacing: 4) {
                             Image(systemName: "person.2.fill")
@@ -472,6 +463,17 @@ struct EventOnboardingCard: View {
                                 .font(.system(size: 12, weight: .medium))
                         }
                         .foregroundColor(Color(hex: 0x02853E))
+                    }
+                    
+                    // Signal strength as engagement indicator
+                    if event.signalStrength > 0 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 12))
+                            Text("Hot")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(.orange)
                     }
                     
                     Spacer()
@@ -523,15 +525,18 @@ class PartiesOnboardingViewModel: ObservableObject {
         
         Task {
             do {
-                // Fetch parties and official events
-                async let parties = repository.fetchParties()
-                async let officialEvents = repository.fetchOfficialEvents()
+                // Get the selected campus region, default to UNT if not set
+                let region = OnboardingCoordinator.shared.selectedCampusRegion
                 
-                let allParties = try await parties
-                let allOfficial = try await officialEvents
+                // Fetch parties and official events in parallel
+                async let partiesResult = repository.fetchParties()
+                async let eventsResult = repository.fetchEventsSeparately(in: region)
                 
-                // Combine and sort by date
-                var combined = allParties + allOfficial
+                let allParties = try await partiesResult
+                let (officialEvents, _) = try await eventsResult
+                
+                // Combine parties and official events, sort by date
+                var combined = allParties + officialEvents
                 combined.sort { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
                 
                 // Show at least 3, up to 10 events
