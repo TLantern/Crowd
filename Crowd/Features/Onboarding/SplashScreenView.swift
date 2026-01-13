@@ -152,7 +152,8 @@ struct TypewriterOverlay: View {
                 ForEach(0..<min(translations.count, positions.count), id: \.self) { index in
                     TypewriterText(
                         text: translations[index].text,
-                        delay: Double(index) * 0.3
+                        delay: Double(index) * 0.25,
+                        colorIndex: index
                     )
                     .position(
                         x: geometry.size.width * positions[index].x,
@@ -169,16 +170,36 @@ struct TypewriterOverlay: View {
 struct TypewriterText: View {
     let text: String
     let delay: Double
+    let colorIndex: Int
     
     @State private var displayedText: String = ""
     @State private var opacity: Double = 0
+    @State private var scale: CGFloat = 0.8
     @State private var isTyping: Bool = false
+    
+    // Vibrant colors for pop effect
+    private let colors: [Color] = [
+        Color(hex: 0x02853E),      // Crowd green
+        Color(hex: 0xFF6B35),      // Orange
+        Color(hex: 0x4ECDC4),      // Teal
+        Color(hex: 0xFFE66D),      // Yellow
+        Color(hex: 0xFF6B6B),      // Coral
+        Color(hex: 0x95E1D3),      // Mint
+        Color(hex: 0xDDA0DD),      // Plum
+        Color(hex: 0x98D8C8),      // Sea green
+    ]
+    
+    private var textColor: Color {
+        colors[colorIndex % colors.count]
+    }
     
     var body: some View {
         Text(displayedText)
-            .font(.system(size: CGFloat.random(in: 14...22), weight: .medium))
-            .foregroundColor(Color.black.opacity(0.15))
+            .font(.system(size: CGFloat.random(in: 18...28), weight: .black))
+            .foregroundColor(textColor)
+            .shadow(color: textColor.opacity(0.5), radius: 4, x: 0, y: 2)
             .opacity(opacity)
+            .scaleEffect(scale)
             .onAppear {
                 startTypewriter()
             }
@@ -186,8 +207,10 @@ struct TypewriterText: View {
     
     private func startTypewriter() {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            withAnimation(.easeIn(duration: 0.2)) {
+            // Pop in animation
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
                 opacity = 1.0
+                scale = 1.0
             }
             
             isTyping = true
@@ -197,14 +220,16 @@ struct TypewriterText: View {
     
     private func typeNextCharacter(index: Int) {
         guard index < text.count else {
-            // Typing complete - fade out after a moment
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                withAnimation(.easeOut(duration: 0.5)) {
+            // Typing complete - pop out after a moment
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation(.easeOut(duration: 0.3)) {
                     opacity = 0
+                    scale = 1.2
                 }
                 // Restart after fade
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     displayedText = ""
+                    scale = 0.8
                     startTypewriter()
                 }
             }
@@ -213,7 +238,7 @@ struct TypewriterText: View {
         
         let charIndex = text.index(text.startIndex, offsetBy: index)
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
             displayedText += String(text[charIndex])
             typeNextCharacter(index: index + 1)
         }
