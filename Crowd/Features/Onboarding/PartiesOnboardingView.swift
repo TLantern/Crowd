@@ -18,6 +18,7 @@ struct PartiesOnboardingView: View {
     @State private var hasViewedMinimumEvents: Bool = false // Track if user has swiped enough
     @State private var eventsViewedCount: Int = 0 // Count of events user has seen
     @State private var showCalendarHighlight: Bool = false // Show calendar tab highlight on last event
+    @State private var showFinalCalendarReminder: Bool = false // Final reminder before completion
     
     let onComplete: () -> Void
     let onIntentAction: (IntentAction) -> Void
@@ -58,6 +59,11 @@ struct PartiesOnboardingView: View {
             // Calendar tab highlight overlay (shown on 4th event)
             if showCalendarHighlight {
                 calendarHighlightOverlay
+            }
+            
+            // Final calendar reminder before completion
+            if showFinalCalendarReminder {
+                finalCalendarReminderOverlay
             }
         }
         .onAppear {
@@ -250,6 +256,106 @@ struct PartiesOnboardingView: View {
                     }
                     .padding(.bottom, 20)
                 }
+            }
+        }
+        .transition(.opacity)
+    }
+    
+    // MARK: - Final Calendar Reminder Overlay
+    
+    private var finalCalendarReminderOverlay: some View {
+        ZStack {
+            // Dark overlay
+            Color.black.opacity(0.9)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                Spacer()
+                
+                // Reminder content
+                VStack(spacing: 20) {
+                    // Calendar icon with pulsing effect
+                    ZStack {
+                        Circle()
+                            .fill(Color(hex: 0x02853E).opacity(0.15))
+                            .frame(width: 120, height: 120)
+                        
+                        Circle()
+                            .fill(Color(hex: 0x02853E).opacity(0.25))
+                            .frame(width: 90, height: 90)
+                        
+                        Image(systemName: "calendar")
+                            .font(.system(size: 40, weight: .medium))
+                            .foregroundColor(Color(hex: 0x02853E))
+                    }
+                    
+                    // Message
+                    VStack(spacing: 8) {
+                        Text("One last thing! 👆")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text("Remember, you can always find\nparties and events here!")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(4)
+                    }
+                    
+                    // Arrow pointing to calendar
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(Color(hex: 0x02853E))
+                        .padding(.top, 8)
+                    
+                    // Calendar tab highlight
+                    VStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 28))
+                            .foregroundColor(Color(hex: 0x02853E))
+                        Text("Parties")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color(hex: 0x02853E))
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(hex: 0x02853E).opacity(0.2))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color(hex: 0x02853E), lineWidth: 2)
+                            )
+                    )
+                    
+                    // All set button
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showFinalCalendarReminder = false
+                        }
+                        
+                        AnalyticsService.shared.track("final_calendar_reminder_dismissed", props: [:])
+                        
+                        // Complete onboarding
+                        OnboardingCoordinator.shared.completePartiesGuide()
+                        onComplete()
+                    }) {
+                        Text("All Set! 🎉")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color(hex: 0x02853E))
+                            )
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.top, 20)
+                }
+                .padding(.horizontal, 24)
+                
+                Spacer()
             }
         }
         .transition(.opacity)
@@ -539,8 +645,10 @@ struct PartiesOnboardingView: View {
                     type: "pulling_up",
                     eventId: viewModel.events.last?.id,
                     completion: {
-                        OnboardingCoordinator.shared.completePartiesGuide()
-                        onComplete()
+                        // Show final calendar reminder before completing
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showFinalCalendarReminder = true
+                        }
                     }
                 ))
             }) {
@@ -558,10 +666,12 @@ struct PartiesOnboardingView: View {
                 )
             }
             
-            // Secondary - Continue to explore
+            // Secondary - Continue to explore (shows final reminder first)
             Button(action: {
-                OnboardingCoordinator.shared.completePartiesGuide()
-                onComplete()
+                // Show final calendar reminder before completing
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showFinalCalendarReminder = true
+                }
             }) {
                 Text("Continue to Map")
                     .font(.system(size: 16, weight: .semibold))
