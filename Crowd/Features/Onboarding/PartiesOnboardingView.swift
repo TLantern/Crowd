@@ -17,13 +17,13 @@ struct PartiesOnboardingView: View {
     @State private var showIntentCTA: Bool = false
     @State private var hasViewedMinimumEvents: Bool = false // Track if user has swiped enough
     @State private var eventsViewedCount: Int = 0 // Count of events user has seen
-    @State private var hasSeenCalendarIntro: Bool = false // Track if user clicked calendar intro
+    @State private var showCalendarHighlight: Bool = false // Show calendar tab highlight on last event
     
     let onComplete: () -> Void
     let onIntentAction: (IntentAction) -> Void
     
-    // Minimum events user must view before they can skip
-    private let minimumEventsToView = 3
+    // Minimum events user must view before they can skip (4 events, last one shows calendar highlight)
+    private let minimumEventsToView = 4
     
     var body: some View {
         ZStack {
@@ -31,37 +31,38 @@ struct PartiesOnboardingView: View {
             Color.black.opacity(0.95)
                 .ignoresSafeArea()
             
-            if !hasSeenCalendarIntro {
-                // STEP 1: Show calendar tab intro first
-                calendarIntroView
-            } else {
-                // STEP 2: Show events swiping
-                VStack(spacing: 0) {
-                    // Header with progress and exit
-                    headerView
+            // Main content
+            VStack(spacing: 0) {
+                // Header with progress and exit
+                headerView
+                
+                if viewModel.isLoading {
+                    loadingView
+                } else if viewModel.events.isEmpty {
+                    emptyStateView
+                } else {
+                    // Swipe cards
+                    swipeCardsView
                     
-                    if viewModel.isLoading {
-                        loadingView
-                    } else if viewModel.events.isEmpty {
-                        emptyStateView
-                    } else {
-                        // Swipe cards
-                        swipeCardsView
-                        
-                        // Progress dots
-                        progressDotsView
-                        
-                        // Action buttons
-                        actionButtonsView
-                    }
+                    // Progress dots
+                    progressDotsView
+                    
+                    // Action buttons
+                    actionButtonsView
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 32)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
+            
+            // Calendar tab highlight overlay (shown on 4th event)
+            if showCalendarHighlight {
+                calendarHighlightOverlay
             }
         }
         .onAppear {
             viewModel.loadEvents()
+            eventsViewedCount = 1 // User sees first event on load
             
             AnalyticsService.shared.trackScreenView("parties_onboarding")
         }
@@ -69,6 +70,13 @@ struct PartiesOnboardingView: View {
         .onChange(of: currentIndex) { oldVal, newVal in
             // Update events viewed count
             eventsViewedCount = newVal + 1
+            
+            // Show calendar highlight on the 4th event (last required event)
+            if eventsViewedCount == minimumEventsToView && !showCalendarHighlight {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showCalendarHighlight = true
+                }
+            }
             
             // Check if user has viewed minimum events
             if eventsViewedCount >= minimumEventsToView {
@@ -141,101 +149,110 @@ struct PartiesOnboardingView: View {
         .animation(.spring(response: 0.3), value: hasViewedMinimumEvents)
     }
     
-    // MARK: - Calendar Intro View
+    // MARK: - Calendar Highlight Overlay
     
-    private var calendarIntroView: some View {
-        VStack(spacing: 0) {
-            Spacer()
+    private var calendarHighlightOverlay: some View {
+        ZStack {
+            // Dark overlay behind
+            Color.black.opacity(0.85)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    // Dismiss on tap anywhere
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showCalendarHighlight = false
+                    }
+                }
             
-            // Calendar icon with highlight
-            VStack(spacing: 24) {
-                // Large calendar icon
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: 0x02853E).opacity(0.2))
-                        .frame(width: 140, height: 140)
-                    
-                    Circle()
-                        .fill(Color(hex: 0x02853E).opacity(0.3))
-                        .frame(width: 110, height: 110)
-                    
-                    Image(systemName: "calendar")
-                        .font(.system(size: 50, weight: .medium))
+            VStack {
+                Spacer()
+                
+                // Calendar tab highlight at bottom
+                VStack(spacing: 16) {
+                    // Arrow pointing down to tab
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundColor(Color(hex: 0x02853E))
-                }
-                
-                // Title
-                Text("📅 The Parties Tab")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.white)
-                
-                // Description
-                VStack(spacing: 8) {
-                    Text("This is where all the parties are!")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
                     
-                    Text("School events, house parties, and everything\nhappening near campus — all in one place.")
-                        .font(.system(size: 15))
-                        .foregroundColor(.white.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
+                    // Message box
+                    VStack(spacing: 12) {
+                        // Calendar icon
+                        ZStack {
+                            Circle()
+                                .fill(Color(hex: 0x02853E).opacity(0.2))
+                                .frame(width: 70, height: 70)
+                            
+                            Image(systemName: "calendar")
+                                .font(.system(size: 30, weight: .medium))
+                                .foregroundColor(Color(hex: 0x02853E))
+                        }
+                        
+                        Text("📅 The Parties Tab")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text("This is where all the parties\nand future events are located!")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(4)
+                        
+                        // Got it button
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showCalendarHighlight = false
+                            }
+                            AnalyticsService.shared.track("calendar_highlight_dismissed", props: [:])
+                        }) {
+                            Text("Got it!")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 40)
+                                .padding(.vertical, 12)
+                                .background(
+                                    Capsule()
+                                        .fill(Color(hex: 0x02853E))
+                                )
+                        }
+                        .padding(.top, 8)
+                    }
+                    .padding(24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(Color(hex: 0x1C1C1E))
+                    )
+                    .padding(.horizontal, 40)
+                    
+                    // Highlighted calendar tab mockup
+                    HStack(spacing: 0) {
+                        Spacer()
+                        
+                        // Calendar tab (highlighted)
+                        VStack(spacing: 4) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 24))
+                                .foregroundColor(Color(hex: 0x02853E))
+                            Text("Parties")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Color(hex: 0x02853E))
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 20)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(hex: 0x02853E).opacity(0.2))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(hex: 0x02853E), lineWidth: 2)
+                                )
+                        )
+                        
+                        Spacer()
+                    }
+                    .padding(.bottom, 20)
                 }
-                .padding(.top, 8)
-                
-                // Feature highlights
-                VStack(spacing: 12) {
-                    featureRow(icon: "flame.fill", text: "See what's hot right now", color: .orange)
-                    featureRow(icon: "calendar.badge.clock", text: "Browse upcoming events", color: Color(hex: 0x02853E))
-                    featureRow(icon: "mappin.circle.fill", text: "Find parties near you", color: .blue)
-                }
-                .padding(.top, 16)
             }
-            .padding(.horizontal, 32)
-            
-            Spacer()
-            
-            // Got it button
-            Button(action: {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    hasSeenCalendarIntro = true
-                    eventsViewedCount = 1 // Start counting from first event
-                }
-                
-                AnalyticsService.shared.track("calendar_intro_completed", props: [:])
-            }) {
-                HStack {
-                    Text("Got it! Show me the events")
-                    Image(systemName: "arrow.right")
-                }
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(hex: 0x02853E))
-                )
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 50)
         }
-    }
-    
-    private func featureRow(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 18))
-                .foregroundColor(color)
-                .frame(width: 30)
-            
-            Text(text)
-                .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.9))
-            
-            Spacer()
-        }
-        .padding(.horizontal, 20)
+        .transition(.opacity)
     }
     
     // MARK: - Loading View
