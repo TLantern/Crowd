@@ -525,8 +525,9 @@ class PartiesOnboardingViewModel: ObservableObject {
         
         Task {
             do {
-                // Get the selected campus region, default to UNT if not set
-                let region = OnboardingCoordinator.shared.selectedCampusRegion
+                // Use main campus region for fetching events
+                // The campus ID from coordinator (e.g., "UNT") is separate from CampusRegion enum
+                let region: CampusRegion = .mainCampus
                 
                 // Fetch parties and official events in parallel
                 async let partiesResult = repository.fetchParties()
