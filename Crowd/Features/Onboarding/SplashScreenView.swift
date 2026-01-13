@@ -3,7 +3,7 @@
 //  Crowd
 //
 //  Initial splash screen showing Crowd logo with "Join the Crowd" button.
-//  User must tap the button to proceed (no auto-advance).
+//  Features typewriter animation showing "Crowd" in different languages.
 //
 
 import SwiftUI
@@ -13,8 +13,28 @@ struct SplashScreenView: View {
     @State private var buttonOpacity: Double = 0
     @State private var isTransitioning: Bool = false
     @State private var contentOpacity: Double = 1.0
+    @State private var showTypewriter: Bool = false
     
     let onComplete: () -> Void
+    
+    // "Crowd" in different languages
+    private let crowdTranslations: [(text: String, language: String)] = [
+        ("Crowd", "English"),
+        ("Multitud", "Spanish"),
+        ("Foule", "French"),
+        ("人群", "Chinese"),
+        ("群衆", "Japanese"),
+        ("군중", "Korean"),
+        ("Толпа", "Russian"),
+        ("Menge", "German"),
+        ("Folla", "Italian"),
+        ("حشد", "Arabic"),
+        ("Multidão", "Portuguese"),
+        ("भीड़", "Hindi"),
+        ("Kalabalık", "Turkish"),
+        ("Đám đông", "Vietnamese"),
+        ("Tłum", "Polish")
+    ]
     
     var body: some View {
         ZStack {
@@ -23,6 +43,12 @@ struct SplashScreenView: View {
                 .resizable()
                 .scaledToFill()
                 .ignoresSafeArea()
+            
+            // Typewriter text scattered across screen
+            if showTypewriter {
+                TypewriterOverlay(translations: crowdTranslations)
+                    .opacity(contentOpacity)
+            }
             
             // Content
             VStack(spacing: 40) {
@@ -77,6 +103,9 @@ struct SplashScreenView: View {
             .opacity(contentOpacity)
         }
         .onAppear {
+            // Start typewriter animation immediately
+            showTypewriter = true
+            
             // Animate logo in
             withAnimation(.easeOut(duration: 0.5)) {
                 logoScale = 1.0
@@ -90,6 +119,104 @@ struct SplashScreenView: View {
             }
         }
         .preferredColorScheme(.light)
+    }
+}
+
+// MARK: - Typewriter Overlay
+
+struct TypewriterOverlay: View {
+    let translations: [(text: String, language: String)]
+    
+    // Positions for text (scattered around the screen avoiding center)
+    private let positions: [(x: CGFloat, y: CGFloat)] = [
+        (0.15, 0.08),  // top left
+        (0.85, 0.12),  // top right
+        (0.10, 0.25),  // left upper
+        (0.90, 0.22),  // right upper
+        (0.20, 0.75),  // left lower
+        (0.80, 0.78),  // right lower
+        (0.12, 0.88),  // bottom left
+        (0.88, 0.85),  // bottom right
+        (0.50, 0.05),  // top center
+        (0.25, 0.42),  // mid left
+        (0.75, 0.45),  // mid right
+        (0.15, 0.58),  // left mid-lower
+        (0.85, 0.55),  // right mid-lower
+        (0.50, 0.92),  // bottom center
+        (0.30, 0.15),  // upper left area
+    ]
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                ForEach(0..<min(translations.count, positions.count), id: \.self) { index in
+                    TypewriterText(
+                        text: translations[index].text,
+                        delay: Double(index) * 0.3
+                    )
+                    .position(
+                        x: geometry.size.width * positions[index].x,
+                        y: geometry.size.height * positions[index].y
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Typewriter Text
+
+struct TypewriterText: View {
+    let text: String
+    let delay: Double
+    
+    @State private var displayedText: String = ""
+    @State private var opacity: Double = 0
+    @State private var isTyping: Bool = false
+    
+    var body: some View {
+        Text(displayedText)
+            .font(.system(size: CGFloat.random(in: 14...22), weight: .medium))
+            .foregroundColor(Color.black.opacity(0.15))
+            .opacity(opacity)
+            .onAppear {
+                startTypewriter()
+            }
+    }
+    
+    private func startTypewriter() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            withAnimation(.easeIn(duration: 0.2)) {
+                opacity = 1.0
+            }
+            
+            isTyping = true
+            typeNextCharacter(index: 0)
+        }
+    }
+    
+    private func typeNextCharacter(index: Int) {
+        guard index < text.count else {
+            // Typing complete - fade out after a moment
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                withAnimation(.easeOut(duration: 0.5)) {
+                    opacity = 0
+                }
+                // Restart after fade
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    displayedText = ""
+                    startTypewriter()
+                }
+            }
+            return
+        }
+        
+        let charIndex = text.index(text.startIndex, offsetBy: index)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            displayedText += String(text[charIndex])
+            typeNextCharacter(index: index + 1)
+        }
     }
 }
 
