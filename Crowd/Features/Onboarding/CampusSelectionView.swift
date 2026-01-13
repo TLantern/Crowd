@@ -59,11 +59,11 @@ struct CampusSelectionView: View {
                         .scaledToFit()
                         .frame(width: 140, height: 90)
                     
-                    Text("Select Your Campus")
+                    Text("Join the Crowd")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(.black)
                     
-                    Text("See what's happening near you")
+                    Text("Select your campus to get started")
                         .font(.system(size: 16))
                         .foregroundColor(.black.opacity(0.7))
                 }

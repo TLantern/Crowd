@@ -23,6 +23,7 @@ struct CrowdApp: App {
     // NEW: Campus selection gate (replaces mandatory onboarding)
     @AppStorage("hasCompletedCampusSelection") private var hasCompletedCampusSelection = false
     @AppStorage("hasCompletedPartiesOnboarding") private var hasCompletedPartiesOnboarding = false
+    @AppStorage("hasSeenSplashScreen") private var hasSeenSplashScreen = false
     @AppStorage("useNewOnboarding") private var useNewOnboarding = true
     
     // LEGACY: Keep for backwards compatibility with existing users
@@ -32,6 +33,7 @@ struct CrowdApp: App {
     @State private var isCheckingTerms = true
     @State private var accountDeleted = false
     @State private var showPartiesOnboarding = false
+    @State private var showSplashScreen = true
     
     private let env = AppEnvironment.current
     
@@ -46,42 +48,53 @@ struct CrowdApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                // MIGRATION: Existing users who completed old onboarding skip campus selection
+                // MIGRATION: Existing users who completed old onboarding skip everything
                 if hasSeenOnboarding && !hasCompletedCampusSelection {
                     // Migrate existing users - they already completed onboarding
                     Color.clear.onAppear {
+                        hasSeenSplashScreen = true
                         hasCompletedCampusSelection = true
                         hasCompletedPartiesOnboarding = true
                     }
                 }
                 
-                // NEW FLOW: Campus selection is the first gate
-                // No account required to see the map!
-                if hasCompletedCampusSelection {
-                    mainAppView
-                } else if useNewOnboarding {
-                    // New users see campus selection first
-                    CampusSelectionView {
-                        // After campus selection, go straight to map
-                        // NO signup required at this point!
-                        hasCompletedCampusSelection = true
-                        hasSeenOnboarding = true // Mark old flag too for safety
-                        
-                        // Show parties onboarding after a short delay
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            if !hasCompletedPartiesOnboarding {
-                                showPartiesOnboarding = true
-                            }
+                // STEP 1: Show splash screen with Crowd logo (2 seconds)
+                if !hasSeenSplashScreen && useNewOnboarding {
+                    SplashScreenView {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            hasSeenSplashScreen = true
                         }
                     }
                     .onAppear {
                         AnalyticsService.shared.track("app_opened", props: ["flow": "new_onboarding"])
                         AnalyticsService.shared.logToFirestore(eventName: "app_opened")
                     }
+                }
+                // STEP 2: Campus selection - "Join the Crowd"
+                else if !hasCompletedCampusSelection && useNewOnboarding {
+                    CampusSelectionView {
+                        // After campus selection, go to parties onboarding
+                        // NO signup required at this point!
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            hasCompletedCampusSelection = true
+                            hasSeenOnboarding = true // Mark old flag too for safety
+                        }
+                        
+                        // REQUIRED: Show parties onboarding - user MUST go through it
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            showPartiesOnboarding = true
+                        }
+                    }
+                    .transition(.opacity)
+                }
+                // STEP 3: Main app (after all onboarding steps complete)
+                else if hasCompletedCampusSelection {
+                    mainAppView
                 } else {
                     // Legacy flow for A/B testing (disabled by default)
                     OnboardingFlowView {
                         hasSeenOnboarding = true
+                        hasSeenSplashScreen = true
                         hasCompletedCampusSelection = true
                         hasCompletedPartiesOnboarding = true
                         showTermsAgreement = true
@@ -97,10 +110,12 @@ struct CrowdApp: App {
                 if deleted {
                     // Reset all onboarding flags on account deletion
                     hasSeenOnboarding = false
+                    hasSeenSplashScreen = false
                     hasCompletedCampusSelection = false
                     hasCompletedPartiesOnboarding = false
                     showTermsAgreement = false
                     showPartiesOnboarding = false
+                    showSplashScreen = true
                     isCheckingTerms = true
                     accountDeleted = false
                 }
