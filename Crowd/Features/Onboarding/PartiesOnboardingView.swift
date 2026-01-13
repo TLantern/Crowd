@@ -17,6 +17,7 @@ struct PartiesOnboardingView: View {
     @State private var showIntentCTA: Bool = false
     @State private var hasViewedMinimumEvents: Bool = false // Track if user has swiped enough
     @State private var eventsViewedCount: Int = 0 // Count of events user has seen
+    @State private var hasSeenCalendarIntro: Bool = false // Track if user clicked calendar intro
     
     let onComplete: () -> Void
     let onIntentAction: (IntentAction) -> Void
@@ -27,35 +28,40 @@ struct PartiesOnboardingView: View {
     var body: some View {
         ZStack {
             // Background
-            Color.black.opacity(0.4)
+            Color.black.opacity(0.95)
                 .ignoresSafeArea()
             
-            VStack(spacing: 0) {
-                // Header with progress and exit
-                headerView
-                
-                if viewModel.isLoading {
-                    loadingView
-                } else if viewModel.events.isEmpty {
-                    emptyStateView
-                } else {
-                    // Swipe cards
-                    swipeCardsView
+            if !hasSeenCalendarIntro {
+                // STEP 1: Show calendar tab intro first
+                calendarIntroView
+            } else {
+                // STEP 2: Show events swiping
+                VStack(spacing: 0) {
+                    // Header with progress and exit
+                    headerView
                     
-                    // Progress dots
-                    progressDotsView
-                    
-                    // Action buttons
-                    actionButtonsView
+                    if viewModel.isLoading {
+                        loadingView
+                    } else if viewModel.events.isEmpty {
+                        emptyStateView
+                    } else {
+                        // Swipe cards
+                        swipeCardsView
+                        
+                        // Progress dots
+                        progressDotsView
+                        
+                        // Action buttons
+                        actionButtonsView
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 32)
         }
         .onAppear {
             viewModel.loadEvents()
-            eventsViewedCount = 1 // User sees first event on load
             
             AnalyticsService.shared.trackScreenView("parties_onboarding")
         }
@@ -133,6 +139,103 @@ struct PartiesOnboardingView: View {
         }
         .padding(.bottom, 20)
         .animation(.spring(response: 0.3), value: hasViewedMinimumEvents)
+    }
+    
+    // MARK: - Calendar Intro View
+    
+    private var calendarIntroView: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            
+            // Calendar icon with highlight
+            VStack(spacing: 24) {
+                // Large calendar icon
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: 0x02853E).opacity(0.2))
+                        .frame(width: 140, height: 140)
+                    
+                    Circle()
+                        .fill(Color(hex: 0x02853E).opacity(0.3))
+                        .frame(width: 110, height: 110)
+                    
+                    Image(systemName: "calendar")
+                        .font(.system(size: 50, weight: .medium))
+                        .foregroundColor(Color(hex: 0x02853E))
+                }
+                
+                // Title
+                Text("📅 The Parties Tab")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.white)
+                
+                // Description
+                VStack(spacing: 8) {
+                    Text("This is where all the parties are!")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    Text("School events, house parties, and everything\nhappening near campus — all in one place.")
+                        .font(.system(size: 15))
+                        .foregroundColor(.white.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+                .padding(.top, 8)
+                
+                // Feature highlights
+                VStack(spacing: 12) {
+                    featureRow(icon: "flame.fill", text: "See what's hot right now", color: .orange)
+                    featureRow(icon: "calendar.badge.clock", text: "Browse upcoming events", color: Color(hex: 0x02853E))
+                    featureRow(icon: "mappin.circle.fill", text: "Find parties near you", color: .blue)
+                }
+                .padding(.top, 16)
+            }
+            .padding(.horizontal, 32)
+            
+            Spacer()
+            
+            // Got it button
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    hasSeenCalendarIntro = true
+                    eventsViewedCount = 1 // Start counting from first event
+                }
+                
+                AnalyticsService.shared.track("calendar_intro_completed", props: [:])
+            }) {
+                HStack {
+                    Text("Got it! Show me the events")
+                    Image(systemName: "arrow.right")
+                }
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(hex: 0x02853E))
+                )
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 50)
+        }
+    }
+    
+    private func featureRow(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundColor(color)
+                .frame(width: 30)
+            
+            Text(text)
+                .font(.system(size: 15))
+                .foregroundColor(.white.opacity(0.9))
+            
+            Spacer()
+        }
+        .padding(.horizontal, 20)
     }
     
     // MARK: - Loading View
