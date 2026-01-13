@@ -15,9 +15,14 @@ struct PartiesOnboardingView: View {
     @StateObject private var viewModel = PartiesOnboardingViewModel()
     @State private var currentIndex: Int = 0
     @State private var showIntentCTA: Bool = false
+    @State private var hasViewedMinimumEvents: Bool = false // Track if user has swiped enough
+    @State private var eventsViewedCount: Int = 0 // Count of events user has seen
     
     let onComplete: () -> Void
     let onIntentAction: (IntentAction) -> Void
+    
+    // Minimum events user must view before they can skip
+    private let minimumEventsToView = 3
     
     var body: some View {
         ZStack {
@@ -50,11 +55,22 @@ struct PartiesOnboardingView: View {
         }
         .onAppear {
             viewModel.loadEvents()
+            eventsViewedCount = 1 // User sees first event on load
             
             AnalyticsService.shared.trackScreenView("parties_onboarding")
         }
-        // Show intent CTA after swiping through events
+        // Track swiping progress and check for intent CTA
         .onChange(of: currentIndex) { oldVal, newVal in
+            // Update events viewed count
+            eventsViewedCount = newVal + 1
+            
+            // Check if user has viewed minimum events
+            if eventsViewedCount >= minimumEventsToView {
+                withAnimation {
+                    hasViewedMinimumEvents = true
+                }
+            }
+            
             checkForIntentCTA()
         }
     }
@@ -62,35 +78,61 @@ struct PartiesOnboardingView: View {
     // MARK: - Header View
     
     private var headerView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("What's Happening")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
+        VStack(spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("What's Happening")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    // Dynamic instruction text
+                    if !hasViewedMinimumEvents && !viewModel.events.isEmpty {
+                        let remaining = max(0, minimumEventsToView - eventsViewedCount)
+                        Text("Swipe through \(remaining) more event\(remaining == 1 ? "" : "s") to continue")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Color(hex: 0x02853E))
+                    } else {
+                        Text("Swipe through events near you")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
                 
-                Text("Swipe through events near you")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.7))
+                Spacer()
+                
+                // Exit button - only visible after viewing minimum events
+                if hasViewedMinimumEvents {
+                    Button(action: {
+                        OnboardingCoordinator.shared.skipPartiesGuide()
+                        onComplete()
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.7))
+                            .frame(width: 36, height: 36)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.2))
+                            )
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
             
-            Spacer()
-            
-            // Exit button (always visible)
-            Button(action: {
-                OnboardingCoordinator.shared.skipPartiesGuide()
-                onComplete()
-            }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
-                    .frame(width: 36, height: 36)
-                    .background(
+            // Progress indicator showing how many events they need to view
+            if !hasViewedMinimumEvents && !viewModel.events.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(0..<minimumEventsToView, id: \.self) { index in
                         Circle()
-                            .fill(Color.white.opacity(0.2))
-                    )
+                            .fill(index < eventsViewedCount ? Color(hex: 0x02853E) : Color.white.opacity(0.3))
+                            .frame(width: 10, height: 10)
+                    }
+                }
+                .padding(.top, 4)
             }
         }
         .padding(.bottom, 20)
+        .animation(.spring(response: 0.3), value: hasViewedMinimumEvents)
     }
     
     // MARK: - Loading View
@@ -147,7 +189,10 @@ struct PartiesOnboardingView: View {
             
             Spacer()
             
+            // When no events, allow user to continue (they've seen the parties tab)
             Button(action: {
+                // Mark as viewed since there's nothing to show
+                hasViewedMinimumEvents = true
                 OnboardingCoordinator.shared.skipPartiesGuide()
                 onComplete()
             }) {
@@ -158,7 +203,7 @@ struct PartiesOnboardingView: View {
                     .padding(.vertical, 14)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.white.opacity(0.2))
+                            .fill(Color(hex: 0x02853E))
                     )
             }
         }
@@ -242,10 +287,18 @@ struct PartiesOnboardingView: View {
     
     private var actionButtonsView: some View {
         VStack(spacing: 12) {
-            if showIntentCTA {
-                // Show intent action CTA after swiping
+            if showIntentCTA && hasViewedMinimumEvents {
+                // Show intent action CTA after swiping through required events
                 intentCTAView
             } else {
+                // Instruction text for what user needs to do
+                if !hasViewedMinimumEvents {
+                    Text("👆 Tap Next to see more events")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(Color(hex: 0x02853E))
+                        .padding(.bottom, 4)
+                }
+                
                 // Navigation buttons
                 HStack(spacing: 16) {
                     // Previous button
@@ -267,47 +320,74 @@ struct PartiesOnboardingView: View {
                     }
                     .disabled(currentIndex == 0)
                     
-                    // Save/Interest button (intent action)
-                    Button(action: {
-                        let event = viewModel.events[currentIndex]
-                        onIntentAction(IntentAction(
-                            type: "save_event",
-                            eventId: event.id
-                        ))
-                    }) {
-                        HStack {
-                            Image(systemName: "bookmark")
-                            Text("Save Event")
+                    // Main action button - changes based on progress
+                    if hasViewedMinimumEvents {
+                        // After minimum events, show Save button
+                        Button(action: {
+                            let event = viewModel.events[currentIndex]
+                            onIntentAction(IntentAction(
+                                type: "save_event",
+                                eventId: event.id
+                            ))
+                        }) {
+                            HStack {
+                                Image(systemName: "bookmark")
+                                Text("Save Event")
+                            }
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.white)
+                            )
                         }
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.white)
-                        )
+                    } else {
+                        // Before minimum events, show prominent NEXT button
+                        Button(action: {
+                            if currentIndex < viewModel.events.count - 1 {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                    currentIndex += 1
+                                }
+                            }
+                        }) {
+                            HStack {
+                                Text("Next")
+                                Image(systemName: "arrow.right")
+                            }
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color(hex: 0x02853E))
+                            )
+                        }
                     }
                     
-                    // Next button
-                    Button(action: {
-                        if currentIndex < viewModel.events.count - 1 {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                currentIndex += 1
+                    // Next button (small) - only after minimum viewed
+                    if hasViewedMinimumEvents {
+                        Button(action: {
+                            if currentIndex < viewModel.events.count - 1 {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                    currentIndex += 1
+                                }
+                            } else {
+                                // Last card - show completion
+                                showIntentCTA = true
                             }
-                        } else {
-                            // Last card - show completion
-                            showIntentCTA = true
+                        }) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 50, height: 50)
+                                .background(
+                                    Circle()
+                                        .fill(Color.white.opacity(0.2))
+                                )
                         }
-                    }) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 50, height: 50)
-                            .background(
-                                Circle()
-                                    .fill(Color.white.opacity(0.2))
-                            )
                     }
                 }
             }
@@ -317,10 +397,21 @@ struct PartiesOnboardingView: View {
     // MARK: - Intent CTA View
     
     private var intentCTAView: some View {
-        VStack(spacing: 12) {
-            Text("Ready to join the crowd?")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.white)
+        VStack(spacing: 16) {
+            // Success message
+            VStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(Color(hex: 0x02853E))
+                
+                Text("Nice! You've seen the events")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                
+                Text("Ready to join the crowd?")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.7))
+            }
             
             // Primary CTA - This triggers the signup if not authenticated
             Button(action: {
@@ -347,14 +438,20 @@ struct PartiesOnboardingView: View {
                 )
             }
             
-            // Secondary - Continue without action
+            // Secondary - Continue to explore
             Button(action: {
                 OnboardingCoordinator.shared.completePartiesGuide()
                 onComplete()
             }) {
-                Text("Just browsing")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.7))
+                Text("Continue to Map")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                    )
             }
         }
     }
