@@ -28,9 +28,13 @@ struct AccountCreationView: View {
     
     var body: some View {
         ZStack {
-            // Background
+            // Background - tap to dismiss keyboard
             Color.black.opacity(0.95)
                 .ignoresSafeArea()
+                .onTapGesture {
+                    // Dismiss keyboard when tapping outside
+                    isNameFocused = false
+                }
             
             ScrollView {
                 VStack(spacing: 32) {
@@ -51,6 +55,7 @@ struct AccountCreationView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 60)
             }
+            .scrollDismissesKeyboard(.interactively)
         }
         .onAppear {
             AnalyticsService.shared.trackScreenView("account_creation")
@@ -135,6 +140,11 @@ struct AccountCreationView: View {
                 .focused($isNameFocused)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.words)
+                .submitLabel(.done)
+                .onSubmit {
+                    // Dismiss keyboard when pressing return
+                    isNameFocused = false
+                }
             
             if !displayName.isEmpty {
                 Text("Hey \(displayName)! 👋")
