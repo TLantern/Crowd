@@ -39,7 +39,6 @@ struct CrowdApp: App {
     @State private var showAccountCreation = false
     @State private var showSplashScreen = true
     @State private var showCalendarReminderOverMap = false // Show calendar reminder over map after parties onboarding
-    @State private var showAllSetOverMap = false // Show "All Set" over map after calendar reminder
     
     private let env = AppEnvironment.current
     
@@ -165,11 +164,6 @@ struct CrowdApp: App {
             // Calendar reminder overlay (shown over map after parties onboarding)
             if showCalendarReminderOverMap {
                 calendarReminderOverlay
-            }
-            
-            // "All Set" overlay (shown over map after calendar reminder)
-            if showAllSetOverMap {
-                allSetOverlay
             }
         }
         .task {
@@ -322,20 +316,13 @@ struct CrowdApp: App {
                             )
                     )
                     
-                    // Got it button
+                    // Got it button - dismisses and completes onboarding
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             showCalendarReminderOverMap = false
                         }
                         
                         AnalyticsService.shared.track("calendar_reminder_dismissed", props: [:])
-                        
-                        // Show "All Set" after calendar reminder
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                showAllSetOverMap = true
-                            }
-                        }
                     }) {
                         Text("Got it!")
                             .font(.system(size: 18, weight: .bold))
@@ -349,74 +336,6 @@ struct CrowdApp: App {
                     }
                     .padding(.horizontal, 40)
                     .padding(.top, 20)
-                }
-                .padding(.horizontal, 24)
-                
-                Spacer()
-            }
-        }
-        .transition(.opacity)
-    }
-    
-    // MARK: - All Set Overlay (shown over map)
-    
-    private var allSetOverlay: some View {
-        ZStack {
-            // Semi-transparent overlay
-            Color.black.opacity(0.85)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                Spacer()
-                
-                // Success content
-                VStack(spacing: 24) {
-                    // Checkmark icon with celebration effect
-                    ZStack {
-                        Circle()
-                            .fill(Color(hex: 0x02853E).opacity(0.15))
-                            .frame(width: 140, height: 140)
-                        
-                        Circle()
-                            .fill(Color(hex: 0x02853E).opacity(0.25))
-                            .frame(width: 100, height: 100)
-                        
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 60, weight: .medium))
-                            .foregroundColor(Color(hex: 0x02853E))
-                    }
-                    
-                    // Message
-                    VStack(spacing: 12) {
-                        Text("All Set! 🎉")
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.white)
-                        
-                        Text("You're ready to join the crowd!")
-                            .font(.system(size: 18))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    
-                    // Continue button
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showAllSetOverMap = false
-                        }
-                        
-                        AnalyticsService.shared.track("all_set_dismissed", props: [:])
-                    }) {
-                        Text("Let's Go!")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color(hex: 0x02853E))
-                            )
-                    }
-                    .padding(.horizontal, 40)
-                    .padding(.top, 12)
                 }
                 .padding(.horizontal, 24)
                 
