@@ -152,9 +152,7 @@ struct PartiesOnboardingView: View {
             
             // When no events, allow user to continue (they've seen the parties tab)
             Button(action: {
-                // Mark as viewed since there's nothing to show
-                hasViewedMinimumEvents = true
-                OnboardingCoordinator.shared.skipPartiesGuide()
+                OnboardingCoordinator.shared.completePartiesGuide()
                 onComplete()
             }) {
                 Text("Continue to Map")
