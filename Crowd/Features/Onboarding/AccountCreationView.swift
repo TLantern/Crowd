@@ -138,8 +138,9 @@ struct AccountCreationView: View {
                 GridItem(.flexible())
             ], spacing: 12) {
                 ForEach(Interest.allInterests) { interest in
-                    InterestChip(
-                        interest: interest,
+                    OnboardingInterestChip(
+                        emoji: interest.emoji,
+                        name: interest.name,
                         isSelected: selectedInterests.contains(interest.id),
                         onTap: {
                             toggleInterest(interest)
@@ -192,20 +193,21 @@ struct AccountCreationView: View {
     }
 }
 
-// MARK: - Interest Chip
+// MARK: - Onboarding Interest Chip (renamed to avoid conflict with existing InterestChip)
 
-struct InterestChip: View {
-    let interest: Interest
+struct OnboardingInterestChip: View {
+    let emoji: String
+    let name: String
     let isSelected: Bool
     let onTap: () -> Void
     
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 6) {
-                Text(interest.emoji)
+                Text(emoji)
                     .font(.system(size: 16))
                 
-                Text(interest.name)
+                Text(name)
                     .font(.system(size: 14, weight: .medium))
                     .lineLimit(1)
             }
