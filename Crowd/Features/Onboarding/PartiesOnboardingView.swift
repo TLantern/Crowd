@@ -17,7 +17,6 @@ struct PartiesOnboardingView: View {
     @State private var showIntentCTA: Bool = false
     @State private var hasViewedMinimumEvents: Bool = false // Track if user has swiped enough
     @State private var eventsViewedCount: Int = 0 // Count of events user has seen
-    @State private var showCalendarHighlight: Bool = false // Show calendar tab highlight on last event
     @State private var isInFinalEventsPhase: Bool = false // After account creation, show 3 more events
     @State private var finalEventsViewed: Int = 0 // Count of final events viewed
     @State private var showAccountCreation: Bool = false // Show account creation overlay
@@ -61,16 +60,11 @@ struct PartiesOnboardingView: View {
             .padding(.top, 16)
             .padding(.bottom, 32)
             
-            // Calendar tab highlight overlay (shown on 4th event)
-            if showCalendarHighlight {
-                calendarHighlightOverlay
-            }
-            
-            // Account creation overlay (if using inline flow)
+            // Account creation overlay (with smooth transition)
             if showAccountCreation {
                 AccountCreationView { name, interests, profileImage in
                     // Account created - start final events phase
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(.easeInOut(duration: 0.4)) {
                         showAccountCreation = false
                         isInFinalEventsPhase = true
                         finalEventsViewed = 0
@@ -86,7 +80,10 @@ struct PartiesOnboardingView: View {
                         "has_profile_image": profileImage != nil
                     ])
                 }
-                .transition(.opacity)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.95)).animation(.easeOut(duration: 0.35)),
+                    removal: .opacity.animation(.easeIn(duration: 0.25))
+                ))
             }
         }
         .onAppear {
@@ -111,17 +108,25 @@ struct PartiesOnboardingView: View {
                     onComplete()
                 }
             } else {
-                // Show calendar highlight on the 4th event (last required event before account creation)
-                if eventsViewedCount == minimumEventsToView && !showCalendarHighlight && !isInFinalEventsPhase {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        showCalendarHighlight = true
-                    }
-                }
-                
                 // Check if user has viewed minimum events
                 if eventsViewedCount >= minimumEventsToView {
                     withAnimation {
                         hasViewedMinimumEvents = true
+                    }
+                    
+                    // After viewing 4 events, trigger account creation
+                    if eventsViewedCount == minimumEventsToView && !showAccountCreation {
+                        // Small delay for smoother transition
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            if let onRequestAccountCreation = onRequestAccountCreation {
+                                onRequestAccountCreation()
+                            } else {
+                                // Show inline account creation with smooth animation
+                                withAnimation(.easeInOut(duration: 0.4)) {
+                                    showAccountCreation = true
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -199,122 +204,6 @@ struct PartiesOnboardingView: View {
         }
         .padding(.bottom, 20)
         .animation(.spring(response: 0.3), value: hasViewedMinimumEvents)
-    }
-    
-    // MARK: - Calendar Highlight Overlay
-    
-    private var calendarHighlightOverlay: some View {
-        ZStack {
-            // Dark overlay behind
-            Color.black.opacity(0.85)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    // Dismiss on tap anywhere
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        showCalendarHighlight = false
-                    }
-                }
-            
-            VStack {
-                Spacer()
-                
-                // Calendar tab highlight at bottom
-                VStack(spacing: 16) {
-                    // Arrow pointing down to tab
-                    Image(systemName: "arrow.down")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(Color(hex: 0x02853E))
-                    
-                    // Message box
-                    VStack(spacing: 12) {
-                        // Calendar icon
-                        ZStack {
-                            Circle()
-                                .fill(Color(hex: 0x02853E).opacity(0.2))
-                                .frame(width: 70, height: 70)
-                            
-                            Image(systemName: "calendar")
-                                .font(.system(size: 30, weight: .medium))
-                                .foregroundColor(Color(hex: 0x02853E))
-                        }
-                        
-                        Text("📅 The Parties Tab")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.white)
-                        
-                        Text("This is where all the parties\nand school events are located!")
-                            .font(.system(size: 16))
-                            .foregroundColor(.white.opacity(0.9))
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(4)
-                        
-                        // Got it button - triggers account creation
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                showCalendarHighlight = false
-                            }
-                            AnalyticsService.shared.track("calendar_highlight_dismissed", props: [:])
-                            
-                            // Trigger account creation
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                                if let onRequestAccountCreation = onRequestAccountCreation {
-                                    onRequestAccountCreation()
-                                } else {
-                                    // Fallback: show inline account creation
-                                    showAccountCreation = true
-                                }
-                            }
-                        }) {
-                            Text("Got it!")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 40)
-                                .padding(.vertical, 12)
-                                .background(
-                                    Capsule()
-                                        .fill(Color(hex: 0x02853E))
-                                )
-                        }
-                        .padding(.top, 8)
-                    }
-                    .padding(24)
-                    .background(
-                        RoundedRectangle(cornerRadius: 24)
-                            .fill(Color(hex: 0x1C1C1E))
-                    )
-                    .padding(.horizontal, 40)
-                    
-                    // Highlighted calendar tab mockup
-                    HStack(spacing: 0) {
-                        Spacer()
-                        
-                        // Calendar tab (highlighted)
-                        VStack(spacing: 4) {
-                            Image(systemName: "calendar")
-                                .font(.system(size: 24))
-                                .foregroundColor(Color(hex: 0x02853E))
-                            Text("Parties")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(Color(hex: 0x02853E))
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(hex: 0x02853E).opacity(0.2))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color(hex: 0x02853E), lineWidth: 2)
-                                )
-                        )
-                        
-                        Spacer()
-                    }
-                    .padding(.bottom, 20)
-                }
-            }
-        }
-        .transition(.opacity)
     }
     
     // MARK: - Loading View
