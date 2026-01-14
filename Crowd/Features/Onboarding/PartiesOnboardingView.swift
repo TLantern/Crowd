@@ -65,11 +65,11 @@ struct PartiesOnboardingView: View {
     
     private var headerView: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("What's Happening")
+            Text("What's Poppin' 🔥")
                 .font(.system(size: 24, weight: .bold))
                 .foregroundColor(.white)
             
-            Text("Swipe through events near you")
+            Text("Here are a few parties happening near you")
                 .font(.system(size: 14))
                 .foregroundColor(.white.opacity(0.7))
         }
@@ -291,12 +291,14 @@ struct PartiesOnboardingView: View {
                 .disabled(currentIndex >= viewModel.events.count - 1)
             }
             
-            // Prominent Done button at bottom
+            // Prominent Done button at bottom - triggers account creation
             Button(action: {
-                OnboardingCoordinator.shared.completePartiesGuide()
-                onComplete()
+                // Trigger account creation with smooth transition
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    onRequestAccountCreation?()
+                }
             }) {
-                Text("Done")
+                Text("Continue")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
