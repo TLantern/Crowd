@@ -18,7 +18,8 @@ struct PartiesOnboardingView: View {
     @State private var hasViewedMinimumEvents: Bool = false // Track if user has swiped enough
     @State private var eventsViewedCount: Int = 0 // Count of events user has seen
     @State private var showCalendarHighlight: Bool = false // Show calendar tab highlight on last event
-    @State private var showFinalCalendarReminder: Bool = false // Final reminder before completion
+    @State private var showAllSetScreen: Bool = false // Show "All Set" screen after final events
+    @State private var showFinalCalendarReminder: Bool = false // Final reminder AFTER "All Set"
     @State private var isInFinalEventsPhase: Bool = false // After account creation, show 3 more events
     @State private var finalEventsViewed: Int = 0 // Count of final events viewed
     @State private var showAccountCreation: Bool = false // Show account creation overlay
@@ -69,7 +70,7 @@ struct PartiesOnboardingView: View {
             
             // Account creation overlay (if using inline flow)
             if showAccountCreation {
-                AccountCreationView { name, interests in
+                AccountCreationView { name, interests, profileImage in
                     // Account created - start final events phase
                     withAnimation(.easeInOut(duration: 0.3)) {
                         showAccountCreation = false
@@ -83,13 +84,19 @@ struct PartiesOnboardingView: View {
                     
                     AnalyticsService.shared.track("account_created_in_onboarding", props: [
                         "name": name,
-                        "interests_count": interests.count
+                        "interests_count": interests.count,
+                        "has_profile_image": profileImage != nil
                     ])
                 }
                 .transition(.opacity)
             }
             
-            // Final calendar reminder before completion
+            // "All Set" screen (shown after final events, before calendar reminder)
+            if showAllSetScreen {
+                allSetOverlay
+            }
+            
+            // Final calendar reminder AFTER "All Set"
             if showFinalCalendarReminder {
                 finalCalendarReminderOverlay
             }
@@ -109,10 +116,10 @@ struct PartiesOnboardingView: View {
             if isInFinalEventsPhase {
                 finalEventsViewed += 1
                 
-                // After 3 final events, show the final calendar reminder
+                // After 3 final events, show "All Set" screen first
                 if finalEventsViewed >= finalEventsCount {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        showFinalCalendarReminder = true
+                        showAllSetScreen = true
                     }
                 }
             } else {
@@ -247,7 +254,7 @@ struct PartiesOnboardingView: View {
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.white)
                         
-                        Text("This is where all the parties\nand future events are located!")
+                        Text("This is where all the parties\nand school events are located!")
                             .font(.system(size: 16))
                             .foregroundColor(.white.opacity(0.9))
                             .multilineTextAlignment(.center)
@@ -322,7 +329,82 @@ struct PartiesOnboardingView: View {
         .transition(.opacity)
     }
     
-    // MARK: - Final Calendar Reminder Overlay
+    // MARK: - All Set Overlay (shown after final events)
+    
+    private var allSetOverlay: some View {
+        ZStack {
+            // Dark overlay
+            Color.black.opacity(0.9)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                Spacer()
+                
+                // Success content
+                VStack(spacing: 24) {
+                    // Checkmark icon with celebration effect
+                    ZStack {
+                        Circle()
+                            .fill(Color(hex: 0x02853E).opacity(0.15))
+                            .frame(width: 140, height: 140)
+                        
+                        Circle()
+                            .fill(Color(hex: 0x02853E).opacity(0.25))
+                            .frame(width: 100, height: 100)
+                        
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 60, weight: .medium))
+                            .foregroundColor(Color(hex: 0x02853E))
+                    }
+                    
+                    // Message
+                    VStack(spacing: 12) {
+                        Text("All Set! 🎉")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text("You're ready to join the crowd!")
+                            .font(.system(size: 18))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    
+                    // Continue button
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showAllSetScreen = false
+                        }
+                        
+                        AnalyticsService.shared.track("all_set_dismissed", props: [:])
+                        
+                        // Show final calendar reminder AFTER "All Set"
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showFinalCalendarReminder = true
+                            }
+                        }
+                    }) {
+                        Text("Continue")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color(hex: 0x02853E))
+                            )
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.top, 12)
+                }
+                .padding(.horizontal, 24)
+                
+                Spacer()
+            }
+        }
+        .transition(.opacity)
+    }
+    
+    // MARK: - Final Calendar Reminder Overlay (shown AFTER "All Set")
     
     private var finalCalendarReminderOverlay: some View {
         ZStack {
@@ -356,7 +438,7 @@ struct PartiesOnboardingView: View {
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.white)
                         
-                        Text("Remember, you can always find\nparties and events here!")
+                        Text("Remember, you can always find\nparties and school events here!")
                             .font(.system(size: 16))
                             .foregroundColor(.white.opacity(0.8))
                             .multilineTextAlignment(.center)
@@ -389,7 +471,7 @@ struct PartiesOnboardingView: View {
                             )
                     )
                     
-                    // All set button
+                    // Got it button - completes onboarding
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             showFinalCalendarReminder = false
@@ -401,7 +483,7 @@ struct PartiesOnboardingView: View {
                         OnboardingCoordinator.shared.completePartiesGuide()
                         onComplete()
                     }) {
-                        Text("All Set! 🎉")
+                        Text("Got it!")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -706,9 +788,9 @@ struct PartiesOnboardingView: View {
                     type: "pulling_up",
                     eventId: viewModel.events.last?.id,
                     completion: {
-                        // Show final calendar reminder before completing
+                        // Show "All Set" first, then calendar reminder
                         withAnimation(.easeInOut(duration: 0.3)) {
-                            showFinalCalendarReminder = true
+                            showAllSetScreen = true
                         }
                     }
                 ))
@@ -727,11 +809,11 @@ struct PartiesOnboardingView: View {
                 )
             }
             
-            // Secondary - Continue to explore (shows final reminder first)
+            // Secondary - Continue to explore (shows All Set first, then reminder)
             Button(action: {
-                // Show final calendar reminder before completing
+                // Show "All Set" first, then calendar reminder
                 withAnimation(.easeInOut(duration: 0.3)) {
-                    showFinalCalendarReminder = true
+                    showAllSetScreen = true
                 }
             }) {
                 Text("Continue to Map")

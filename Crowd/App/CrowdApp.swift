@@ -13,6 +13,7 @@
 import SwiftUI
 import FirebaseCore
 import FirebaseAnalytics
+import FirebaseAuth
 
 @main
 struct CrowdApp: App {
@@ -194,19 +195,29 @@ struct CrowdApp: App {
         }
         // Account creation during onboarding
         .fullScreenCover(isPresented: $showAccountCreation) {
-            AccountCreationView { name, interests in
-                // Save the display name
+            AccountCreationView { name, interests, profileImage in
+                // Save the display name locally
                 userDisplayName = name
                 hasCompletedAccountCreation = true
                 showAccountCreation = false
                 
-                // Save interests to UserDefaults (can be synced to Firebase later)
+                // Save interests to UserDefaults
                 let interestIds = interests.map { $0.id }
                 UserDefaults.standard.set(interestIds, forKey: "selectedInterestIds")
                 
+                // ACTUALLY CREATE ACCOUNT IN FIREBASE
+                Task {
+                    await createFirebaseAccount(
+                        name: name,
+                        interests: interestIds,
+                        profileImage: profileImage
+                    )
+                }
+                
                 AnalyticsService.shared.track("account_created", props: [
                     "name_length": name.count,
-                    "interests_count": interests.count
+                    "interests_count": interests.count,
+                    "has_profile_image": profileImage != nil
                 ])
             }
         }
@@ -246,6 +257,62 @@ struct CrowdApp: App {
                 // Default to showing terms if we can't verify
                 showTermsAgreement = true
             }
+        }
+    }
+    
+    // MARK: - Create Firebase Account
+    
+    private func createFirebaseAccount(
+        name: String,
+        interests: [String],
+        profileImage: UIImage?
+    ) async {
+        do {
+            // Step 1: Get or create Firebase user (anonymous if not signed in)
+            var userId = FirebaseManager.shared.getCurrentUserId()
+            
+            if userId == nil {
+                // Create anonymous user
+                print("📱 Creating anonymous Firebase user...")
+                let result = try await Auth.auth().signInAnonymously()
+                userId = result.user.uid
+                print("✅ Anonymous user created: \(userId ?? "nil")")
+            }
+            
+            guard let finalUserId = userId else {
+                print("❌ Failed to get or create user ID")
+                return
+            }
+            
+            // Step 2: Create user profile in Firestore
+            print("📝 Creating user profile in Firestore...")
+            let campus = OnboardingCoordinator.shared.currentCampusId
+            
+            try await UserProfileService.shared.createProfile(
+                userId: finalUserId,
+                displayName: name,
+                campus: campus,
+                interests: interests,
+                profileImage: profileImage
+            )
+            
+            print("✅ User profile created successfully!")
+            
+            // Track success
+            AnalyticsService.shared.track("firebase_account_created", props: [
+                "user_id": finalUserId,
+                "campus": campus,
+                "interests_count": interests.count,
+                "has_profile_image": profileImage != nil
+            ])
+            
+        } catch {
+            print("❌ Failed to create Firebase account: \(error.localizedDescription)")
+            
+            // Track failure
+            AnalyticsService.shared.track("firebase_account_creation_failed", props: [
+                "error": error.localizedDescription
+            ])
         }
     }
 }

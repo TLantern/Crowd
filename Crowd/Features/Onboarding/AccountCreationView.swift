@@ -11,9 +11,11 @@ import SwiftUI
 struct AccountCreationView: View {
     @State private var displayName: String = ""
     @State private var selectedInterests: Set<String> = []
+    @State private var selectedProfileImage: UIImage? = nil
+    @State private var showImagePicker: Bool = false
     @FocusState private var isNameFocused: Bool
     
-    let onComplete: (String, [Interest]) -> Void
+    let onComplete: (String, [Interest], UIImage?) -> Void
     
     // Minimum interests required to continue
     private let minimumInterests = 1
@@ -32,7 +34,7 @@ struct AccountCreationView: View {
             
             ScrollView {
                 VStack(spacing: 32) {
-                    // Header
+                    // Header with profile image picker
                     headerView
                     
                     // Name input
@@ -53,22 +55,52 @@ struct AccountCreationView: View {
         .onAppear {
             AnalyticsService.shared.trackScreenView("account_creation")
         }
+        .sheet(isPresented: $showImagePicker) {
+            ProfileImagePicker(selectedImage: $selectedProfileImage)
+        }
     }
     
     // MARK: - Header View
     
     private var headerView: some View {
-        VStack(spacing: 12) {
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(Color(hex: 0x02853E).opacity(0.2))
-                    .frame(width: 80, height: 80)
-                
-                Image(systemName: "person.crop.circle.badge.plus")
-                    .font(.system(size: 36))
-                    .foregroundColor(Color(hex: 0x02853E))
+        VStack(spacing: 16) {
+            // Profile image picker
+            Button(action: {
+                showImagePicker = true
+            }) {
+                ZStack {
+                    if let image = selectedProfileImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 100, height: 100)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(Color(hex: 0x02853E).opacity(0.2))
+                            .frame(width: 100, height: 100)
+                        
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.system(size: 44))
+                            .foregroundColor(Color(hex: 0x02853E))
+                    }
+                    
+                    // Camera badge
+                    Circle()
+                        .fill(Color(hex: 0x02853E))
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
+                        )
+                        .offset(x: 35, y: 35)
+                }
             }
+            
+            Text("Tap to add photo")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.6))
             
             Text("Create Your Profile")
                 .font(.system(size: 28, weight: .bold))
@@ -161,10 +193,11 @@ struct AccountCreationView: View {
             
             AnalyticsService.shared.track("account_created", props: [
                 "name_length": name.count,
-                "interests_count": interests.count
+                "interests_count": interests.count,
+                "has_profile_image": selectedProfileImage != nil
             ])
             
-            onComplete(name, interests)
+            onComplete(name, interests, selectedProfileImage)
         }) {
             HStack {
                 Text("Continue")
@@ -228,7 +261,7 @@ struct OnboardingInterestChip: View {
 }
 
 #Preview {
-    AccountCreationView { name, interests in
-        print("Name: \(name), Interests: \(interests.count)")
+    AccountCreationView { name, interests, profileImage in
+        print("Name: \(name), Interests: \(interests.count), Image: \(profileImage != nil)")
     }
 }
