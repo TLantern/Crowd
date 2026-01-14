@@ -64,35 +64,16 @@ struct PartiesOnboardingView: View {
     // MARK: - Header View
     
     private var headerView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("What's Happening")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-                
-                Text("Swipe through events near you")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.7))
-            }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("What's Happening")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(.white)
             
-            Spacer()
-            
-            // Done button - always visible
-            Button(action: {
-                OnboardingCoordinator.shared.completePartiesGuide()
-                onComplete()
-            }) {
-                Text("Done")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Color(hex: 0x02853E))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(Color(hex: 0x02853E).opacity(0.2))
-                    )
-            }
+            Text("Swipe through events near you")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.7))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, 20)
     }
     
@@ -245,67 +226,86 @@ struct PartiesOnboardingView: View {
     // MARK: - Action Buttons
     
     private var actionButtonsView: some View {
-        HStack(spacing: 16) {
-            // Previous button
-            Button(action: {
-                if currentIndex > 0 {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                        currentIndex -= 1
+        VStack(spacing: 16) {
+            // Navigation buttons
+            HStack(spacing: 16) {
+                // Previous button
+                Button(action: {
+                    if currentIndex > 0 {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                            currentIndex -= 1
+                        }
                     }
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(currentIndex > 0 ? .white : .white.opacity(0.3))
+                        .frame(width: 50, height: 50)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.2))
+                        )
                 }
-            }) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(currentIndex > 0 ? .white : .white.opacity(0.3))
-                    .frame(width: 50, height: 50)
+                .disabled(currentIndex == 0)
+                
+                // Next button
+                Button(action: {
+                    if currentIndex < viewModel.events.count - 1 {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                            currentIndex += 1
+                        }
+                    }
+                }) {
+                    HStack {
+                        Text("Next")
+                        Image(systemName: "arrow.right")
+                    }
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
                     .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.2))
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(currentIndex < viewModel.events.count - 1 ? Color.white.opacity(0.2) : Color.gray.opacity(0.3))
+                    )
+                }
+                .disabled(currentIndex >= viewModel.events.count - 1)
+                
+                // Next button (small)
+                Button(action: {
+                    if currentIndex < viewModel.events.count - 1 {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                            currentIndex += 1
+                        }
+                    }
+                }) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(currentIndex < viewModel.events.count - 1 ? .white : .white.opacity(0.3))
+                        .frame(width: 50, height: 50)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.2))
+                        )
+                }
+                .disabled(currentIndex >= viewModel.events.count - 1)
+            }
+            
+            // Prominent Done button at bottom
+            Button(action: {
+                OnboardingCoordinator.shared.completePartiesGuide()
+                onComplete()
+            }) {
+                Text("Done")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(hex: 0x02853E))
                     )
             }
-            .disabled(currentIndex == 0)
-            
-            // Next button
-            Button(action: {
-                if currentIndex < viewModel.events.count - 1 {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                        currentIndex += 1
-                    }
-                }
-            }) {
-                HStack {
-                    Text("Next")
-                    Image(systemName: "arrow.right")
-                }
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(currentIndex < viewModel.events.count - 1 ? Color(hex: 0x02853E) : Color.gray.opacity(0.5))
-                )
-            }
-            .disabled(currentIndex >= viewModel.events.count - 1)
-            
-            // Next button (small)
-            Button(action: {
-                if currentIndex < viewModel.events.count - 1 {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                        currentIndex += 1
-                    }
-                }
-            }) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(currentIndex < viewModel.events.count - 1 ? .white : .white.opacity(0.3))
-                    .frame(width: 50, height: 50)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.2))
-                    )
-            }
-            .disabled(currentIndex >= viewModel.events.count - 1)
         }
     }
 }
