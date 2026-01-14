@@ -206,8 +206,14 @@ struct CrowdApp: App {
                     // If not authenticated, signup sheet will be shown via IntentAuthGate
                 },
                 onRequestAccountCreation: {
-                    // Show account creation sheet
-                    showAccountCreation = true
+                    // First dismiss parties onboarding, then show account creation
+                    // SwiftUI only allows one fullScreenCover at a time
+                    showPartiesOnboarding = false
+                    
+                    // Wait for dismissal animation, then show account creation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        showAccountCreation = true
+                    }
                 }
             )
             .environmentObject(appState)
@@ -238,18 +244,14 @@ struct CrowdApp: App {
                     )
                 }
                 
-                // After a brief delay, close parties onboarding and show calendar reminder
+                // After a brief delay, show calendar reminder over map
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     // Complete parties onboarding
                     OnboardingCoordinator.shared.completePartiesGuide()
                     hasCompletedPartiesOnboarding = true
                     
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        showPartiesOnboarding = false
-                    }
-                    
                     // Show calendar reminder over map
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         withAnimation(.easeInOut(duration: 0.3)) {
                             showCalendarReminderOverMap = true
                         }
