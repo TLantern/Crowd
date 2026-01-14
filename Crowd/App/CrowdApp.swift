@@ -38,6 +38,8 @@ struct CrowdApp: App {
     @State private var showPartiesOnboarding = false
     @State private var showAccountCreation = false
     @State private var showSplashScreen = true
+    @State private var showCalendarReminderOverMap = false // Show calendar reminder over map after parties onboarding
+    @State private var showAllSetOverMap = false // Show "All Set" over map after calendar reminder
     
     private let env = AppEnvironment.current
     
@@ -159,6 +161,16 @@ struct CrowdApp: App {
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(1.5)
             }
+            
+            // Calendar reminder overlay (shown over map after parties onboarding)
+            if showCalendarReminderOverMap {
+                calendarReminderOverlay
+            }
+            
+            // "All Set" overlay (shown over map after calendar reminder)
+            if showAllSetOverMap {
+                allSetOverlay
+            }
         }
         .task {
             await checkTermsAcceptance()
@@ -174,6 +186,13 @@ struct CrowdApp: App {
                 onComplete: {
                     showPartiesOnboarding = false
                     hasCompletedPartiesOnboarding = true
+                    
+                    // After parties onboarding, show calendar reminder over map
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showCalendarReminderOverMap = true
+                        }
+                    }
                 },
                 onIntentAction: { action in
                     // Attempt the intent action - may trigger signup
@@ -182,6 +201,13 @@ struct CrowdApp: App {
                         action.completion?()
                         showPartiesOnboarding = false
                         hasCompletedPartiesOnboarding = true
+                        
+                        // Show calendar reminder over map
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showCalendarReminderOverMap = true
+                            }
+                        }
                     }
                     // If not authenticated, signup sheet will be shown via IntentAuthGate
                 },
@@ -227,6 +253,177 @@ struct CrowdApp: App {
                 showPartiesOnboarding = true
             }
         }
+    }
+    
+    // MARK: - Calendar Reminder Overlay (shown over map)
+    
+    private var calendarReminderOverlay: some View {
+        ZStack {
+            // Semi-transparent overlay
+            Color.black.opacity(0.85)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                Spacer()
+                
+                // Reminder content
+                VStack(spacing: 20) {
+                    // Calendar icon with pulsing effect
+                    ZStack {
+                        Circle()
+                            .fill(Color(hex: 0x02853E).opacity(0.15))
+                            .frame(width: 120, height: 120)
+                        
+                        Circle()
+                            .fill(Color(hex: 0x02853E).opacity(0.25))
+                            .frame(width: 90, height: 90)
+                        
+                        Image(systemName: "calendar")
+                            .font(.system(size: 40, weight: .medium))
+                            .foregroundColor(Color(hex: 0x02853E))
+                    }
+                    
+                    // Message
+                    VStack(spacing: 8) {
+                        Text("One last thing! 👆")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text("Remember, you can always find\nparties and school events here!")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(4)
+                    }
+                    
+                    // Arrow pointing to calendar
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(Color(hex: 0x02853E))
+                        .padding(.top, 8)
+                    
+                    // Calendar tab highlight
+                    VStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 28))
+                            .foregroundColor(Color(hex: 0x02853E))
+                        Text("Parties")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color(hex: 0x02853E))
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(hex: 0x02853E).opacity(0.2))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color(hex: 0x02853E), lineWidth: 2)
+                            )
+                    )
+                    
+                    // Got it button
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showCalendarReminderOverMap = false
+                        }
+                        
+                        AnalyticsService.shared.track("calendar_reminder_dismissed", props: [:])
+                        
+                        // Show "All Set" after calendar reminder
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                showAllSetOverMap = true
+                            }
+                        }
+                    }) {
+                        Text("Got it!")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color(hex: 0x02853E))
+                            )
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.top, 20)
+                }
+                .padding(.horizontal, 24)
+                
+                Spacer()
+            }
+        }
+        .transition(.opacity)
+    }
+    
+    // MARK: - All Set Overlay (shown over map)
+    
+    private var allSetOverlay: some View {
+        ZStack {
+            // Semi-transparent overlay
+            Color.black.opacity(0.85)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                Spacer()
+                
+                // Success content
+                VStack(spacing: 24) {
+                    // Checkmark icon with celebration effect
+                    ZStack {
+                        Circle()
+                            .fill(Color(hex: 0x02853E).opacity(0.15))
+                            .frame(width: 140, height: 140)
+                        
+                        Circle()
+                            .fill(Color(hex: 0x02853E).opacity(0.25))
+                            .frame(width: 100, height: 100)
+                        
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 60, weight: .medium))
+                            .foregroundColor(Color(hex: 0x02853E))
+                    }
+                    
+                    // Message
+                    VStack(spacing: 12) {
+                        Text("All Set! 🎉")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Text("You're ready to join the crowd!")
+                            .font(.system(size: 18))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    
+                    // Continue button
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showAllSetOverMap = false
+                        }
+                        
+                        AnalyticsService.shared.track("all_set_dismissed", props: [:])
+                    }) {
+                        Text("Let's Go!")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color(hex: 0x02853E))
+                            )
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.top, 12)
+                }
+                .padding(.horizontal, 24)
+                
+                Spacer()
+            }
+        }
+        .transition(.opacity)
     }
     
     // MARK: - Terms Acceptance Check
