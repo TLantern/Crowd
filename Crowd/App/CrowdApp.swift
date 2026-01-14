@@ -219,7 +219,11 @@ struct CrowdApp: App {
                 // Save the display name locally
                 userDisplayName = name
                 hasCompletedAccountCreation = true
-                showAccountCreation = false
+                
+                // Smooth transition: close account creation first
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    showAccountCreation = false
+                }
                 
                 // Save interests to UserDefaults
                 let interestIds = interests.map { $0.id }
@@ -234,12 +238,34 @@ struct CrowdApp: App {
                     )
                 }
                 
+                // After a brief delay, close parties onboarding and show calendar reminder
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    // Complete parties onboarding
+                    OnboardingCoordinator.shared.completePartiesGuide()
+                    hasCompletedPartiesOnboarding = true
+                    
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showPartiesOnboarding = false
+                    }
+                    
+                    // Show calendar reminder over map
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            showCalendarReminderOverMap = true
+                        }
+                    }
+                }
+                
                 AnalyticsService.shared.track("account_created", props: [
                     "name_length": name.count,
                     "interests_count": interests.count,
                     "has_profile_image": profileImage != nil
                 ])
             }
+            .transition(.asymmetric(
+                insertion: .move(edge: .bottom).combined(with: .opacity),
+                removal: .move(edge: .bottom).combined(with: .opacity)
+            ))
         }
         // Listen for parties guide trigger from coordinator
         .onReceive(onboardingCoordinator.$shouldShowPartiesGuide) { shouldShow in
@@ -283,7 +309,7 @@ struct CrowdApp: App {
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.white)
                         
-                        Text("Remember, you can always find\nparties and school events here!")
+                        Text("You can always find parties/school\nevents in the calendar!")
                             .font(.system(size: 16))
                             .foregroundColor(.white.opacity(0.8))
                             .multilineTextAlignment(.center)
@@ -296,25 +322,19 @@ struct CrowdApp: App {
                         .foregroundColor(Color(hex: 0x02853E))
                         .padding(.top, 8)
                     
-                    // Calendar tab highlight
-                    VStack(spacing: 4) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 28))
-                            .foregroundColor(Color(hex: 0x02853E))
-                        Text("Parties")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: 0x02853E))
-                    }
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(hex: 0x02853E).opacity(0.2))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color(hex: 0x02853E), lineWidth: 2)
-                            )
-                    )
+                    // Calendar tab highlight (icon only, no text)
+                    Image(systemName: "calendar")
+                        .font(.system(size: 32))
+                        .foregroundColor(Color(hex: 0x02853E))
+                        .padding(16)
+                        .background(
+                            Circle()
+                                .fill(Color(hex: 0x02853E).opacity(0.2))
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color(hex: 0x02853E), lineWidth: 2)
+                                )
+                        )
                     
                     // Got it button - dismisses and completes onboarding
                     Button(action: {
