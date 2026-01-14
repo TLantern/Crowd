@@ -30,10 +30,10 @@ struct SplashScreenView: View {
                 Spacer()
                 
                 // Logo and Typewriter Text
-                VStack(spacing: 28) {
+                VStack(spacing: 16) {
                     // Flickering flame logo - larger for more impact
                     FlickeringLogoView()
-                        .frame(width: 200, height: 200)
+                        .frame(width: 250, height: 250)
                     
                     // Typewriter "Crowd" in different languages (replaces CrowdText image)
                     CrowdTypewriterView()
@@ -98,8 +98,8 @@ struct FlickeringLogoView: View {
     @State private var flickerOffsetX: CGFloat = 0
     @State private var flickerOffsetY: CGFloat = 0
     @State private var flickerRotation: Double = 0
-    @State private var glowOpacity: Double = 0.4
-    @State private var glowRadius: CGFloat = 15
+    @State private var glowOpacity: Double = 0.5
+    @State private var glowRadius: CGFloat = 20
     
     var body: some View {
         Image("Logo")
@@ -130,8 +130,8 @@ struct FlickeringLogoView: View {
     private func startGlowPulsing() {
         // Pulsing glow effect - larger for bigger logo
         withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-            glowOpacity = 0.7
-            glowRadius = 25
+            glowOpacity = 0.8
+            glowRadius = 35
         }
     }
 }

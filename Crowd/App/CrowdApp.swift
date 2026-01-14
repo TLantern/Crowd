@@ -23,8 +23,10 @@ struct CrowdApp: App {
     // NEW: Campus selection gate (replaces mandatory onboarding)
     @AppStorage("hasCompletedCampusSelection") private var hasCompletedCampusSelection = false
     @AppStorage("hasCompletedPartiesOnboarding") private var hasCompletedPartiesOnboarding = false
+    @AppStorage("hasCompletedAccountCreation") private var hasCompletedAccountCreation = false
     @AppStorage("hasSeenSplashScreen") private var hasSeenSplashScreen = false
     @AppStorage("useNewOnboarding") private var useNewOnboarding = true
+    @AppStorage("userDisplayName") private var userDisplayName = ""
     
     // LEGACY: Keep for backwards compatibility with existing users
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
@@ -33,6 +35,7 @@ struct CrowdApp: App {
     @State private var isCheckingTerms = true
     @State private var accountDeleted = false
     @State private var showPartiesOnboarding = false
+    @State private var showAccountCreation = false
     @State private var showSplashScreen = true
     
     private let env = AppEnvironment.current
@@ -55,6 +58,7 @@ struct CrowdApp: App {
                         hasSeenSplashScreen = true
                         hasCompletedCampusSelection = true
                         hasCompletedPartiesOnboarding = true
+                        hasCompletedAccountCreation = true
                     }
                 }
                 
@@ -113,8 +117,11 @@ struct CrowdApp: App {
                     hasSeenSplashScreen = false
                     hasCompletedCampusSelection = false
                     hasCompletedPartiesOnboarding = false
+                    hasCompletedAccountCreation = false
+                    userDisplayName = ""
                     showTermsAgreement = false
                     showPartiesOnboarding = false
+                    showAccountCreation = false
                     showSplashScreen = true
                     isCheckingTerms = true
                     accountDeleted = false
@@ -176,10 +183,32 @@ struct CrowdApp: App {
                         hasCompletedPartiesOnboarding = true
                     }
                     // If not authenticated, signup sheet will be shown via IntentAuthGate
+                },
+                onRequestAccountCreation: {
+                    // Show account creation sheet
+                    showAccountCreation = true
                 }
             )
             .environmentObject(appState)
             .withIntentAuthGate()
+        }
+        // Account creation during onboarding
+        .fullScreenCover(isPresented: $showAccountCreation) {
+            AccountCreationView { name, interests in
+                // Save the display name
+                userDisplayName = name
+                hasCompletedAccountCreation = true
+                showAccountCreation = false
+                
+                // Save interests to UserDefaults (can be synced to Firebase later)
+                let interestIds = interests.map { $0.id }
+                UserDefaults.standard.set(interestIds, forKey: "selectedInterestIds")
+                
+                AnalyticsService.shared.track("account_created", props: [
+                    "name_length": name.count,
+                    "interests_count": interests.count
+                ])
+            }
         }
         // Listen for parties guide trigger from coordinator
         .onReceive(onboardingCoordinator.$shouldShowPartiesGuide) { shouldShow in

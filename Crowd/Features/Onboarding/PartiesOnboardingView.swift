@@ -19,12 +19,18 @@ struct PartiesOnboardingView: View {
     @State private var eventsViewedCount: Int = 0 // Count of events user has seen
     @State private var showCalendarHighlight: Bool = false // Show calendar tab highlight on last event
     @State private var showFinalCalendarReminder: Bool = false // Final reminder before completion
+    @State private var isInFinalEventsPhase: Bool = false // After account creation, show 3 more events
+    @State private var finalEventsViewed: Int = 0 // Count of final events viewed
+    @State private var showAccountCreation: Bool = false // Show account creation overlay
     
     let onComplete: () -> Void
     let onIntentAction: (IntentAction) -> Void
+    let onRequestAccountCreation: (() -> Void)? // Callback to trigger account creation
     
-    // Minimum events user must view before they can skip (4 events, last one shows calendar highlight)
+    // Minimum events user must view before account creation (4 events)
     private let minimumEventsToView = 4
+    // Number of final events to show after account creation
+    private let finalEventsCount = 3
     
     var body: some View {
         ZStack {
@@ -61,6 +67,28 @@ struct PartiesOnboardingView: View {
                 calendarHighlightOverlay
             }
             
+            // Account creation overlay (if using inline flow)
+            if showAccountCreation {
+                AccountCreationView { name, interests in
+                    // Account created - start final events phase
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showAccountCreation = false
+                        isInFinalEventsPhase = true
+                        finalEventsViewed = 0
+                        // Reset to show next events after current position
+                        if currentIndex < viewModel.events.count - 1 {
+                            currentIndex += 1
+                        }
+                    }
+                    
+                    AnalyticsService.shared.track("account_created_in_onboarding", props: [
+                        "name": name,
+                        "interests_count": interests.count
+                    ])
+                }
+                .transition(.opacity)
+            }
+            
             // Final calendar reminder before completion
             if showFinalCalendarReminder {
                 finalCalendarReminderOverlay
@@ -77,17 +105,29 @@ struct PartiesOnboardingView: View {
             // Update events viewed count
             eventsViewedCount = newVal + 1
             
-            // Show calendar highlight on the 4th event (last required event)
-            if eventsViewedCount == minimumEventsToView && !showCalendarHighlight {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    showCalendarHighlight = true
+            // If in final events phase, track those separately
+            if isInFinalEventsPhase {
+                finalEventsViewed += 1
+                
+                // After 3 final events, show the final calendar reminder
+                if finalEventsViewed >= finalEventsCount {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showFinalCalendarReminder = true
+                    }
                 }
-            }
-            
-            // Check if user has viewed minimum events
-            if eventsViewedCount >= minimumEventsToView {
-                withAnimation {
-                    hasViewedMinimumEvents = true
+            } else {
+                // Show calendar highlight on the 4th event (last required event before account creation)
+                if eventsViewedCount == minimumEventsToView && !showCalendarHighlight && !isInFinalEventsPhase {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showCalendarHighlight = true
+                    }
+                }
+                
+                // Check if user has viewed minimum events
+                if eventsViewedCount >= minimumEventsToView {
+                    withAnimation {
+                        hasViewedMinimumEvents = true
+                    }
                 }
             }
             
@@ -101,12 +141,23 @@ struct PartiesOnboardingView: View {
         VStack(spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("What's Happening")
+                    Text(isInFinalEventsPhase ? "Almost Done!" : "What's Happening")
                         .font(.system(size: 24, weight: .bold))
                         .foregroundColor(.white)
                     
                     // Dynamic instruction text
-                    if !hasViewedMinimumEvents && !viewModel.events.isEmpty {
+                    if isInFinalEventsPhase {
+                        let remaining = max(0, finalEventsCount - finalEventsViewed)
+                        if remaining > 0 {
+                            Text("Check out \(remaining) more event\(remaining == 1 ? "" : "s")")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(Color(hex: 0x02853E))
+                        } else {
+                            Text("You're all set!")
+                                .font(.system(size: 14))
+                                .foregroundColor(Color(hex: 0x02853E))
+                        }
+                    } else if !hasViewedMinimumEvents && !viewModel.events.isEmpty {
                         let remaining = max(0, minimumEventsToView - eventsViewedCount)
                         Text("Swipe through \(remaining) more event\(remaining == 1 ? "" : "s") to continue")
                             .font(.system(size: 14, weight: .medium))
@@ -202,12 +253,22 @@ struct PartiesOnboardingView: View {
                             .multilineTextAlignment(.center)
                             .lineSpacing(4)
                         
-                        // Got it button
+                        // Got it button - triggers account creation
                         Button(action: {
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 showCalendarHighlight = false
                             }
                             AnalyticsService.shared.track("calendar_highlight_dismissed", props: [:])
+                            
+                            // Trigger account creation
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                if let onRequestAccountCreation = onRequestAccountCreation {
+                                    onRequestAccountCreation()
+                                } else {
+                                    // Fallback: show inline account creation
+                                    showAccountCreation = true
+                                }
+                            }
                         }) {
                             Text("Got it!")
                                 .font(.system(size: 16, weight: .bold))
@@ -887,7 +948,8 @@ class PartiesOnboardingViewModel: ObservableObject {
 #Preview {
     PartiesOnboardingView(
         onComplete: { print("Completed") },
-        onIntentAction: { action in print("Intent: \(action.type)") }
+        onIntentAction: { action in print("Intent: \(action.type)") },
+        onRequestAccountCreation: { print("Account creation requested") }
     )
     .environmentObject(AppState())
 }
