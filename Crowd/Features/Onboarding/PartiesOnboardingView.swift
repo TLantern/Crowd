@@ -14,21 +14,11 @@ struct PartiesOnboardingView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = PartiesOnboardingViewModel()
     @State private var currentIndex: Int = 0
-    @State private var showIntentCTA: Bool = false
-    @State private var hasViewedMinimumEvents: Bool = false // Track if user has swiped enough
     @State private var eventsViewedCount: Int = 0 // Count of events user has seen
-    @State private var isInFinalEventsPhase: Bool = false // After account creation, show 3 more events
-    @State private var finalEventsViewed: Int = 0 // Count of final events viewed
-    @State private var showAccountCreation: Bool = false // Show account creation overlay
     
     let onComplete: () -> Void
     let onIntentAction: (IntentAction) -> Void
     let onRequestAccountCreation: (() -> Void)? // Callback to trigger account creation
-    
-    // Minimum events user must view before account creation (4 events)
-    private let minimumEventsToView = 4
-    // Number of final events to show after account creation
-    private let finalEventsCount = 3
     
     var body: some View {
         ZStack {
@@ -38,7 +28,7 @@ struct PartiesOnboardingView: View {
             
             // Main content
             VStack(spacing: 0) {
-                // Header with progress and exit
+                // Header with exit button
                 headerView
                 
                 if viewModel.isLoading {
@@ -59,32 +49,6 @@ struct PartiesOnboardingView: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 32)
-            
-            // Account creation overlay (with smooth transition)
-            if showAccountCreation {
-                AccountCreationView { name, interests, profileImage in
-                    // Account created - start final events phase
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        showAccountCreation = false
-                        isInFinalEventsPhase = true
-                        finalEventsViewed = 0
-                        // Reset to show next events after current position
-                        if currentIndex < viewModel.events.count - 1 {
-                            currentIndex += 1
-                        }
-                    }
-                    
-                    AnalyticsService.shared.track("account_created_in_onboarding", props: [
-                        "name": name,
-                        "interests_count": interests.count,
-                        "has_profile_image": profileImage != nil
-                    ])
-                }
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.95)).animation(.easeOut(duration: 0.35)),
-                    removal: .opacity.animation(.easeIn(duration: 0.25))
-                ))
-            }
         }
         .onAppear {
             viewModel.loadEvents()
@@ -92,118 +56,44 @@ struct PartiesOnboardingView: View {
             
             AnalyticsService.shared.trackScreenView("parties_onboarding")
         }
-        // Track swiping progress and check for intent CTA
         .onChange(of: currentIndex) { oldVal, newVal in
-            // Update events viewed count
             eventsViewedCount = newVal + 1
-            
-            // If in final events phase, track those separately
-            if isInFinalEventsPhase {
-                finalEventsViewed += 1
-                
-                // After 3 final events, complete parties onboarding
-                // The calendar reminder and "All Set" will show over the map
-                if finalEventsViewed >= finalEventsCount {
-                    OnboardingCoordinator.shared.completePartiesGuide()
-                    onComplete()
-                }
-            } else {
-                // Check if user has viewed minimum events
-                if eventsViewedCount >= minimumEventsToView {
-                    withAnimation {
-                        hasViewedMinimumEvents = true
-                    }
-                    
-                    // After viewing 4 events, trigger account creation
-                    if eventsViewedCount == minimumEventsToView && !showAccountCreation {
-                        // Small delay for smoother transition
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            if let onRequestAccountCreation = onRequestAccountCreation {
-                                onRequestAccountCreation()
-                            } else {
-                                // Show inline account creation with smooth animation
-                                withAnimation(.easeInOut(duration: 0.4)) {
-                                    showAccountCreation = true
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            checkForIntentCTA()
         }
     }
     
     // MARK: - Header View
     
     private var headerView: some View {
-        VStack(spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(isInFinalEventsPhase ? "Almost Done!" : "What's Happening")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    // Dynamic instruction text
-                    if isInFinalEventsPhase {
-                        let remaining = max(0, finalEventsCount - finalEventsViewed)
-                        if remaining > 0 {
-                            Text("Check out \(remaining) more event\(remaining == 1 ? "" : "s")")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(Color(hex: 0x02853E))
-                        } else {
-                            Text("You're all set!")
-                                .font(.system(size: 14))
-                                .foregroundColor(Color(hex: 0x02853E))
-                        }
-                    } else if !hasViewedMinimumEvents && !viewModel.events.isEmpty {
-                        let remaining = max(0, minimumEventsToView - eventsViewedCount)
-                        Text("Swipe through \(remaining) more event\(remaining == 1 ? "" : "s") to continue")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(Color(hex: 0x02853E))
-                    } else {
-                        Text("Swipe through events near you")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                }
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("What's Happening")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
                 
-                Spacer()
-                
-                // Exit button - only visible after viewing minimum events
-                if hasViewedMinimumEvents {
-                    Button(action: {
-                        OnboardingCoordinator.shared.skipPartiesGuide()
-                        onComplete()
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.7))
-                            .frame(width: 36, height: 36)
-                            .background(
-                                Circle()
-                                    .fill(Color.white.opacity(0.2))
-                            )
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                }
+                Text("Swipe through events near you")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.7))
             }
             
-            // Progress indicator showing how many events they need to view
-            if !hasViewedMinimumEvents && !viewModel.events.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(0..<minimumEventsToView, id: \.self) { index in
-                        Circle()
-                            .fill(index < eventsViewedCount ? Color(hex: 0x02853E) : Color.white.opacity(0.3))
-                            .frame(width: 10, height: 10)
-                    }
-                }
-                .padding(.top, 4)
+            Spacer()
+            
+            // Done button - always visible
+            Button(action: {
+                OnboardingCoordinator.shared.completePartiesGuide()
+                onComplete()
+            }) {
+                Text("Done")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(Color(hex: 0x02853E))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(Color(hex: 0x02853E).opacity(0.2))
+                    )
             }
         }
         .padding(.bottom, 20)
-        .animation(.spring(response: 0.3), value: hasViewedMinimumEvents)
     }
     
     // MARK: - Loading View
@@ -357,187 +247,67 @@ struct PartiesOnboardingView: View {
     // MARK: - Action Buttons
     
     private var actionButtonsView: some View {
-        VStack(spacing: 12) {
-            if showIntentCTA && hasViewedMinimumEvents {
-                // Show intent action CTA after swiping through required events
-                intentCTAView
-            } else {
-                // Instruction text for what user needs to do
-                if !hasViewedMinimumEvents {
-                    Text("👆 Tap Next to see more events")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: 0x02853E))
-                        .padding(.bottom, 4)
-                }
-                
-                // Navigation buttons
-                HStack(spacing: 16) {
-                    // Previous button
-                    Button(action: {
-                        if currentIndex > 0 {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                currentIndex -= 1
-                            }
-                        }
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(currentIndex > 0 ? .white : .white.opacity(0.3))
-                            .frame(width: 50, height: 50)
-                            .background(
-                                Circle()
-                                    .fill(Color.white.opacity(0.2))
-                            )
-                    }
-                    .disabled(currentIndex == 0)
-                    
-                    // Main action button - changes based on progress
-                    if hasViewedMinimumEvents {
-                        // After minimum events, show Save button
-                        Button(action: {
-                            let event = viewModel.events[currentIndex]
-                            onIntentAction(IntentAction(
-                                type: "save_event",
-                                eventId: event.id
-                            ))
-                        }) {
-                            HStack {
-                                Image(systemName: "bookmark")
-                                Text("Save Event")
-                            }
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color.white)
-                            )
-                        }
-                    } else {
-                        // Before minimum events, show prominent NEXT button
-                        Button(action: {
-                            if currentIndex < viewModel.events.count - 1 {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                    currentIndex += 1
-                                }
-                            }
-                        }) {
-                            HStack {
-                                Text("Next")
-                                Image(systemName: "arrow.right")
-                            }
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color(hex: 0x02853E))
-                            )
-                        }
-                    }
-                    
-                    // Next button (small) - only after minimum viewed
-                    if hasViewedMinimumEvents {
-                        Button(action: {
-                            if currentIndex < viewModel.events.count - 1 {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                    currentIndex += 1
-                                }
-                            } else {
-                                // Last card - show completion
-                                showIntentCTA = true
-                            }
-                        }) {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 50, height: 50)
-                                .background(
-                                    Circle()
-                                        .fill(Color.white.opacity(0.2))
-                                )
-                        }
+        HStack(spacing: 16) {
+            // Previous button
+            Button(action: {
+                if currentIndex > 0 {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                        currentIndex -= 1
                     }
                 }
-            }
-        }
-    }
-    
-    // MARK: - Intent CTA View
-    
-    private var intentCTAView: some View {
-        VStack(spacing: 16) {
-            // Success message
-            VStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 40))
-                    .foregroundColor(Color(hex: 0x02853E))
-                
-                Text("Nice! You've seen the events")
+            }) {
+                Image(systemName: "chevron.left")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                
-                Text("Ready to join the crowd?")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            
-            // Primary CTA - This triggers the signup if not authenticated
-            Button(action: {
-                onIntentAction(IntentAction(
-                    type: "pulling_up",
-                    eventId: viewModel.events.last?.id,
-                    completion: {
-                        // Complete parties onboarding - reminder will show over map
-                        OnboardingCoordinator.shared.completePartiesGuide()
-                        onComplete()
-                    }
-                ))
-            }) {
-                HStack {
-                    Image(systemName: "flame.fill")
-                    Text("I'm pulling up")
-                }
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(hex: 0x02853E))
-                )
-            }
-            
-            // Secondary - Continue to explore (goes to map, reminder will show there)
-            Button(action: {
-                // Complete parties onboarding - reminder will show over map
-                OnboardingCoordinator.shared.completePartiesGuide()
-                onComplete()
-            }) {
-                Text("Continue to Map")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .foregroundColor(currentIndex > 0 ? .white : .white.opacity(0.3))
+                    .frame(width: 50, height: 50)
                     .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                        Circle()
+                            .fill(Color.white.opacity(0.2))
                     )
             }
-        }
-    }
-    
-    // MARK: - Helpers
-    
-    private func checkForIntentCTA() {
-        // Show intent CTA after viewing at least 3 events or reaching the end
-        let minEventsViewed = min(3, viewModel.events.count)
-        if currentIndex >= minEventsViewed - 1 && currentIndex == viewModel.events.count - 1 {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                showIntentCTA = true
+            .disabled(currentIndex == 0)
+            
+            // Next button
+            Button(action: {
+                if currentIndex < viewModel.events.count - 1 {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                        currentIndex += 1
+                    }
+                }
+            }) {
+                HStack {
+                    Text("Next")
+                    Image(systemName: "arrow.right")
+                }
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(currentIndex < viewModel.events.count - 1 ? Color(hex: 0x02853E) : Color.gray.opacity(0.5))
+                )
             }
+            .disabled(currentIndex >= viewModel.events.count - 1)
+            
+            // Next button (small)
+            Button(action: {
+                if currentIndex < viewModel.events.count - 1 {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                        currentIndex += 1
+                    }
+                }
+            }) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(currentIndex < viewModel.events.count - 1 ? .white : .white.opacity(0.3))
+                    .frame(width: 50, height: 50)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.2))
+                    )
+            }
+            .disabled(currentIndex >= viewModel.events.count - 1)
         }
     }
 }
