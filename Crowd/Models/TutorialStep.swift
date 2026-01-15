@@ -35,26 +35,19 @@ extension TutorialStep {
         TutorialStep(
             id: 1,
             title: "Welcome to Crowd! 🎉",
-            description: "Tap on any event pin to see details and join the crowd. Events show where people are gathering right now.",
+            description: "No more guessing what's going on. Crowd helps you see real-time campus activity so you can decide where to go next.",
             cardPosition: .topCenter,
             arrowDirection: .bottom
         ),
         TutorialStep(
             id: 2,
             title: "Create Your Own Event",
-            description: "Tap the green plus button to host an event. It's free and takes less than a minute!",
+            description: "Have plans already? Tap the green plus, enter your crowd info, and let people know where you're gathering.",
             cardPosition: .bottomCenter,
             arrowDirection: .top
         ),
         TutorialStep(
             id: 3,
-            title: "Filter Events",
-            description: "Use the filter dropdown to see only user-created or school-hosted events.",
-            cardPosition: .topCenter,
-            arrowDirection: .bottom
-        ),
-        TutorialStep(
-            id: 4,
             title: "You're All Set! 🚀",
             description: "Start exploring events around you and connect with your campus community.",
             cardPosition: .center,
