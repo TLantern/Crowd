@@ -244,18 +244,10 @@ struct CrowdApp: App {
                     )
                 }
                 
-                // After a brief delay, show calendar reminder over map
+                // Complete parties onboarding
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    // Complete parties onboarding
                     OnboardingCoordinator.shared.completePartiesGuide()
                     hasCompletedPartiesOnboarding = true
-                    
-                    // Show calendar reminder over map
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            showCalendarReminderOverMap = true
-                        }
-                    }
                 }
                 
                 AnalyticsService.shared.track("account_created", props: [
@@ -305,11 +297,11 @@ struct CrowdApp: App {
                             .foregroundColor(Color(hex: 0x02853E))
                     }
                     
-                    // Message
-                    VStack(spacing: 8) {
-                        Text("One last thing! 👆")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.white)
+                        // Message
+                        VStack(spacing: 8) {
+                            Text("Good to know 📅")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.white)
                         
                         Text("You can always find parties/school\nevents in the calendar!")
                             .font(.system(size: 16))
