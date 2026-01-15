@@ -348,9 +348,9 @@ struct CrowdHomeView: View {
         }
         
         // Combine all events (deduplicated user events + official + upcoming) - today only
-        let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
-        let filteredOfficial = filterEventsForToday(officialEvents)
-        let filteredUser = filterEventsForToday(allUserEvents)
+            let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
+            let filteredOfficial = filterEventsForToday(officialEvents)
+            let filteredUser = filterEventsForToday(allUserEvents)
         let inputEvents = filteredOfficial + filteredUser + filteredUpcoming
         
         return EventClusteringService.clusterEvents(inputEvents)
@@ -592,30 +592,30 @@ struct CrowdHomeView: View {
     
     @MapContentBuilder
     private func anchorAnnotations() -> some MapContent {
-        // Render combined groups (anchors + events at same location)
-        ForEach(combinedGroups) { combinedGroup in
-            let isExpanded = expandedCombinedGroupId == combinedGroup.id
-            
-            if isExpanded {
-                combinedGroupExpandedAnnotations(
-                    anchorGroup: combinedGroup.anchorGroup,
-                    cluster: combinedGroup.cluster,
-                    center: combinedGroup.center,
-                    groupId: combinedGroup.id
-                )
-            } else {
-                combinedGroupCollapsedAnnotation(
-                    anchorGroup: combinedGroup.anchorGroup,
-                    cluster: combinedGroup.cluster,
-                    center: combinedGroup.center,
-                    groupId: combinedGroup.id
-                )
+            // Render combined groups (anchors + events at same location)
+            ForEach(combinedGroups) { combinedGroup in
+                let isExpanded = expandedCombinedGroupId == combinedGroup.id
+                
+                if isExpanded {
+                    combinedGroupExpandedAnnotations(
+                        anchorGroup: combinedGroup.anchorGroup,
+                        cluster: combinedGroup.cluster,
+                        center: combinedGroup.center,
+                        groupId: combinedGroup.id
+                    )
+                } else {
+                    combinedGroupCollapsedAnnotation(
+                        anchorGroup: combinedGroup.anchorGroup,
+                        cluster: combinedGroup.cluster,
+                        center: combinedGroup.center,
+                        groupId: combinedGroup.id
+                    )
+                }
             }
-        }
-        
-        // Render standalone anchor groups (not overlapping with clusters)
-        ForEach(standaloneAnchorGroups) { standaloneGroup in
-            anchorGroupAnnotations(group: standaloneGroup.group)
+            
+            // Render standalone anchor groups (not overlapping with clusters)
+            ForEach(standaloneAnchorGroups) { standaloneGroup in
+                anchorGroupAnnotations(group: standaloneGroup.group)
         }
     }
     
