@@ -10,9 +10,10 @@ import SwiftUI
 
 struct AccountCreationView: View {
     @State private var displayName: String = ""
-    @State private var selectedInterests: Set<String> = []
+    @State private var selectedInterestNames: Set<String> = [] // Use names instead of IDs to handle duplicates
     @State private var selectedProfileImage: UIImage? = nil
     @State private var showImagePicker: Bool = false
+    @State private var showAllInterests: Bool = false
     @FocusState private var isNameFocused: Bool
     
     let onComplete: (String, [Interest], UIImage?) -> Void
@@ -20,10 +21,37 @@ struct AccountCreationView: View {
     // Minimum interests required to continue
     private let minimumInterests = 1
     
+    // Get unique interests (remove duplicates by name)
+    private var uniqueInterests: [Interest] {
+        var seen = Set<String>()
+        return Interest.allInterests.filter { interest in
+            if seen.contains(interest.name) {
+                return false
+            }
+            seen.insert(interest.name)
+            return true
+        }
+    }
+    
+    // Find index of "Football" to show limited list up to that point
+    private var footballIndex: Int {
+        uniqueInterests.firstIndex { $0.name == "Football" } ?? uniqueInterests.count - 1
+    }
+    
+    // Interests to display (limited or all)
+    private var displayedInterests: [Interest] {
+        if showAllInterests {
+            return uniqueInterests
+        } else {
+            // Show up to and including Football (index + 1 to include Football)
+            return Array(uniqueInterests.prefix(footballIndex + 1))
+        }
+    }
+    
     // Check if form is valid
     private var isFormValid: Bool {
         !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        selectedInterests.count >= minimumInterests
+        selectedInterestNames.count >= minimumInterests
     }
     
     var body: some View {
@@ -165,9 +193,9 @@ struct AccountCreationView: View {
                 
                 Spacer()
                 
-                Text("\(selectedInterests.count) selected")
+                Text("\(selectedInterestNames.count) selected")
                     .font(.system(size: 14))
-                    .foregroundColor(selectedInterests.count >= minimumInterests ? Color(hex: 0x02853E) : .white.opacity(0.5))
+                    .foregroundColor(selectedInterestNames.count >= minimumInterests ? Color(hex: 0x02853E) : .white.opacity(0.5))
             }
             
             Text("Select at least \(minimumInterests) interest to continue")
@@ -179,16 +207,44 @@ struct AccountCreationView: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 12) {
-                ForEach(Interest.allInterests) { interest in
+                ForEach(displayedInterests) { interest in
                     OnboardingInterestChip(
                         emoji: interest.emoji,
                         name: interest.name,
-                        isSelected: selectedInterests.contains(interest.id),
+                        isSelected: selectedInterestNames.contains(interest.name),
                         onTap: {
                             toggleInterest(interest)
                         }
                     )
                 }
+            }
+            
+            // "See more" button (only show if not showing all interests)
+            if !showAllInterests && uniqueInterests.count > displayedInterests.count {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showAllInterests = true
+                    }
+                }) {
+                    HStack {
+                        Text("See more")
+                            .font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(Color(hex: 0x02853E))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(hex: 0x02853E).opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(hex: 0x02853E), lineWidth: 1)
+                            )
+                    )
+                }
+                .padding(.top, 8)
             }
         }
     }
@@ -197,8 +253,8 @@ struct AccountCreationView: View {
     
     private var continueButton: some View {
         Button(action: {
-            // Get selected interest objects
-            let interests = Interest.allInterests.filter { selectedInterests.contains($0.id) }
+            // Get selected interest objects from unique list
+            let interests = uniqueInterests.filter { selectedInterestNames.contains($0.name) }
             let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
             
             AnalyticsService.shared.track("account_created", props: [
@@ -228,10 +284,10 @@ struct AccountCreationView: View {
     // MARK: - Helpers
     
     private func toggleInterest(_ interest: Interest) {
-        if selectedInterests.contains(interest.id) {
-            selectedInterests.remove(interest.id)
+        if selectedInterestNames.contains(interest.name) {
+            selectedInterestNames.remove(interest.name)
         } else {
-            selectedInterests.insert(interest.id)
+            selectedInterestNames.insert(interest.name)
         }
     }
 }

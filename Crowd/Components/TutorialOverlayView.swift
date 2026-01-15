@@ -11,6 +11,7 @@ struct TutorialOverlayView: View {
     let steps: [TutorialStep]
     let targetPositions: [Int: CGPoint] // Map step ID to target position
     let onComplete: () -> Void
+    let onStepComplete: ((Int) -> Void)? // Optional callback when a specific step is completed
     
     @State private var currentStepIndex: Int = 0
     @State private var isVisible: Bool = false
@@ -97,7 +98,19 @@ struct TutorialOverlayView: View {
     private func handleNext() {
         Haptics.light()
         
-        if isLastStep {
+        // Check if we're completing step 2 (Create Your Own Event) - id: 2
+        if currentStep.id == 2 {
+            // Call step completion callback if provided
+            onStepComplete?(2)
+            
+            // Complete tutorial (don't continue to step 3)
+            withAnimation(.easeOut(duration: 0.3)) {
+                isVisible = false
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                onComplete()
+            }
+        } else if isLastStep {
             // Complete tutorial
             withAnimation(.easeOut(duration: 0.3)) {
                 isVisible = false
@@ -132,7 +145,8 @@ struct TutorialOverlayView: View {
         TutorialOverlayView(
             steps: TutorialStep.allSteps,
             targetPositions: [:],
-            onComplete: { print("Tutorial completed") }
+            onComplete: { print("Tutorial completed") },
+            onStepComplete: nil
         )
     }
 }
