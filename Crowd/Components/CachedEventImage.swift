@@ -30,12 +30,12 @@ struct CachedEventImage: View {
                     .fill(Color.gray.opacity(0.2))
                     .overlay(ProgressView())
             case .success(let image):
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: contentMode)
+            image
+                .resizable()
+                .aspectRatio(contentMode: contentMode)
             case .failure:
-                Rectangle()
-                    .fill(Color.gray.opacity(0.2))
+            Rectangle()
+                .fill(Color.gray.opacity(0.2))
                     .overlay(
                         Image(systemName: "photo")
                             .foregroundStyle(.gray)

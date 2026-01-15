@@ -347,9 +347,9 @@ struct CrowdHomeView: View {
         }
         
         // Combine all events (deduplicated user events + official + upcoming) - today only
-        let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
-        let filteredOfficial = filterEventsForToday(officialEvents)
-        let filteredUser = filterEventsForToday(allUserEvents)
+            let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
+            let filteredOfficial = filterEventsForToday(officialEvents)
+            let filteredUser = filterEventsForToday(allUserEvents)
         let inputEvents = filteredOfficial + filteredUser + filteredUpcoming
         
         return EventClusteringService.clusterEvents(inputEvents)
@@ -639,7 +639,7 @@ struct CrowdHomeView: View {
     }
     
     @MapContentBuilder
-    func anchorAnnotations() -> some MapContent {
+    private func anchorAnnotations() -> some MapContent {
         // Render combined groups (anchors + events at same location)
         ForEach(combinedGroups) { combinedGroup in
             let isExpanded = expandedCombinedGroupId == combinedGroup.id

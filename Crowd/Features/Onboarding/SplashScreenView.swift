@@ -37,7 +37,7 @@ struct SplashScreenView: View {
                     
                     // Typewriter "Crowd" in different languages (replaces CrowdText image)
                     CrowdTypewriterView()
-                        .frame(height: 50)
+                        .frame(height: 80)
                 }
                 .scaleEffect(logoScale)
                 
@@ -187,12 +187,12 @@ struct CrowdTypewriterView: View {
     var body: some View {
         Text(displayedText)
             .font(.system(
-                size: currentTranslation.isEnglish ? 42 : 38,
+                size: currentTranslation.isEnglish ? 72 : 64,
                 weight: currentTranslation.isEnglish ? .black : .bold,
                 design: .rounded
             ))
             .foregroundColor(currentTranslation.color)
-            .shadow(color: currentTranslation.color.opacity(0.4), radius: 6, x: 0, y: 3)
+            .shadow(color: currentTranslation.color.opacity(0.4), radius: 8, x: 0, y: 4)
             .opacity(textOpacity)
             .scaleEffect(textScale)
             .onAppear {
