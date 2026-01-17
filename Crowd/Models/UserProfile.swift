@@ -50,6 +50,7 @@ struct UserProfile: Codable, Equatable, Identifiable {
     
     // Visibility state - controls whether user's location is shared with others
     var isVisible: Bool
+    var visibilityExpiresAt: Date?
     
     // Computed property (not encoded/decoded)
     var avatarColor: Color {
@@ -83,6 +84,7 @@ struct UserProfile: Codable, Equatable, Identifiable {
         case termsAccepted
         case blockedUsers
         case isVisible
+        case visibilityExpiresAt
     }
 
     static let anonymous = UserProfile(
@@ -111,6 +113,7 @@ struct UserProfile: Codable, Equatable, Identifiable {
         eventStatus: nil,
         termsAccepted: false,
         blockedUsers: nil,
-        isVisible: false
+        isVisible: false,
+        visibilityExpiresAt: nil
     )
 }

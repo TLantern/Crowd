@@ -63,7 +63,8 @@ final class UserProfileService {
             lastActive: Date(),
             createdAt: Date(),
             termsAccepted: false,
-            isVisible: false
+            isVisible: false,
+            visibilityExpiresAt: nil
         )
         
         print("🔧 UserProfileService: Profile object created, calling saveProfile...")
@@ -289,6 +290,13 @@ final class UserProfileService {
         let blockedUsers = data["blockedUsers"] as? [String]
         let isVisible = data["isVisible"] as? Bool ?? false
         
+        let visibilityExpiresAt: Date?
+        if let timestamp = data["visibilityExpiresAt"] as? Timestamp {
+            visibilityExpiresAt = timestamp.dateValue()
+        } else {
+            visibilityExpiresAt = nil
+        }
+        
         return UserProfile(
             id: userId,
             displayName: displayName,
@@ -312,7 +320,8 @@ final class UserProfileService {
             lastLocationUpdate: lastLocationUpdate,
             termsAccepted: termsAccepted,
             blockedUsers: blockedUsers,
-            isVisible: isVisible
+            isVisible: isVisible,
+            visibilityExpiresAt: visibilityExpiresAt
         )
     }
     

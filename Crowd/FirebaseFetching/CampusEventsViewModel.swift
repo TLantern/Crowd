@@ -56,7 +56,6 @@ final class CampusEventsViewModel: ObservableObject {
             let startOfToday = calendar.startOfDay(for: Date())
             
             // Parse events from events_from_official_raw collection
-            print("📊 Starting to parse \(docs.count) documents from Firebase...")
             let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) { () async -> [CrowdEvent] in
                 var tmp: [CrowdEvent] = []
                 var geocodingCount = 0
@@ -71,17 +70,11 @@ final class CampusEventsViewModel: ObservableObject {
                             if event.latitude == 33.2100 && event.longitude == -97.1500 { // Default fallback coordinates
                                 if let locationName = event.rawLocationName, !locationName.isEmpty {
                                     geocodingCount += 1
-                                    print("🗺️ Geocoding event #\(geocodingCount): \(event.title) at '\(locationName)'")
                                     if let predefined = matchUNTLocationCoordinate(for: locationName) {
                                         event.coordinates = predefined
-                                        print("   ✅ Found predefined coordinates")
                                     } else {
-                                        print("   🔍 Searching Apple Maps...")
                                         if let geocoded = await searchLocationOnAppleMapsCampus(locationName) {
                                             event.coordinates = geocoded
-                                            print("   ✅ Geocoded successfully")
-                                        } else {
-                                            print("   ❌ Geocoding failed")
                                         }
                                     }
                                 }
@@ -92,7 +85,6 @@ final class CampusEventsViewModel: ObservableObject {
                         print("❌ Failed to parse official event: \(error)")
                     }
                 }
-                print("✅ Parsed \(tmp.count) future events, geocoded \(geocodingCount) locations")
                 tmp.sort { a, b in
                     let aStart = a.time ?? .distantFuture
                     let bStart = b.time ?? .distantFuture
@@ -150,14 +142,7 @@ final class CampusEventsViewModel: ObservableObject {
                             
                             // Filter for future events only (today or later)
                             if let startDate = event.time, startDate >= startOfToday {
-                                print("✅ CampusEventsViewModel: Mapped official event: \(event.title) (id: \(event.id))")
-                                print("   📅 Start date: \(startDate)")
                                 mapped.append(event)
-                            } else {
-                                let dateStr = event.time.map { "\($0)" } ?? "nil"
-                                print("⏭️ CampusEventsViewModel: Skipping past event: \(event.title)")
-                                print("   📅 Parsed start date: \(dateStr)")
-                                print("   🕐 Start of today: \(startOfToday)")
                             }
                         } catch {
                             print("❌ CampusEventsViewModel: Failed to parse official event: \(error)")
@@ -249,15 +234,6 @@ final class CampusEventsViewModel: ObservableObject {
             )
             rawDateTime = cleanedDateTime
             time = parseDateTimeString(cleanedDateTime)
-            
-            print("🔄 Cleaning rawDateTime:")
-            print("   Original: \(dateTimeStr)")
-            print("   Cleaned: \(cleanedDateTime)")
-            if let parsedTime = time {
-                print("   Parsed: \(parsedTime)")
-            } else {
-                print("   ⚠️ Failed to parse cleaned date")
-            }
         }
         
         // Extract tags (we'll use these later)
@@ -391,12 +367,9 @@ final class CampusEventsViewModel: ObservableObject {
         
         for formatter in formatters {
             if let date = formatter.date(from: dateTimeString) {
-                print("✅ Successfully parsed date using format: \(formatter.dateFormat ?? "standard")")
                 return date
             }
         }
-        
-        print("⚠️ Could not parse date string: \(dateTimeString)")
         return nil
     }
     

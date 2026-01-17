@@ -4,15 +4,23 @@ import Lottie
 struct LottieView: UIViewRepresentable {
     let name: String
     let loopMode: LottieLoopMode
+    let animationSpeed: CGFloat
+
+    init(name: String, loopMode: LottieLoopMode, animationSpeed: CGFloat = 1.0) {
+        self.name = name
+        self.loopMode = loopMode
+        self.animationSpeed = animationSpeed
+    }
 
     func makeUIView(context: Context) -> UIView {
         let container = UIView()
         container.backgroundColor = UIColor.clear
 
-        // Load animation using dotLottieName - this works with asset catalog datasets
-        let animationView = LottieAnimationView(dotLottieName: name)
+        // Load animation from bundle - using name:bundle: like LottieEyes
+        let animationView = LottieAnimationView(name: name, bundle: .main)
 
         animationView.loopMode = loopMode
+        animationView.animationSpeed = animationSpeed
         animationView.contentMode = .scaleAspectFit
         animationView.translatesAutoresizingMaskIntoConstraints = false
         animationView.backgroundColor = UIColor.clear
@@ -29,16 +37,6 @@ struct LottieView: UIViewRepresentable {
         // Play animation after a small delay to ensure view is ready
         DispatchQueue.main.async {
             animationView.play()
-            
-            // Debug logs at the end
-            print("🔥 LottieView: Creating view with name: '\(name)'")
-            if animationView.animation == nil {
-                print("⚠️ LottieView: Animation is nil for '\(name)'")
-            } else {
-                print("✅ LottieView: Animation loaded successfully for '\(name)'")
-            }
-            print("🎬 LottieView: Attempting to play animation '\(name)'")
-            print("🎬 LottieView: Animation playing: \(animationView.isAnimationPlaying)")
         }
 
         return container
@@ -50,7 +48,6 @@ struct LottieView: UIViewRepresentable {
             if let animationView = subview as? LottieAnimationView {
                 if !animationView.isAnimationPlaying {
                     animationView.play()
-                    print("🔄 LottieView: Restarting animation '\(name)' in updateUIView - Playing: \(animationView.isAnimationPlaying)")
                 }
             }
         }

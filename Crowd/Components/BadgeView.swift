@@ -12,12 +12,14 @@ struct BadgeView: View {
     let emoji: String?
     let isSelected: Bool
     let onTap: (() -> Void)?
+    let textColor: Color?
     
-    init(title: String, emoji: String? = nil, isSelected: Bool = false, onTap: (() -> Void)? = nil) {
+    init(title: String, emoji: String? = nil, isSelected: Bool = false, onTap: (() -> Void)? = nil, textColor: Color? = nil) {
         self.title = title
         self.emoji = emoji
         self.isSelected = isSelected
         self.onTap = onTap
+        self.textColor = textColor
     }
     
     var body: some View {
@@ -62,7 +64,7 @@ struct BadgeView: View {
             Text(title)
                 .font(.system(size: 14, weight: .medium))
         }
-        .foregroundStyle(colorSchemeForTitle.text)
+        .foregroundStyle(textColor ?? colorSchemeForTitle.text)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(colorSchemeForTitle.background, in: Capsule())

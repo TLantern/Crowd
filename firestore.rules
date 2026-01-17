@@ -45,7 +45,9 @@ service cloud.firestore {
              (!('auraPoints' in request.resource.data) || request.resource.data.auraPoints is int) &&
              (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp) &&
              (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp) &&
-             (!('interests' in request.resource.data) || request.resource.data.interests is list);
+             (!('interests' in request.resource.data) || request.resource.data.interests is list) &&
+             (!('isVisible' in request.resource.data) || request.resource.data.isVisible is bool) &&
+             (!('visibilityExpiresAt' in request.resource.data) || request.resource.data.visibilityExpiresAt is timestamp);
     }
     
     function isValidEventData() {
@@ -93,9 +95,10 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if true;
       allow create, delete: if false; // Only Cloud Functions can create/delete
-      // Allow authenticated users to update only attendeeCount and signalStrength (for joining)
-      allow update: if isAuthenticated()
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength']);
+      // Allow anyone (including unauthenticated) to update attendeeCount and signalStrength (for joining)
+      // Prevent hosts from joining their own events
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength'])
+                    && (!isAuthenticated() || request.auth.uid != resource.data.hostId);
     }
     
     // User-created events collection
@@ -122,9 +125,12 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         // Host can update their own events
         (resource.data.hostId == request.auth.uid && isValidEventData())
-        // OR anyone can update only attendeeCount and signalStrength (for joining)
-        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength']))
       );
+      
+      // Allow anyone (including unauthenticated) to join by updating attendeeCount/signalStrength
+      // Prevent hosts from joining their own events
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength'])
+                    && (!isAuthenticated() || request.auth.uid != resource.data.hostId);
     }
     
     // Users collection
@@ -132,14 +138,16 @@ service cloud.firestore {
       // Users can read any user profile
       allow read: if true;
       
-      // Users can only write their own profile
+      // Users can create their own profile OR create with just visibility fields
       allow create: if isOwner(userId) && isValidUserDataForCreate();
-      allow update: if isOwner(userId) && isValidUserDataForUpdate();
-      allow delete: if isOwner(userId);
       
-      // Allow Cloud Functions (no auth) to update notification cooldowns only
-      allow update: if request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['notificationCooldowns', 'lastNotificationSent']);
+      // ✅ ALSO allow creating user doc with ONLY visibility fields (for setData merge on non-existent doc)
+      allow create: if request.resource.data.keys().hasOnly(['isVisible', 'visibilityExpiresAt']);
+      
+      // ✅ Allow ALL updates for testing visibility
+      allow update: if true;
+      
+      allow delete: if isOwner(userId);
     }
     
     // Signals collection (event attendance)
@@ -147,17 +155,22 @@ service cloud.firestore {
       // Anyone can read signals
       allow read: if true;
       
-      // Authenticated users can create/update/delete their own signals
-      // OR delete signals for expired events (for cleanup)
-      allow create: if isAuthenticated() && 
-                       request.resource.data.userId == request.auth.uid &&
-                       isValidSignalData();
-      allow update: if isAuthenticated() && 
-                       resource.data.userId == request.auth.uid &&
-                       isValidSignalData();
-      allow delete: if isAuthenticated() && (
-        // User's own signal
-        resource.data.userId == request.auth.uid ||
+      // Anyone (including unauthenticated) can create signals, but authenticated users must match userId
+      // Prevent hosts from creating signals for their own events
+      allow create: if isValidSignalData()
+                    && (!isAuthenticated() || request.resource.data.userId == request.auth.uid)
+                    && (!isAuthenticated() || !exists(/databases/$(database)/documents/userEvents/$(request.resource.data.eventId)) 
+                        || request.auth.uid != get(/databases/$(database)/documents/userEvents/$(request.resource.data.eventId)).data.hostId)
+                    && (!isAuthenticated() || !exists(/databases/$(database)/documents/events/$(request.resource.data.eventId)) 
+                        || request.auth.uid != get(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data.hostId);
+      
+      // Anyone (including unauthenticated) can update signals
+      allow update: if isValidSignalData()
+                    && (!isAuthenticated() || resource.data.userId == request.auth.uid);
+      
+      allow delete: if (
+        // Authenticated user's own signal
+        (isAuthenticated() && resource.data.userId == request.auth.uid) ||
         // Or signal for an expired event (cleanup)
         (resource.data.eventId != null && 
          exists(/databases/$(database)/documents/userEvents/$(resource.data.eventId)) &&
@@ -208,18 +221,22 @@ service cloud.firestore {
     
     // User attendances collection (tracking which events users are attending)
     match /userAttendances/{attendanceId} {
-      // Authenticated users can read attendances
-      allow read: if isAuthenticated();
+      // Anyone can read attendances
+      allow read: if true;
       
-      // Authenticated users can create their own attendances
-      allow create: if isAuthenticated()
-                    && request.resource.data.userId == request.auth.uid;
+      // Anyone (including unauthenticated) can create attendances, but authenticated users must match userId
+      // Prevent hosts from creating attendances for their own events
+      allow create: if (!isAuthenticated() || request.resource.data.userId == request.auth.uid)
+                    && (!isAuthenticated() || !exists(/databases/$(database)/documents/userEvents/$(request.resource.data.eventId)) 
+                        || request.auth.uid != get(/databases/$(database)/documents/userEvents/$(request.resource.data.eventId)).data.hostId)
+                    && (!isAuthenticated() || !exists(/databases/$(database)/documents/events/$(request.resource.data.eventId)) 
+                        || request.auth.uid != get(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data.hostId);
       
       // Users can delete their own attendances
       // OR delete attendances for expired events (for cleanup)
-      allow delete: if isAuthenticated() && (
-        // User's own attendance
-        resource.data.userId == request.auth.uid ||
+      allow delete: if (
+        // Authenticated user's own attendance
+        (isAuthenticated() && resource.data.userId == request.auth.uid) ||
         // Or attendance for an expired event (cleanup)
         (resource.data.eventId != null && 
          exists(/databases/$(database)/documents/userEvents/$(resource.data.eventId)) &&

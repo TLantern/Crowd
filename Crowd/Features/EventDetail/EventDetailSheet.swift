@@ -157,7 +157,7 @@ struct EventDetailView: View {
                                     .foregroundColor(.secondary)
                                 HStack(spacing: 8) {
                                     ForEach(Array(chips.enumerated()), id: \.offset) { index, chip in
-                                        BadgeView(title: chip)
+                                        BadgeView(title: chip, textColor: .black)
                                     }
                                 }
                             }

@@ -103,7 +103,7 @@ struct HostEventSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding()
             }
-            .navigationTitle("Spark a Crowd")
+            .navigationTitle("Start a Crowd")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

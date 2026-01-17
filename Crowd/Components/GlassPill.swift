@@ -66,8 +66,8 @@ struct GlassPill: View {
         content
             .padding(.horizontal, horizontalPadding)
             .frame(height: height)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.35), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 6)
+            .background(Color(hex: 0xF5F7FA), in: Capsule())
+            .shadow(color: Color.black.opacity(0.07), radius: 15, x: 0, y: 3)  // Layer 1: Separation
+            .shadow(color: Color.black.opacity(0.14), radius: 7, x: 0, y: 1.5)  // Layer 2: Contact
     }
 }

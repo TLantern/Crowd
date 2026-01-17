@@ -15,8 +15,6 @@ struct EventAnnotationView: View {
     var isOnMainCampus: Bool = false
     @ObservedObject private var chatNotificationService = ChatNotificationService.shared
     @ObservedObject private var attendedEventsService = AttendedEventsService.shared
-    @State private var showAttendeeCount = false
-    @State private var timer: Timer?
     @State private var liveAttendeeCount: Int = 0
     @State private var eventListener: ListenerRegistration?
     
@@ -80,27 +78,9 @@ struct EventAnnotationView: View {
                 )
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
                 .overlay(
-                    ZStack {
-                        if !isSchoolHosted {
-                            // Count view
-                            Text("\(liveAttendeeCount)")
-                                .font(.system(size: 32, weight: .bold))
-                                .foregroundColor(.black)
-                                .opacity(showAttendeeCount ? 1 : 0)
-                                .scaleEffect(showAttendeeCount ? 1 : 0.8)
-                            
-                            // Emoji view
-                            Text(emoji)
-                                .font(.system(size: 40, weight: .regular))
-                                .opacity(showAttendeeCount ? 0 : 1)
-                                .scaleEffect(showAttendeeCount ? 0.8 : 1)
-                        } else {
-                            // School-hosted always shows emoji, never switches to count
-                            Text(emoji)
-                                .font(.system(size: 40, weight: .regular))
-                        }
-                    }
-                    .animation(isSchoolHosted ? nil : .easeInOut(duration: 0.5), value: showAttendeeCount)
+                    // Always show emoji
+                    Text(emoji)
+                        .font(.system(size: 40, weight: .regular))
                 )
                 .overlay(
                     // Red dot indicator for unread messages (top-left corner)
@@ -123,36 +103,14 @@ struct EventAnnotationView: View {
         .scaleEffect(scaleMultiplier)
         .onAppear {
             liveAttendeeCount = event.attendeeCount
-            // School-hosted events never switch to crowd count - always show emoji
-            if !isSchoolHosted {
-                startTimer()
-            } else {
-                // Ensure showAttendeeCount stays false for school-hosted events
-                showAttendeeCount = false
-            }
             startEventListener()
         }
         .onDisappear {
-            stopTimer()
             stopEventListener()
         }
         .accessibilityLabel("\(emoji) event pin, \(liveAttendeeCount) attendees")
         .accessibilityHint("Double tap to view event details")
         .accessibilityAddTraits(.isButton)
-    }
-    
-    private func startTimer() {
-        stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
-            withAnimation(.easeInOut(duration: 0.5)) {
-                showAttendeeCount.toggle()
-            }
-        }
-    }
-    
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
     }
     
     // MARK: - Event Listener

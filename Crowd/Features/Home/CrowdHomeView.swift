@@ -9,6 +9,7 @@ import SwiftUI
 import MapKit
 import Combine
 import FirebaseFirestore
+import FirebaseAuth
 
 struct CrowdHomeView: View {
     @Environment(\.appEnvironment) var env
@@ -90,6 +91,9 @@ struct CrowdHomeView: View {
     // MARK: - Visibility State
     @State private var visibleUsers: [UserProfile] = []
     @State private var visibleUsersListener: ListenerRegistration?
+    @State private var selectedUserProfile: UserProfile? // For showing user profile sheet
+    @State private var showVisibilityInfo = false // Show info sheet on first visibility toggle
+    @AppStorage("hasSeenVisibilityInfo") private var hasSeenVisibilityInfo = false
     
     // Commented out temporarily
     // private var anchorsToDisplay: [Anchor] {
@@ -405,7 +409,6 @@ struct CrowdHomeView: View {
                     value: expandedClusterId
                 )
                 .onTapGesture {
-                    print("📍 Expanded event tapped: \(event.title)")
                     handleEventTap(event)
                 }
             }
@@ -776,7 +779,35 @@ struct CrowdHomeView: View {
                 ForEach(visibleUsers) { user in
                     if let latitude = user.latitude, let longitude = user.longitude {
                         let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-                        otherUserAnnotation(coordinate: coordinate)
+                        Annotation("", coordinate: coordinate) {
+                            Button(action: {
+                                selectedUserProfile = user
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(.primary.opacity(0.4))
+                                        .frame(width: 16, height: 16)
+                                        .blur(radius: 2)
+                                        .offset(x: -30, y: 20)
+                                    
+                                    Circle()
+                                        .fill(.primary.opacity(0.6))
+                                        .frame(width: 10, height: 10)
+                                        .offset(x: -30, y: 20)
+                                    
+                                    Image("OtherUsersLocation")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 50, height: 50)
+                                        .offset(x: -30, y: -2)
+                                }
+                                .opacity(appState.isVisible ? 1.0 : 0.0)
+                                .scaleEffect(appState.isVisible ? 1.0 : 0.3)
+                                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: appState.isVisible)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .annotationTitles(.hidden)
                     }
                 }
             }
@@ -813,7 +844,6 @@ struct CrowdHomeView: View {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                             expandedClusterId = nil
                         }
-                        print("📍 Collapsed cluster via background tap")
                     }
                 }
         )
@@ -823,6 +853,11 @@ struct CrowdHomeView: View {
             snapTo(selectedRegion)
             AnalyticsService.shared.trackScreenView("home")
             AnalyticsService.shared.track("map_viewed", props: [:])
+            
+            // Start visible users listener if visibility is enabled
+            if appState.isVisible {
+                startVisibleUsersListener()
+            }
             
             // Capture location synchronously to avoid concurrency warnings
             let location = locationService.lastKnown
@@ -851,7 +886,6 @@ struct CrowdHomeView: View {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 expandedClusterId = nil
             }
-            print("📍 Auto-collapsed cluster at distance 3000")
         }
         // Commented out anchor-related camera change handlers end here
         
@@ -923,7 +957,6 @@ struct CrowdHomeView: View {
                         do {
                             try await firebaseRepo.deleteExpiredEvents()
                         } catch {
-                            print("❌ Failed to delete expired events on app start: \(error.localizedDescription)")
                         }
                     }
                     
@@ -939,12 +972,39 @@ struct CrowdHomeView: View {
                 }
                 .onChange(of: appState.isVisible) { _, isVisible in
                     if isVisible {
-                        print("👁️ Visibility ON - Querying visible users")
                         startVisibleUsersListener()
                     } else {
-                        print("👁️ Visibility OFF - Removing visible users")
                         stopVisibleUsersListener()
                         visibleUsers = []
+                    }
+                }
+                .sheet(item: $selectedUserProfile) { user in
+                    UserProfileSheetView(user: user)
+                        .presentationDetents([.height(600), .large])
+                        .presentationDragIndicator(.visible)
+                }
+                .sheet(isPresented: $showVisibilityInfo) {
+                    VisibilityInfoSheet {
+                        hasSeenVisibilityInfo = true
+                        // Proceed with toggling visibility
+                        Task {
+                            guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+                                return
+                            }
+                            
+                            do {
+                                try await VisibilityService.shared.toggleVisibility(userId: userId)
+                                
+                                let updatedProfile = try await UserProfileService.shared.fetchProfile(userId: userId)
+                                
+                                await MainActor.run {
+                                    appState.sessionUser = updatedProfile
+                                    appState.isVisible = updatedProfile.isVisible
+                                }
+                            } catch {
+                                // Handle error silently or show user feedback
+                            }
+                        }
                     }
                 }
                 .onChange(of: selectedRegion) { _, newRegion in
@@ -1048,7 +1108,6 @@ struct CrowdHomeView: View {
         eventListener = eventRef.addSnapshotListener { snapshot, error in
             Task { @MainActor in
                 if let error = error {
-                    print("⚠️ CrowdHomeView: Error listening to event: \(error)")
                     // Try userEvents collection as fallback
                     tryUserEventsListener(for: event)
                     return
@@ -1057,7 +1116,6 @@ struct CrowdHomeView: View {
                 if let data = snapshot?.data(),
                    let attendeeCount = data["attendeeCount"] as? Int {
                     liveAttendeeCount = attendeeCount
-                    print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
                 } else if !(snapshot?.exists ?? false) {
                     // Document doesn't exist in events, try userEvents
                     tryUserEventsListener(for: event)
@@ -1074,14 +1132,12 @@ struct CrowdHomeView: View {
         eventListener = eventRef.addSnapshotListener { snapshot, error in
             Task { @MainActor in
                 if let error = error {
-                    print("⚠️ CrowdHomeView: Error listening to userEvent: \(error)")
                     return
                 }
                 
                 if let data = snapshot?.data(),
                    let attendeeCount = data["attendeeCount"] as? Int {
                     liveAttendeeCount = attendeeCount
-                    print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
                 }
             }
         }
@@ -1094,12 +1150,10 @@ struct CrowdHomeView: View {
         stopVisibleUsersListener()
         
         guard let userId = FirebaseManager.shared.getCurrentUserId() else {
-            print("⚠️ Cannot start visible users listener: No user ID")
             return
         }
         
         guard appState.isVisible else {
-            print("👁️ Visibility is OFF, not starting visible users listener")
             return
         }
         
@@ -1109,8 +1163,6 @@ struct CrowdHomeView: View {
         // Get blocked user IDs
         let blockedUserIds = blockedUserIds
         
-        print("👁️ Starting visible users listener for camera: \(camera.centerCoordinate.latitude), \(camera.centerCoordinate.longitude)")
-        
         // Set up listener
         visibleUsersListener = VisibilityService.shared.listenToVisibleUsers(
             in: camera,
@@ -1119,7 +1171,6 @@ struct CrowdHomeView: View {
         ) { [self] (users: [UserProfile]) in
             Task { @MainActor in
                 self.visibleUsers = users
-                print("👁️ Visible users updated: \(users.count) users")
             }
         }
     }
@@ -1127,7 +1178,6 @@ struct CrowdHomeView: View {
     private func stopVisibleUsersListener() {
         visibleUsersListener?.remove()
         visibleUsersListener = nil
-        print("👁️ Stopped visible users listener")
     }
     
     // MARK: - Event End Check Timer
@@ -1157,7 +1207,6 @@ struct CrowdHomeView: View {
                 if eventHasEnded {
                     // Clear the joined event
                     state.currentJoinedEvent = nil
-                    print("✅ Cleared ended joined event: \(joinedEvent.title)")
                 }
             }
         }
@@ -1181,7 +1230,6 @@ struct CrowdHomeView: View {
         }
         
         if eventHasEnded {
-            print("⏰ Event '\(joinedEvent.title)' has ended, clearing from map and chat")
             appState.currentJoinedEvent = nil
             eventListener?.remove()
             eventListener = nil
@@ -1210,7 +1258,6 @@ struct CrowdHomeView: View {
             .addSnapshotListener { snapshot, error in
                 Task { @MainActor in
                     if let error = error {
-                        print("❌ CrowdHomeView: Error listening to new events: \(error)")
                         return
                     }
                     
@@ -1240,7 +1287,6 @@ struct CrowdHomeView: View {
             .addSnapshotListener { snapshot, error in
                 Task { @MainActor in
                     if let error = error {
-                        print("❌ CrowdHomeView: Error listening to new userEvents: \(error)")
                         return
                     }
                     
@@ -1295,10 +1341,7 @@ struct CrowdHomeView: View {
             // Show banner
             newEventBanner = event
             startBannerDismissTimer()
-            
-            print("🔔 New event detected: \(event.title) (ID: \(eventId))")
         } catch {
-            print("❌ Failed to parse new event: \(error)")
         }
     }
     
@@ -1327,7 +1370,6 @@ struct CrowdHomeView: View {
             // Leave previous event if user is already in one
             let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
             if let previousEvent = attendedEvents.first(where: { $0.id != event.id }) {
-                print("🔄 Leaving previous event before joining new one: \(previousEvent.id)")
                 let viewModel = EventDetailViewModel(eventRepo: env.eventRepo)
                 await viewModel.leaveEvent(event: previousEvent)
                 
@@ -1418,9 +1460,7 @@ struct CrowdHomeView: View {
 
                 VStack(spacing: 0) {
                     // === Centered main navbar (region picker) with eye button ===
-                    HStack(spacing: 12) {
-                        Spacer()
-                        
+                    ZStack {
                         // Region picker (centered)
                         Menu {
                             ForEach(CampusRegion.allCases) { region in
@@ -1436,58 +1476,58 @@ struct CrowdHomeView: View {
                                 HStack(spacing: 10) {
                                     Text(selectedRegion.displayName)
                                         .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(.black)
                                         .lineLimit(1)
                                     Image(systemName: "chevron.down")
                                         .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(.white.opacity(0.8))
+                                        .foregroundStyle(.black.opacity(0.8))
                                 }
                                 .padding(.horizontal, 12)
                             }
                         }
                         .fixedSize()
                         
-                        // Eye icon button (visibility toggle) - top right beside navbar
-                        ZStack {
-                            // Aura glow
-                            Circle()
-                                .fill(Color(hex: 0x8A5A3C).opacity(0.22))
-                                .frame(width: 72, height: 72)
-                                .blur(radius: 8)
+                        // Eye icon button (visibility toggle) - absolute positioned to right
+                        HStack {
+                            Spacer()
                             
-                            FrostedIconButton(
-                                systemName: "eye.fill",
+                            FrostedEyesButton(
                                 baseSize: 54,
-                                targetSize: 72,
+                                targetSize: 54,
                                 frostOpacity: 1.0,
-                                iconBaseColor: Color(hex: 0x8A5A3C),
                                 highlightColor: Color(hex: 0x8A5A3C),
-                                containerColor: Color(hex: 0xFFFFFF)
+                                containerColor: Color(hex: 0xFFFFFF),
+                                isGhostMode: appState.isVisible // Show ghost when visible, eyes when not
                             ) {
                                 Haptics.light()
-                                Task {
-                                    guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
-                                    do {
-                                        try await VisibilityService.shared.toggleVisibility(userId: userId)
-                                        await MainActor.run {
-                                            appState.isVisible.toggle()
-                                            // Update sessionUser visibility state
-                                            if var sessionUser = appState.sessionUser {
-                                                sessionUser.isVisible = appState.isVisible
-                                                appState.sessionUser = sessionUser
-                                            }
-                                            print("👁️ Visibility toggled: \(appState.isVisible ? "ON" : "OFF")")
+                                
+                                // Show info sheet on first use
+                                if !hasSeenVisibilityInfo && !appState.isVisible {
+                                    showVisibilityInfo = true
+                                } else {
+                                    Task {
+                                        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+                                            return
                                         }
-                                    } catch {
-                                        print("❌ Failed to toggle visibility: \(error.localizedDescription)")
+                                        
+                                        do {
+                                            try await VisibilityService.shared.toggleVisibility(userId: userId)
+                                            
+                                            // Reload profile to get updated visibility state and expiration
+                                            let updatedProfile = try await UserProfileService.shared.fetchProfile(userId: userId)
+                                            
+                                            await MainActor.run {
+                                                appState.sessionUser = updatedProfile
+                                                appState.isVisible = updatedProfile.isVisible
+                                            }
+                                        } catch {
+                                            // Handle error silently or show user feedback
+                                        }
                                     }
                                 }
                             }
-                            .opacity(appState.isVisible ? 1.0 : 0.5)
+                            .padding(.trailing, 16)
                         }
-                        .padding(.trailing, 16)
-                        
-                        Spacer()
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, 0)
@@ -1517,18 +1557,11 @@ struct CrowdHomeView: View {
 
                     // Bottom frosted panel + FAB cluster
                     ZStack {
-                        // Frosted base
+                        // Frosted base with dual shadow layers
                         RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                    .stroke(.white.opacity(0.12), lineWidth: 1)
-                            )
-                            .background(
-                                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                            )
-                            .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
+                            .fill(Color(hex: 0xF5F7FA))
+                            .shadow(color: Color.black.opacity(0.07), radius: 15, x: 0, y: 3)  // Layer 1: Separation
+                            .shadow(color: Color.black.opacity(0.14), radius: 7, x: 0, y: 1.5)  // Layer 2: Contact
                             .frame(width: panelWidth, height: panelHeight)
                             .allowsHitTesting(false)
 
@@ -1539,8 +1572,14 @@ struct CrowdHomeView: View {
                             let sideYOffset: CGFloat = panelHeight * 0.16
 
                             ZStack {
-                                // Center FAB — Host
-                                FABPlusButton(size: fabSize, color: Color(hex: 0x02853E)) {
+                                // Center FAB — Host (Fire animation)
+                                FrostedFireButton(
+                                    baseSize: fabSize,
+                                    targetSize: 82,
+                                    frostOpacity: 1.0,
+                                    highlightColor: Color(hex: 0xff8a00),
+                                    containerColor: Color(hex: 0xFFFFFF)
+                                ) {
                                     showHostSheet = true
                                     Haptics.light()
                                 }
@@ -1548,12 +1587,6 @@ struct CrowdHomeView: View {
 
                                  // Left — Profile (open at 3/4 screen)
                                  ZStack {
-                                     // Field glow (subtle energy around it)
-                                     Circle()
-                                         .fill(Color(hex: 0x5880ad).opacity(0.25))
-                                         .frame(width: 72, height: 72)
-                                         .blur(radius: 8)
-                                     
                                      FrostedIconButton(
                                          systemName: "person",
                                          baseSize: 54,
@@ -1574,12 +1607,6 @@ struct CrowdHomeView: View {
 
                                 // Right — Calendar
                                 ZStack {
-                                    // Field glow (subtle energy around it)
-                                    Circle()
-                                        .fill(Color(red: 139/255.0, green: 15/255.0, blue: 26/255.0, opacity: 0.25))
-                                        .frame(width: 72, height: 72)
-                                        .blur(radius: 8)
-                                    
                                     FrostedIconButton(
                                         systemName: "calendar",
                                         baseSize: 54,
@@ -1597,7 +1624,7 @@ struct CrowdHomeView: View {
                                 .offset(x: spread, y: sideYOffset)
                             }
 
-                            Text("Spark a Crowd")
+                            Text("Start a Crowd")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(.primary.opacity(0.78))
                                 .padding(.top, -8)
@@ -1697,7 +1724,6 @@ struct CrowdHomeView: View {
                 
                 do {
                     try await env.eventRepo.create(event: event)
-                    print("✅ Event created in Firebase: \(event.id)")
                     
                     // Track analytics with zone
                     let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
@@ -1728,10 +1754,7 @@ struct CrowdHomeView: View {
                             
                             // Track analytics
                             AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title, zone: zone)
-                            
-                            print("✅ Automatically joined created event: \(event.id)")
                         } catch {
-                            print("⚠️ Failed to auto-join created event: \(error)")
                         }
                     }
                     
@@ -1754,7 +1777,6 @@ struct CrowdHomeView: View {
                         }
                     }
                 } catch {
-                    print("❌ Failed to create event in Firebase: \(error)")
                     await MainActor.run {
                         hostedEvents.append(event)
                     }
@@ -1801,8 +1823,6 @@ struct CrowdHomeView: View {
             userEventsFromFirebase.removeAll { $0.id == eventId }
             upcomingEvents.removeAll { $0.id == eventId }
             
-            print("🗑️ Removed deleted event from all arrays: \(eventId)")
-            
             if expandedClusterId != nil {
                 withAnimation(.easeOut(duration: 0.3)) {
                     expandedClusterId = nil
@@ -1813,8 +1833,6 @@ struct CrowdHomeView: View {
     
     private func handleNavigateToEvent(_ notification: Notification) {
         if let eventId = notification.userInfo?["eventId"] as? String {
-            print("📲 Navigating to event from notification: \(eventId)")
-            
             if let event = allEvents.first(where: { $0.id == eventId }) {
                 selectedEvent = event
             } else {
@@ -1847,9 +1865,6 @@ struct CrowdHomeView: View {
                     // Track seen event IDs
                     let allLoadedEvents = official + userCreated
                     seenEventIds = Set(allLoadedEvents.map { $0.id })
-                    
-                    print("✅ Loaded \(official.count) official events and \(userCreated.count) user-created events from Firebase")
-                    print("📋 Tracking \(seenEventIds.count) seen event IDs")
                 }
             } else {
                 // Fallback for mock repository or other implementations
@@ -1858,7 +1873,6 @@ struct CrowdHomeView: View {
                     officialEvents = events
                     userEventsFromFirebase = []
                     isLoadingEvents = false
-                    print("✅ Loaded \(events.count) events from repository (using fallback)")
                 }
             }
         } catch {
@@ -1866,7 +1880,6 @@ struct CrowdHomeView: View {
                 officialEvents = []
                 userEventsFromFirebase = []
                 isLoadingEvents = false
-                print("❌ Failed to load Firebase events: \(error.localizedDescription)")
             }
         }
     }
@@ -1880,7 +1893,6 @@ struct CrowdHomeView: View {
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         await MainActor.run {
             upcomingEvents = campusEventsVM.crowdEvents
-            print("✅ Loaded \(upcomingEvents.count) upcoming events")
         }
         campusEventsVM.stop()
     }
@@ -1893,11 +1905,9 @@ struct CrowdHomeView: View {
     /// Step 3: Replace cache with server data when it arrives
     /// This ensures low latency when navigating to CalendarView
     private func preloadCalendarEvents() async {
-        print("🔄 Preloading calendar events for future navigation...")
         // Step 2: Fire fresh fetch in parallel (cache already loaded in Step 1)
         let sharedVM = await CampusEventsViewModel.shared
         await sharedVM.fetchOnce(limit: 200) // Preload with high limit to get all future events
-        print("✅ Preloaded \(sharedVM.crowdEvents.count) calendar events (Step 3: server data loaded)")
     }
     
     // MARK: - Moderation Data Loading
@@ -1916,10 +1926,8 @@ struct CrowdHomeView: View {
                 blockedUserIds = blockedResult
                 hiddenEventIds = hiddenResult
                 bannedUserIds = bannedResult
-                print("✅ Loaded moderation data: \(blockedResult.count) blocked, \(hiddenResult.count) hidden, \(bannedResult.count) banned")
             }
         } catch {
-            print("⚠️ Failed to load moderation data: \(error.localizedDescription)")
         }
     }
     
@@ -1993,7 +2001,6 @@ struct CrowdHomeView: View {
                     do {
                         try await firebaseRepo.deleteExpiredEvents()
                     } catch {
-                        print("❌ Failed to delete expired events from database: \(error.localizedDescription)")
                     }
                 }
             }
@@ -2018,7 +2025,6 @@ struct CrowdHomeView: View {
                         batch.deleteDocument(doc.reference)
                     }
                     try await batch.commit()
-                    print("✅ Removed \(signalsSnapshot.documents.count) signal(s) for expired event \(eventId)")
                 }
                 
                 // Delete attendances for this event
@@ -2032,10 +2038,8 @@ struct CrowdHomeView: View {
                         batch.deleteDocument(doc.reference)
                     }
                     try await batch.commit()
-                    print("✅ Removed \(attendancesSnapshot.documents.count) attendance(s) for expired event \(eventId)")
                 }
             } catch {
-                print("❌ Failed to remove users from expired event \(eventId): \(error)")
             }
         }
     }
@@ -2049,16 +2053,13 @@ struct CrowdHomeView: View {
     
     // MARK: - Cluster Handlers
     private func handleClusterTap(_ cluster: EventCluster) {
-        print("🎯 handleClusterTap called - isSingleEvent: \(cluster.isSingleEvent), count: \(cluster.eventCount)")
         if cluster.isSingleEvent {
             // Single event - show detail directly
             if let event = cluster.events.first {
-                print("✅ Showing detail for single event: \(event.title)")
                 selectedEvent = event
             }
         } else {
             // Multi-event cluster - show dropdown list (NO ZOOM)
-            print("📋 Showing dropdown for \(cluster.eventCount) events")
             Haptics.light()
             
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -2078,7 +2079,6 @@ struct CrowdHomeView: View {
     }
     
     private func handleEventTap(_ event: CrowdEvent) {
-        print("✅ handleEventTap called for: \(event.title)")
         selectedEvent = event
     }
     
@@ -2131,8 +2131,6 @@ struct CrowdHomeView: View {
     }
     
     func handleAnchorTap(_ anchor: Anchor) {
-        print("📍 Anchor tapped: \(anchor.name)")
-        
         // Start chat listening immediately (before modal opens) if user ID is available
         if let userId = FirebaseManager.shared.getCurrentUserId() {
             EventChatService.shared.startListening(eventId: anchor.id, currentUserId: userId)
