@@ -9,6 +9,7 @@
 
 import Foundation
 import CoreLocation
+import FirebaseFirestore
 
 // UNT fallback coordinate for now.
 // Later replace with geocoded building coords.
@@ -191,6 +192,34 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     // Use source document id when available so the same event keeps a stable id across fetches
     if let liveId = live.id, !liveId.isEmpty { ev.id = liveId }
     return ev
+}
+
+/// Async version that fetches going count from Firebase (for school events)
+func mapCampusEventLiveToCrowdEventAsync(_ live: CampusEventLive) async -> CrowdEvent? {
+    // First create the base event
+    guard var event = mapCampusEventLiveToCrowdEvent(live) else { return nil }
+    
+    // Fetch going count for this school event
+    do {
+        let goingCount = try await getSchoolEventGoingCount(eventId: event.id)
+        event.attendeeCount = goingCount
+    } catch {
+        // If fetch fails, keep default attendee count of 0
+        print("⚠️ Failed to fetch going count for school event \(event.id): \(error.localizedDescription)")
+    }
+    
+    return event
+}
+
+/// Get the count of users going to a school event from partyGoing collection
+/// (reusing same collection for both parties and school events)
+private func getSchoolEventGoingCount(eventId: String) async throws -> Int {
+    let db = Firestore.firestore()
+    let goingQuery = try await db.collection("partyGoing")
+        .whereField("partyId", isEqualTo: eventId)
+        .getDocuments()
+    
+    return goingQuery.documents.count
 }
 
 // Parse time range string like "Tuesday, October 28, 2025 at 10:00 AM to Tuesday, October 28, 2025 at 11:00 AM"

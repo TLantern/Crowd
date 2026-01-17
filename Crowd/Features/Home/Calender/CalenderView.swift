@@ -29,8 +29,7 @@ struct CalenderView: View {
     @State private var hiddenEventIds: Set<String> = []
     @State private var bannedUserIds: Set<String> = []
     @State private var showEventCreationFlow = false
-    @State private var currentPartyImageURLs: [String] = []
-    @State private var currentPartyIndices: [Int] = []
+    @State private var currentPartyImageURL: String?
     @State private var currentSchoolEventImageURL: String?
     
     // Filtered events based on selected categories
@@ -149,8 +148,7 @@ struct CalenderView: View {
         Group {
             if selectedTab == .parties {
                 PartiesView(
-                    currentPartyImageURLs: $currentPartyImageURLs,
-                    currentPartyIndices: $currentPartyIndices
+                    currentPartyImageURL: $currentPartyImageURL
                 )
             } else {
                 VStack(spacing: 0) {
@@ -177,7 +175,8 @@ struct CalenderView: View {
                 GeometryReader { geometry in
                     ZStack {
                         if selectedTab == .parties {
-                            if let imageURL = currentPartyImageURLs.last {
+                            // Use the image URL directly from the currently visible party
+                            if let imageURL = currentPartyImageURL {
                                 AsyncImage(url: URL(string: imageURL)) { phase in
                                     if case .success(let image) = phase {
                                         image
@@ -211,7 +210,7 @@ struct CalenderView: View {
                         }
                         
                         // Glass background overlay
-                        if (selectedTab == .parties && !currentPartyImageURLs.isEmpty) || (selectedTab == .schoolEvents && currentSchoolEventImageURL != nil) {
+                        if (selectedTab == .parties && currentPartyImageURL != nil) || (selectedTab == .schoolEvents && currentSchoolEventImageURL != nil) {
                             Color.clear
                                 .background(.ultraThinMaterial)
                                 .frame(width: geometry.size.width, height: geometry.size.height)
@@ -244,6 +243,8 @@ struct CalenderView: View {
                         
                         Spacer()
                         
+                        // TODO: Temporarily commented out
+                        /*
                         Button {
                             withAnimation(.easeInOut(duration: 0.3)) {
                                 showEventCreationFlow = true
@@ -259,6 +260,7 @@ struct CalenderView: View {
                             }
                         }
                         .padding(.trailing, 20)
+                        */
                     }
                     .frame(height: 44)
                     Spacer()
@@ -519,18 +521,18 @@ struct EventCardView: View {
                     }
                 }) {
                     HStack(spacing: 6) {
-                        Image(systemName: isAttending ? "checkmark.circle.fill" : "plus.circle")
+                        Image(systemName: isAttending ? "checkmark.circle.fill" : "hand.thumbsup.fill")
                             .font(.system(size: 14, weight: .medium))
                         
                         Text(isAttending ? "Attending" : "I'm Attending")
                             .font(.system(size: 12, weight: .medium))
                     }
-                    .foregroundColor(isAttending ? .white : .accentColor)
+                    .foregroundColor(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(isAttending ? Color.accentColor : Color.accentColor.opacity(0.1))
+                            .fill(isAttending ? Color.green : Color.accentColor)
                     )
                 }
             }
@@ -689,7 +691,6 @@ struct SchoolEventsView: View {
     let selectedCategories: Set<EventCategory>
     @Binding var currentSchoolEventImageURL: String?
     
-    @State private var selectedEvent: CrowdEvent? = nil
     @State private var currentEventIndex: Int = 0
     @State private var visibleIndices: Set<Int> = []
     @StateObject private var imageLoader = OptimizedImageLoader.shared
@@ -721,18 +722,12 @@ struct SchoolEventsView: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(filteredEvents.enumerated()), id: \.element.id) { index, event in
-                                Button(action: {
-                                    print("🎉 School event card tapped: \(event.title)")
-                                    selectedEvent = event
-                                }) {
-                                    SchoolEventCardView(
-                                        event: event,
-                                        index: index,
-                                        isVisible: visibleIndices.contains(index),
-                                        priority: index < initialLoadCount
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
+                                SchoolEventCardView(
+                                    event: event,
+                                    index: index,
+                                    isVisible: visibleIndices.contains(index),
+                                    priority: index < initialLoadCount
+                                )
                                 .frame(width: geometry.size.width - 30, height: geometry.size.height)
                                 .containerRelativeFrame(.vertical)
                                 .contentShape(Rectangle())
@@ -761,13 +756,11 @@ struct SchoolEventsView: View {
             }
             if !filteredEvents.isEmpty {
                 currentSchoolEventImageURL = filteredEvents[0].imageURL
-                print("📸 Set initial school event image URL: \(filteredEvents[0].imageURL ?? "nil")")
             }
         }
         .onChange(of: currentEventIndex) { oldValue, newValue in
             if newValue >= 0 && newValue < filteredEvents.count {
                 currentSchoolEventImageURL = filteredEvents[newValue].imageURL
-                print("📸 School event index changed to \(newValue), image URL: \(filteredEvents[newValue].imageURL ?? "nil")")
             }
         }
         .onChange(of: filteredEvents) { oldValue, newValue in
@@ -775,16 +768,7 @@ struct SchoolEventsView: View {
             // Update image URL when filtered events change
             if !newValue.isEmpty && (currentEventIndex >= newValue.count || currentSchoolEventImageURL == nil) {
                 currentSchoolEventImageURL = newValue[0].imageURL
-                print("📸 Updated school event image URL after filter: \(newValue[0].imageURL ?? "nil")")
             }
-        }
-        .onChange(of: selectedEvent) { oldValue, newValue in
-            if newValue != nil {
-                print("🎉 Selected school event changed: \(newValue?.title ?? "nil")")
-            }
-        }
-        .fullScreenCover(item: $selectedEvent) { event in
-            SchoolEventDetailView(event: event)
         }
     }
     
@@ -793,7 +777,6 @@ struct SchoolEventsView: View {
         if index < filteredEvents.count {
             let event = filteredEvents[index]
             currentSchoolEventImageURL = event.imageURL
-            print("📸 School event card appeared at index \(index): \(event.title), image URL: \(event.imageURL ?? "nil")")
         }
         
         // Add to visible indices
@@ -833,11 +816,8 @@ struct SchoolEventsView: View {
         print("🎉 Starting school event image preload for \(preloadRange) images")
         for index in 0..<preloadRange {
             guard let imageURL = filteredEvents[index].imageURL else { continue }
-            let eventTitle = filteredEvents[index].title
-            print("📸 Preloading school event image \(index + 1)/\(preloadRange): \(eventTitle)")
             _ = await imageLoader.loadPlaceholder(for: imageURL, width: 350, height: 450)
             _ = await imageLoader.loadImage(for: imageURL, width: 350, height: 450, priority: true)
-            print("✅ Preloaded school event image \(index + 1)/\(preloadRange): \(eventTitle)")
         }
         print("✅ Completed school event image preload for \(preloadRange) images")
     }
@@ -850,7 +830,10 @@ struct SchoolEventCardView: View {
     let isVisible: Bool
     let priority: Bool
     
+    @Environment(\.appEnvironment) var env
     @State private var isAttending = false
+    @State private var isJoining = false
+    @State private var goingCount = 0
     
     var body: some View {
         VStack(spacing: 0) {
@@ -909,66 +892,36 @@ struct SchoolEventCardView: View {
                     }
                 }
                 
-                // Action Buttons
-                VStack(spacing: 12) {
-                    // I'm Attending Button
-                    Button(action: {
+                // I'm Attending / Share Button
+                Button(action: {
+                    if !isAttending {
                         Task {
-                            if !isAttending {
-                                await MainActor.run {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        isAttending = true
-                                        AttendedEventsService.shared.addAttendedEvent(event)
-                                    }
-                                }
-                            } else {
-                                await MainActor.run {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        isAttending = false
-                                        AttendedEventsService.shared.removeAttendedEvent(event.id)
-                                    }
-                                }
-                            }
+                            await toggleAttending()
                         }
-                    }) {
-                        HStack {
-                            Image(systemName: isAttending ? "checkmark.circle.fill" : "hand.thumbsup.fill")
+                    } else {
+                        shareEvent()
+                    }
+                }) {
+                    HStack {
+                        if isJoining {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Image(systemName: isAttending ? "square.and.arrow.up" : "hand.thumbsup.fill")
                                 .font(.system(size: 14))
-                            Text(isAttending ? "Attending" : "I'm Attending")
+                            Text(isAttending ? "Share" : "I'm Attending")
                                 .font(.system(size: 14, weight: .semibold))
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(isAttending ? Color.green : Color.accentColor)
-                        )
                     }
-                    
-                    // More Info Button
-                    if let sourceURL = event.sourceURL {
-                        Button(action: {
-                            if let url = URL(string: sourceURL) {
-                                UIApplication.shared.open(url)
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "link")
-                                    .font(.system(size: 14))
-                                Text("More Info")
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.black)
-                            )
-                        }
-                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(isJoining ? Color.green : (isAttending ? Color(hex: 0x676767) : Color.accentColor))
+                    )
                 }
+                .disabled(isJoining)
                 .padding(.top, 8)
             }
             .padding(16)
@@ -985,280 +938,132 @@ struct SchoolEventCardView: View {
         )
         .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
         .onAppear {
-            isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
+            Task {
+                await loadAttendingStatus()
+            }
         }
     }
     
-    private func formatEventTime(_ date: Date) -> String {
-        let calendar = Calendar.current
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
+    private func loadAttendingStatus() async {
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            return
+        }
         
-        if calendar.isDateInToday(date) {
-            return "Today at \(formatter.string(from: date))"
-        } else if calendar.isDateInTomorrow(date) {
-            return "Tomorrow at \(formatter.string(from: date))"
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
+            return
+        }
+        
+        do {
+            let isGoing = try await firebaseRepo.isUserGoingToSchoolEvent(eventId: event.id, userId: userId)
+            let count = try await firebaseRepo.getSchoolEventGoingCount(eventId: event.id)
+            
+            await MainActor.run {
+                isAttending = isGoing
+                goingCount = count
+            }
+        } catch {
+            print("⚠️ Failed to check going status: \(error.localizedDescription)")
+        }
+    }
+    
+    private func toggleAttending() async {
+        // TODO: REMOVE AFTER AUTH IMPLEMENTED - Allow anonymous sign-in for debugging
+        var userId: String?
+        
+        if let existingUserId = FirebaseManager.shared.getCurrentUserId() {
+            userId = existingUserId
         } else {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .medium
-            dateFormatter.timeStyle = .short
-            return dateFormatter.string(from: date)
+            // Anonymous sign-in for debugging
+            do {
+                userId = try await FirebaseManager.shared.signInAnonymously()
+                print("✅ [DEBUG] Signed in anonymously: \(userId ?? "nil")")
+            } catch {
+                print("❌ [DEBUG] Failed to sign in anonymously: \(error.localizedDescription)")
+                return
+            }
         }
-    }
-}
-
-// MARK: - School Event Detail View
-struct SchoolEventDetailView: View {
-    let event: CrowdEvent
-    @Environment(\.dismiss) private var dismiss
-    @State private var isAttending = false
-    
-    var body: some View {
-        ZStack(alignment: .top) {
-            Color(.systemBackground)
-                .ignoresSafeArea()
+        
+        guard let userId = userId else {
+            print("⚠️ Cannot mark attending - No authenticated user")
+            return
+        }
+        
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
+            print("⚠️ Event repository is not FirebaseEventRepository")
+            return
+        }
+        
+        await MainActor.run {
+            isJoining = true
+        }
+        
+        do {
+            // Mark going
+            try await firebaseRepo.markSchoolEventGoing(eventId: event.id, userId: userId)
             
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Event Image - Full Width (Optimized)
-                    OptimizedEventImage(
-                        imageURL: event.imageURL,
-                        width: UIScreen.main.bounds.width,
-                        height: 400,
-                        contentMode: .fill,
-                        priority: true
-                    )
-                
-                    // Content Section
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Title
-                        Text(event.title)
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .padding(.top, 20)
-                        
-                        // Description
-                        if let description = event.description, !description.isEmpty {
-                            Text(description)
-                                .font(.system(size: 16))
-                                .foregroundStyle(.secondary)
-                                .lineSpacing(4)
-                                .padding(.top, 8)
-                        }
-                        
-                        // Date - show unformatted rawDateTime from Firebase for school events
-                        if let rawDateTime = event.rawDateTime, !rawDateTime.isEmpty {
-                            HStack(spacing: 4) {
-                                Text("Date:")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                                Text("📅")
-                                    .font(.system(size: 18))
-                                Text(rawDateTime)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(.primary)
-                            }
-                        }
-                        
-                        // Location
-                        if let location = event.rawLocationName, !location.isEmpty {
-                            HStack(spacing: 4) {
-                                Text("Location:")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                                Button(action: {
-                                    openLocationInMaps(address: location, coordinate: event.coordinates)
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Text(location)
-                                            .font(.system(size: 18, weight: .semibold))
-                                            .foregroundStyle(.blue)
-                                            .underline()
-                                        Image(systemName: "arrow.up.right.square")
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Divider()
-                            .padding(.vertical, 8)
-                        
-                        // Action Buttons
-                        VStack(spacing: 12) {
-                            // More Info Button
-                            if let sourceURL = event.sourceURL {
-                                Button(action: {
-                                    if let url = URL(string: sourceURL) {
-                                        UIApplication.shared.open(url)
-                                    }
-                                }) {
-                                    HStack {
-                                        Image(systemName: "link")
-                                            .font(.system(size: 18))
-                                        Text("More Info")
-                                            .font(.system(size: 17, weight: .semibold))
-                                    }
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 14)
-                                            .fill(Color.black)
-                                    )
-                                }
-                            }
-                            
-                            // I'm Attending Button
-                            Button(action: {
-                                Task {
-                                    if !isAttending {
-                                        await MainActor.run {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                isAttending = true
-                                                AttendedEventsService.shared.addAttendedEvent(event)
-                                            }
-                                        }
-                                    } else {
-                                        await MainActor.run {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
-                                                isAttending = false
-                                                AttendedEventsService.shared.removeAttendedEvent(event.id)
-                                            }
-                                        }
-                                    }
-                                }
-                            }) {
-                                HStack {
-                                    Image(systemName: isAttending ? "checkmark.circle.fill" : "hand.thumbsup.fill")
-                                        .font(.system(size: 18))
-                                    Text(isAttending ? "Attending" : "I'm Attending")
-                                        .font(.system(size: 17, weight: .semibold))
-                                }
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(isAttending ? Color.green : Color.accentColor)
-                                )
-                            }
-                            
-                            // Share Button
-                            Button(action: {
-                                shareEvent()
-                            }) {
-                                HStack {
-                                    Image(systemName: "square.and.arrow.up")
-                                        .font(.system(size: 18))
-                                    Text("Share")
-                                        .font(.system(size: 17, weight: .semibold))
-                                }
-                                .foregroundColor(.primary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(Color(.systemGray6))
-                                )
-                            }
-                        }
-                        .padding(.top, 8)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
+            // Fetch updated going count
+            let newCount = try await firebaseRepo.getSchoolEventGoingCount(eventId: event.id)
+            
+            // Keep loading state visible for 0.3 seconds
+            try await Task.sleep(nanoseconds: 300_000_000)
+            
+            await MainActor.run {
+                goingCount = newCount
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isAttending = true
+                    isJoining = false
                 }
             }
             
-            // Close Button - Floating at top
-            VStack {
-                HStack {
-                    Spacer()
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 32))
-                            .background(Circle().fill(Color.black.opacity(0.3)).frame(width: 36, height: 36))
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.top, 16)
-                }
-                Spacer()
+            print("✅ Marked going for school event: \(event.id)")
+        } catch {
+            print("❌ Failed to toggle school event attendance: \(error.localizedDescription)")
+            await MainActor.run {
+                isJoining = false
             }
         }
-        .onAppear {
-            isAttending = AttendedEventsService.shared.isAttendingEvent(event.id)
-        }
-    }
-    
-    private func openLocationInMaps(address: String, coordinate: CLLocationCoordinate2D) {
-        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-        mapItem.name = address
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-        ])
-    }
-    
-    private func formatFullDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE MMM d, yyyy"
-        return formatter.string(from: date)
     }
     
     private func shareEvent() {
-        AnalyticsService.shared.track("invite_sent", props: [
-            "event_id": event.id,
-            "title": event.title
-        ])
-        let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
-        let zone = coordinate.geohash(precision: 4)
-        AnalyticsService.shared.logToFirestore(
-            eventName: "invite_sent",
-            properties: [
-                "event_id": event.id,
-                "title": event.title
-            ],
-            zone: zone
-        )
-        
-        var shareItems: [Any] = []
-        shareItems.append(event.title)
+        // Create share text with event details and deep link to Crowd app
+        var shareText = "📅 \(event.title)\n\n"
         
         if let description = event.description {
-            shareItems.append(description)
+            shareText += "\(description)\n\n"
         }
         
-        if let time = event.time {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            shareItems.append("Time: \(formatter.string(from: time))")
+        if let rawDateTime = event.rawDateTime, !rawDateTime.isEmpty {
+            shareText += "When: \(rawDateTime)\n"
         }
         
-        if let sourceURL = event.sourceURL {
-            shareItems.append(sourceURL)
+        if let location = event.rawLocationName, !location.isEmpty {
+            shareText += "Where: \(location)\n"
         }
+        
+        shareText += "\nView on Crowd: crowd://event/\(event.id)"
         
         let activityViewController = UIActivityViewController(
-            activityItems: shareItems,
+            activityItems: [shareText],
             applicationActivities: nil
         )
         
+        // Configure for iPad
         if let popover = activityViewController.popoverPresentationController {
             popover.sourceView = UIApplication.shared.windows.first
             popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height / 2, width: 0, height: 0)
             popover.permittedArrowDirections = []
         }
         
+        // Present the activity view controller
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = windowScene.windows.first,
            let rootViewController = window.rootViewController {
+            
             var topController = rootViewController
             while let presentedController = topController.presentedViewController {
                 topController = presentedController
             }
+            
             topController.present(activityViewController, animated: true)
         }
     }
@@ -1269,10 +1074,9 @@ struct PartiesView: View {
     @Environment(\.appEnvironment) var env
     @State private var parties: [CrowdEvent] = []
     @State private var isLoading = false
-    @State private var selectedParty: CrowdEvent? = nil
     @State private var currentPartyIndex: Int = 0
-    @Binding var currentPartyImageURLs: [String]
-    @Binding var currentPartyIndices: [Int]
+    @State private var scrollPosition: Int? = 0
+    @Binding var currentPartyImageURL: String?
     
     var body: some View {
         Group {
@@ -1307,30 +1111,18 @@ struct PartiesView: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(parties.enumerated()), id: \.element.id) { index, party in
-                                Button(action: {
-                                    print("🎉 Party card tapped: \(party.title)")
-                                    selectedParty = party
-                                }) {
-                                    PartyCardView(party: party)
-                                }
-                                .buttonStyle(PlainButtonStyle())
+                                PartyCardView(party: party)
                                 .frame(width: geometry.size.width - 30)
                                 .frame(height: geometry.size.height)
                                 .containerRelativeFrame(.vertical)
                                 .contentShape(Rectangle())
                                 .id(index)
-                                .onAppear {
-                                    currentPartyIndex = index
-                                    updateCurrentEventAndImage(index: index, party: party)
-                                }
-                                .onDisappear {
-                                    removeEventFromArrays(index: index)
-                                }
                             }
                         }
                         .scrollTargetLayout()
                         .padding(.horizontal, 15)
                     }
+                    .scrollPosition(id: $scrollPosition)
                     .scrollTargetBehavior(.paging)
                     .scrollIndicators(.hidden)
                 }
@@ -1341,76 +1133,14 @@ struct PartiesView: View {
                 await loadParties()
             }
         }
-        .fullScreenCover(item: $selectedParty) { party in
-            PartyDetailView(party: party)
-        }
-        .onChange(of: selectedParty) { oldValue, newValue in
-            if newValue != nil {
-                print("🎉 Selected party changed: \(newValue?.title ?? "nil")")
+        .onChange(of: scrollPosition) { oldValue, newValue in
+            // Update background image based on the scroll position (which party is visible)
+            if let index = newValue, index >= 0 && index < parties.count {
+                currentPartyIndex = index
+                let party = parties[index]
+                currentPartyImageURL = party.imageURL
             }
         }
-        .onChange(of: currentPartyIndex) { oldValue, newValue in
-            if newValue >= 0 && newValue < parties.count {
-                let party = parties[newValue]
-                updateCurrentEventAndImage(index: newValue, party: party)
-            }
-        }
-    }
-    
-    /// Updates the current event and image arrays to keep them synchronized
-    /// Ensures both arrays always have the same length and matching indices
-    /// Only tracks events that have a valid imageURL
-    private func updateCurrentEventAndImage(index: Int, party: CrowdEvent) {
-        // Only add to arrays if the party has a valid imageURL (not nil or empty)
-        guard let imageURL = party.imageURL, !imageURL.isEmpty else {
-            if party.imageURL == nil {
-                print("⚠️ Party '\(party.title)' has nil imageURL - skipping")
-            } else {
-                print("⚠️ Party '\(party.title)' has empty imageURL - skipping")
-            }
-            return
-        }
-        
-        // Find if this index already exists in the arrays
-        if let existingPosition = currentPartyIndices.firstIndex(of: index) {
-            // Update existing entry at the same position in both arrays
-            currentPartyIndices[existingPosition] = index
-            if existingPosition < currentPartyImageURLs.count {
-                currentPartyImageURLs[existingPosition] = imageURL
-            } else {
-                // If somehow out of sync, fix it
-                currentPartyImageURLs.append(imageURL)
-            }
-        } else {
-            // Add new entry to both arrays at the same time to keep them synchronized
-            currentPartyIndices.append(index)
-            currentPartyImageURLs.append(imageURL)
-        }
-        
-        // Ensure arrays are always the same length (safety check)
-        let minCount = min(currentPartyIndices.count, currentPartyImageURLs.count)
-        currentPartyIndices = Array(currentPartyIndices.prefix(minCount))
-        currentPartyImageURLs = Array(currentPartyImageURLs.prefix(minCount))
-    }
-    
-    /// Removes event from arrays when it disappears from view
-    /// Ensures both arrays are updated together to maintain synchronization
-    private func removeEventFromArrays(index: Int) {
-        // Only remove if it's not the currently visible index
-        guard index != currentPartyIndex else { return }
-        
-        if let arrayIndex = currentPartyIndices.firstIndex(of: index) {
-            // Remove from both arrays at the same position to keep them synchronized
-            currentPartyIndices.remove(at: arrayIndex)
-            if arrayIndex < currentPartyImageURLs.count {
-                currentPartyImageURLs.remove(at: arrayIndex)
-            }
-        }
-        
-        // Ensure arrays stay synchronized (safety check)
-        let minCount = min(currentPartyIndices.count, currentPartyImageURLs.count)
-        currentPartyIndices = Array(currentPartyIndices.prefix(minCount))
-        currentPartyImageURLs = Array(currentPartyImageURLs.prefix(minCount))
     }
     
     private func loadParties() async {
@@ -1445,18 +1175,11 @@ struct PartiesView: View {
             await MainActor.run {
                 parties = sortedParties
                 currentPartyIndex = 0
-                // Initialize arrays with first party that has a valid imageURL (not nil or empty)
-                if !sortedParties.isEmpty, let firstImageURL = sortedParties[0].imageURL, !firstImageURL.isEmpty {
-                    currentPartyImageURLs = [firstImageURL]
-                    currentPartyIndices = [0]
-                    print("📸 Initialized arrays with first party imageURL: \(firstImageURL.prefix(50))...")
+                // Initialize with first party image URL
+                if !sortedParties.isEmpty {
+                    currentPartyImageURL = sortedParties[0].imageURL
                 } else {
-                    currentPartyImageURLs = []
-                    currentPartyIndices = []
-                    if !sortedParties.isEmpty {
-                        let firstImageURL = sortedParties[0].imageURL
-                        print("⚠️ First party '\(sortedParties[0].title)' has invalid imageURL (nil: \(firstImageURL == nil), empty: \(firstImageURL?.isEmpty ?? false)) - arrays start empty")
-                    }
+                    currentPartyImageURL = nil
                 }
                 isLoading = false
             }
@@ -1476,11 +1199,8 @@ struct PartyCardView: View {
     @Environment(\.appEnvironment) var env
     @State private var isAttending = false
     @State private var isJoining = false
-    @State private var isUserAuthenticated = false
-    
-    private var canInteract: Bool {
-        isUserAuthenticated && !isJoining && !isAttending
-    }
+    @State private var goingCount = 0
+    @State private var showMoreInfoSheet = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -1534,19 +1254,6 @@ struct PartyCardView: View {
                     }
                 }
                 
-                // Going count badge
-                if party.attendeeCount > 0 {
-                    HStack(spacing: 4) {
-                        Text("\(party.attendeeCount >= 50 ? "50+" : "\(party.attendeeCount)")")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                        Text("going")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 4)
-                }
-                
                 // Buy Ticket Button
                 if let ticketURL = party.ticketURL {
                     Button(action: {
@@ -1568,37 +1275,107 @@ struct PartyCardView: View {
                                 .fill(Color.black)
                         )
                     }
-                    .padding(.top, 8)
+                    .padding(.top, 4)
                 }
                 
-                // I'm Going Button
-                Button(action: {
-                    Task {
-                        await saveEventToProfile()
-                    }
-                }) {
-                    HStack {
-                        if isJoining {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Text("I'm going")
-                                .font(.system(size: 14, weight: .semibold))
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14))
+                // Button Layout - Split if sourceURL exists, otherwise full width
+                if let sourceURL = party.sourceURL {
+                    // TWO BUTTONS: Split layout
+                    HStack(spacing: 8) {
+                        // I'm Attending / Share Button (half width)
+                        Button(action: {
+                            if !isAttending {
+                                Task {
+                                    await saveEventToProfile()
+                                }
+                            } else {
+                                shareParty()
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                if isJoining {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                } else {
+                                    Image(systemName: isAttending ? "square.and.arrow.up" : "hand.thumbsup.fill")
+                                        .font(.system(size: 14))
+                                    Text(isAttending ? "Share" : "I'm Attending")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                }
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(isJoining ? Color.green : Color.blue)
+                            )
                         }
+                        .frame(maxWidth: .infinity)
+                        .disabled(isJoining)
+                        
+                        // More Info Button (half width)
+                        Button(action: {
+                            showMoreInfoSheet = true
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 14))
+                                Text("More Info")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .lineLimit(1)
+                            }
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(.systemGray5))
+                            )
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.blue)
-                    )
+                    .padding(.top, 4)
+                } else {
+                    // ONE BUTTON: Full width layout
+                    Button(action: {
+                        if !isAttending {
+                            Task {
+                                await saveEventToProfile()
+                            }
+                        } else {
+                            shareParty()
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            if isJoining {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Image(systemName: isAttending ? "square.and.arrow.up" : "hand.thumbsup.fill")
+                                    .font(.system(size: 14))
+                                Text(isAttending ? "Share" : "I'm Attending")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(isJoining ? Color.green : Color.blue)
+                        )
+                    }
+                    .disabled(isJoining)
+                    .padding(.top, 4)
                 }
-                .disabled(!canInteract)
-                .opacity(canInteract ? 1.0 : 0.6)
-                .padding(.top, 8)
             }
             .padding(16)
         }
@@ -1613,568 +1390,125 @@ struct PartyCardView: View {
                 .stroke(.primary.opacity(0.1), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+        .sheet(isPresented: $showMoreInfoSheet) {
+            if let sourceURL = party.sourceURL {
+                MoreInfoSheetView(sourceURL: sourceURL)
+                    .presentationDetents([.large])
+            }
+        }
+        .onAppear {
+            // Initialize going count from party.attendeeCount (fetched from Firebase)
+            goingCount = party.attendeeCount
+            
+            // Check if user is already going to this party
+            Task {
+                guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+                    return
+                }
+                
+                guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
+                    return
+                }
+                
+                do {
+                    let isGoing = try await firebaseRepo.isUserGoingToParty(partyId: party.id, userId: userId)
+                    await MainActor.run {
+                        isAttending = isGoing
+                    }
+                } catch {
+                    print("⚠️ Failed to check party going status: \(error.localizedDescription)")
+                }
+            }
+        }
     }
     
     
     private func saveEventToProfile() async {
-        // Try to authenticate if not already authenticated
-        if !isUserAuthenticated {
+        // TODO: REMOVE AFTER AUTH IMPLEMENTED - Allow anonymous sign-in for debugging
+        var userId: String?
+        
+        if let existingUserId = FirebaseManager.shared.getCurrentUserId() {
+            userId = existingUserId
+        } else {
+            // Anonymous sign-in for debugging
             do {
-                let userId = try await FirebaseManager.shared.signInAnonymously()
-                print("✅ Signed in anonymously for attendance: \(userId)")
-                await MainActor.run {
-                    isUserAuthenticated = true
-                }
+                userId = try await FirebaseManager.shared.signInAnonymously()
+                print("✅ [DEBUG] Signed in anonymously: \(userId ?? "nil")")
             } catch {
-                print("❌ Failed to sign in anonymously: \(error.localizedDescription)")
-                await MainActor.run {
-                    isUserAuthenticated = false
-                }
+                print("❌ [DEBUG] Failed to sign in anonymously: \(error.localizedDescription)")
                 return
             }
         }
         
-        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
-            print("⚠️ Cannot save event - No authenticated user after sign-in attempt")
-            await MainActor.run {
-                isUserAuthenticated = false
-            }
+        guard let userId = userId else {
+            print("⚠️ Cannot save event - No authenticated user")
             return
         }
         
-        // Check if already attending
-        if isAttending {
-            return
-        }
-        
-        await MainActor.run {
-            isJoining = true
-        }
-        
-        do {
-            // Fetch current profile to get existing eventStatus
-            let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
-            var currentEventStatus = profile.eventStatus ?? []
-            
-            // Add event ID if not already present
-            if !currentEventStatus.contains(party.id) {
-                currentEventStatus.append(party.id)
-                
-                // Update profile with new event status
-                try await UserProfileService.shared.updateProfile(userId: userId, updates: [
-                    "eventStatus": currentEventStatus
-                ])
-                
-                print("✅ Saved event \(party.id) to user profile event status")
-                
-                await MainActor.run {
-                    isAttending = true
-                    isJoining = false
-                }
-            } else {
-                await MainActor.run {
-                    isAttending = true
-                    isJoining = false
-                }
-            }
-        } catch {
-            print("❌ Failed to save event to profile: \(error.localizedDescription)")
-            await MainActor.run {
-                isJoining = false
-            }
-        }
-    }
-    
-    private func formatEventTime(_ date: Date) -> String {
-        let calendar = Calendar.current
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        
-        if calendar.isDateInToday(date) {
-            return "Today at \(formatter.string(from: date))"
-        } else if calendar.isDateInTomorrow(date) {
-            return "Tomorrow at \(formatter.string(from: date))"
-        } else {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .medium
-            dateFormatter.timeStyle = .short
-            return dateFormatter.string(from: date)
-        }
-    }
-}
-
-// MARK: - Party Detail View
-struct PartyDetailView: View {
-    let party: CrowdEvent
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.appEnvironment) var env
-    @StateObject private var viewModel = EventDetailViewModel()
-    @State private var isAttending = false
-    @State private var isJoining = false
-    @State private var loadedParty: CrowdEvent?
-    @State private var isLoadingParty = false
-    @State private var goingCount: Int = 0
-    @State private var goingCountListener: ListenerRegistration?
-    
-    var body: some View {
-        ZStack(alignment: .top) {
-            // Background
-            Color(.systemBackground)
-                .ignoresSafeArea()
-            
-            if isLoadingParty {
-                ProgressView("Loading party details...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                let displayParty = loadedParty ?? party
-                
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Party Image - Full Width
-                        CachedEventImage(
-                            imageURL: displayParty.imageURL,
-                            height: 400,
-                            contentMode: .fill
-                        )
-                    
-                    // Content Section
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Title + Hosted by
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Title only (largest)
-                            Text(displayParty.title)
-                                .font(.system(size: 32, weight: .bold))
-                                .foregroundStyle(.primary)
-                            
-                            // Hosted by with label
-                            if !displayParty.hostName.isEmpty && displayParty.hostName != "Party Host" {
-                                HStack(spacing: 4) {
-                                    Text("Hosted by:")
-                                        .font(.system(size: 18, weight: .medium))
-                                        .foregroundStyle(.secondary)
-                                    Text(displayParty.hostName)
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundStyle(.primary)
-                                }
-                            }
-                        }
-                        .padding(.top, 20)
-                        
-                        // Description
-                        if let description = displayParty.description, !description.isEmpty {
-                            Text(description)
-                                .font(.system(size: 16))
-                                .foregroundStyle(.secondary)
-                                .lineSpacing(4)
-                                .padding(.top, 8)
-                        }
-                        
-                        // Date - show unformatted dateTime string from Firebase for parties
-                        if let dateTime = displayParty.dateTime, !dateTime.isEmpty {
-                            HStack(spacing: 4) {
-                                Text("Date:")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                                Text("📅")
-                                    .font(.system(size: 18))
-                                Text(dateTime)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(.primary)
-                            }
-                        }
-                        
-                        // Location - Clickable to open Maps
-                        if let location = displayParty.rawLocationName, !location.isEmpty {
-                            HStack(spacing: 4) {
-                                Text("Location:")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                                Button(action: {
-                                    openLocationInMaps(address: location, coordinate: displayParty.coordinates)
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Text(location)
-                                            .font(.system(size: 18, weight: .semibold))
-                                            .foregroundStyle(.blue)
-                                            .underline()
-                                        Image(systemName: "arrow.up.right.square")
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Divider()
-                            .padding(.vertical, 8)
-                        
-                        // Action Buttons
-                        VStack(spacing: 0) {
-                            // Buy Tickets Button (Primary)
-                            if let ticketURL = displayParty.ticketURL {
-                                Button(action: {
-                                    if let url = URL(string: ticketURL) {
-                                        UIApplication.shared.open(url)
-                                    }
-                                }) {
-                                    HStack {
-                                        Image(systemName: "ticket.fill")
-                                            .font(.system(size: 18))
-                                        Text("Buy Tickets")
-                                            .font(.system(size: 17, weight: .semibold))
-                                    }
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 14)
-                                            .fill(Color.black)
-                                    )
-                                }
-                            }
-                            
-                            // I'm Going Button with count
-                            Button(action: {
-                                Task {
-                                    await toggleGoing(party: displayParty)
-                                }
-                            }) {
-                                HStack {
-                                    if isJoining {
-                                        ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    } else {
-                                        Image(systemName: isAttending ? "checkmark.circle.fill" : "hand.thumbsup.fill")
-                                            .font(.system(size: 18))
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(isAttending ? "Going" : "I'm Going")
-                                                .font(.system(size: 17, weight: .semibold))
-                                            if goingCount > 0 {
-                                                Text("\(goingCount >= 50 ? "50+" : "\(goingCount)") going")
-                                                    .font(.system(size: 12, weight: .medium))
-                                                    .opacity(0.9)
-                                            }
-                                        }
-                                    }
-                                }
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(isAttending ? Color.green : Color.accentColor)
-                                )
-                            }
-                            .padding(.top, 6)
-                            .disabled(isJoining)
-                            
-                            // Share Button - Shares ticket URL
-                            if let ticketURL = displayParty.ticketURL {
-                                Button(action: {
-                                    shareTicketURL(ticketURL: ticketURL, partyTitle: displayParty.title)
-                                }) {
-                                    HStack {
-                                        Image(systemName: "square.and.arrow.up")
-                                            .font(.system(size: 18))
-                                        Text("Share")
-                                            .font(.system(size: 17, weight: .semibold))
-                                    }
-                                    .foregroundColor(.primary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 14)
-                                            .fill(Color(.systemGray6))
-                                    )
-                                }
-                            }
-                        }
-                        .padding(.top, 8)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
-                }
-                }
-            }
-            
-            // Close Button - Floating at top
-            VStack {
-                HStack {
-                    Spacer()
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 32))
-                            .background(Circle().fill(Color.black.opacity(0.3)).frame(width: 36, height: 36))
-                    }
-                    .padding(.trailing, 20)
-                    .padding(.top, 16)
-                }
-                Spacer()
-            }
-        }
-        .onAppear {
-            Task {
-                await loadPartyDetails()
-            }
-            setupGoingCountListener()
-        }
-        .onDisappear {
-            goingCountListener?.remove()
-            goingCountListener = nil
-        }
-    }
-    
-    private func loadPartyDetails() async {
-        // Set loading state
-        await MainActor.run {
-            isLoadingParty = true
-        }
-        
-        // Ensure we have a Firebase repository
         guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
             print("⚠️ Event repository is not FirebaseEventRepository")
-            await MainActor.run {
-                loadedParty = party
-                isLoadingParty = false
-            }
             return
         }
         
-        // Get current user ID
-        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
-            print("⚠️ No authenticated user found")
-            await MainActor.run {
-                loadedParty = party
-                isLoadingParty = false
-            }
-            return
-        }
-        
-        do {
-            print("🎉 Loading party details for: \(party.id)")
-            
-            // Fetch party data in parallel for better performance
-            async let goingCountTask = firebaseRepo.getPartyGoingCount(partyId: party.id)
-            async let isGoingTask = firebaseRepo.isUserGoingToParty(partyId: party.id, userId: userId)
-            
-            // Wait for both results
-            let (fetchedGoingCount, fetchedIsGoing) = try await (goingCountTask, isGoingTask)
-            
-            print("✅ Party details loaded - Going: \(fetchedGoingCount), User attending: \(fetchedIsGoing)")
-            
-            // Create updated party with fresh data
-            var updatedParty = party
-            updatedParty.attendeeCount = fetchedGoingCount
-            
-            // Update UI on main thread
-            await MainActor.run {
-                loadedParty = updatedParty
-                isAttending = fetchedIsGoing
-                goingCount = fetchedGoingCount
-                isLoadingParty = false
-            }
-        } catch {
-            print("❌ Failed to load party details: \(error.localizedDescription)")
-            
-            // Fallback to original party data
-            await MainActor.run {
-                loadedParty = party
-                goingCount = party.attendeeCount
-                isAttending = false
-                isLoadingParty = false
-            }
-        }
-    }
-    
-    private func setupGoingCountListener() {
-        // Ensure we have a Firebase repository
-        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
-            print("⚠️ Cannot setup listener - Event repository is not FirebaseEventRepository")
-            return
-        }
-        
-        // Remove existing listener if any to prevent duplicates
-        goingCountListener?.remove()
-        goingCountListener = nil
-        
-        print("🎉 Setting up real-time listener for party: \(party.id)")
-        
-        // Set up real-time listener for going count changes
-        goingCountListener = firebaseRepo.listenToPartyGoingCount(partyId: party.id) { count in
-            print("🔄 Party going count updated: \(count)")
-            
-            // Update state on main thread
-            Task { @MainActor in
-                goingCount = count
-                
-                // Update loaded party with new count
-                if var updatedParty = loadedParty {
-                    updatedParty.attendeeCount = count
-                    loadedParty = updatedParty
-                }
-            }
-        }
-    }
-    
-    private func openLocationInMaps(address: String, coordinate: CLLocationCoordinate2D) {
-        // Try to use coordinates if available, otherwise use address string
-        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-        mapItem.name = address
-        
-        // Open in Apple Maps
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-        ])
-    }
-    
-    private func saveEventToProfile(eventId: String, userId: String) async throws {
-        // Fetch current profile to get existing eventStatus
-        let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
-        var currentEventStatus = profile.eventStatus ?? []
-        
-        // Add event ID if not already present
-        if !currentEventStatus.contains(eventId) {
-            currentEventStatus.append(eventId)
-            
-            // Update profile with new event status
-            try await UserProfileService.shared.updateProfile(userId: userId, updates: [
-                "eventStatus": currentEventStatus
-            ])
-            
-            print("✅ Saved event \(eventId) to user profile event status")
-        }
-    }
-    
-    private func removeEventFromProfile(eventId: String, userId: String) async throws {
-        // Fetch current profile to get existing eventStatus
-        let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
-        var currentEventStatus = profile.eventStatus ?? []
-        
-        // Remove event ID if present
-        if currentEventStatus.contains(eventId) {
-            currentEventStatus.removeAll { $0 == eventId }
-            
-            // Update profile with updated event status (empty array is fine, keeps the field)
-            try await UserProfileService.shared.updateProfile(userId: userId, updates: [
-                "eventStatus": currentEventStatus
-            ])
-            
-            print("✅ Removed event \(eventId) from user profile event status")
-        }
-    }
-    
-    private func toggleGoing(party: CrowdEvent) async {
-        // Get current user ID
-        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
-            print("⚠️ Cannot toggle going - No authenticated user")
-            return
-        }
-        
-        // Ensure we have a Firebase repository
-        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
-            print("⚠️ Cannot toggle going - Event repository is not FirebaseEventRepository")
-            return
-        }
-        
-        // Set loading state
         await MainActor.run {
             isJoining = true
         }
         
-        // Save current state for rollback if needed
-        let previousState = isAttending
-        
         do {
-            if isAttending {
-                print("🎉 Unmarking party as going: \(party.id)")
-                
-                // Unmark going
-                try await firebaseRepo.unmarkPartyGoing(partyId: party.id, userId: userId)
-                
-                // Remove from user profile event status
-                try await removeEventFromProfile(eventId: party.id, userId: userId)
-                
-                print("✅ Successfully unmarked party as going and removed from profile")
-                
-                // Update UI
-                await MainActor.run {
-                    isAttending = false
-                    isJoining = false
-                }
-            } else {
-                print("🎉 Marking party as going: \(party.id)")
-                
-                // Mark going
-                try await firebaseRepo.markPartyGoing(partyId: party.id, userId: userId)
-                
-                // Save to user profile event status
-                try await saveEventToProfile(eventId: party.id, userId: userId)
-                
-                print("✅ Successfully marked party as going and saved to profile")
-                
-                // Update UI
-                await MainActor.run {
+            // Mark going in Firebase
+            try await firebaseRepo.markPartyGoing(partyId: party.id, userId: userId)
+            
+            // Fetch updated going count
+            let newCount = try await firebaseRepo.getPartyGoingCount(partyId: party.id)
+            
+            // Keep loading state visible for 0.3 seconds
+            try await Task.sleep(nanoseconds: 300_000_000)
+            
+            await MainActor.run {
+                goingCount = newCount
+                withAnimation(.easeInOut(duration: 0.3)) {
                     isAttending = true
                     isJoining = false
                 }
             }
-        } catch {
-            print("❌ Failed to toggle going: \(error.localizedDescription)")
             
-            // Rollback to previous state on error
+            print("✅ Marked going for party: \(party.id)")
+        } catch {
+            print("❌ Failed to toggle party attendance: \(error.localizedDescription)")
             await MainActor.run {
-                isAttending = previousState
                 isJoining = false
             }
         }
     }
     
-    private func formatEventTime(_ date: Date) -> String {
-        let calendar = Calendar.current
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
+    private func shareParty() {
+        // Create share text with party details and deep link to Crowd app
+        var shareText = "🎉 \(party.title)\n\n"
         
-        if calendar.isDateInToday(date) {
-            return "Today at \(formatter.string(from: date))"
-        } else if calendar.isDateInTomorrow(date) {
-            return "Tomorrow at \(formatter.string(from: date))"
-        } else {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .medium
-            dateFormatter.timeStyle = .short
-            return dateFormatter.string(from: date)
+        if !party.hostName.isEmpty && party.hostName != "Party Host" {
+            shareText += "Hosted by: \(party.hostName)\n"
         }
-    }
-    
-    private func formatFullDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE MMM d, yyyy"
-        return formatter.string(from: date)
-        // Returns: "Saturday Nov 15, 2025"
-    }
-    
-    private func shareTicketURL(ticketURL: String, partyTitle: String) {
-        // Track share analytics
-        AnalyticsService.shared.track("party_ticket_shared", props: [
-            "party_id": party.id,
-            "title": partyTitle
-        ])
         
-        // Create share text with ticket URL
-        var shareText = "🎉 \(partyTitle)\n\n"
-        shareText += "Get tickets: \(ticketURL)"
-        
-        var shareItems: [Any] = [shareText]
-        
-        // Add ticket URL
-        if let url = URL(string: ticketURL) {
-            shareItems.append(url)
+        if let description = party.description {
+            shareText += "\(description)\n\n"
         }
+        
+        if let dateTime = party.dateTime, !dateTime.isEmpty {
+            shareText += "When: \(dateTime)\n"
+        }
+        
+        if let location = party.rawLocationName, !location.isEmpty {
+            shareText += "Where: \(location)\n"
+        }
+        
+        if goingCount > 0 {
+            shareText += "\n👥 \(goingCount) going\n"
+        }
+        
+        shareText += "\nView on Crowd: crowd://party/\(party.id)"
         
         let activityViewController = UIActivityViewController(
-            activityItems: shareItems,
+            activityItems: [shareText],
             applicationActivities: nil
         )
         
@@ -2190,13 +1524,29 @@ struct PartyDetailView: View {
            let window = windowScene.windows.first,
            let rootViewController = window.rootViewController {
             
-            // Find the topmost presented view controller
             var topController = rootViewController
             while let presentedController = topController.presentedViewController {
                 topController = presentedController
             }
             
             topController.present(activityViewController, animated: true)
+        }
+    }
+    
+    private func formatEventTime(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        
+        if calendar.isDateInToday(date) {
+            return "Today at \(formatter.string(from: date))"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow at \(formatter.string(from: date))"
+        } else {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .medium
+            dateFormatter.timeStyle = .short
+            return dateFormatter.string(from: date)
         }
     }
 }
@@ -2839,6 +2189,64 @@ struct EventTypeCard: View {
                     .fill(Color.white.opacity(0.1))
             )
         }
+    }
+}
+
+// MARK: - More Info Sheet View
+struct MoreInfoSheetView: View {
+    let sourceURL: String
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                if let url = URL(string: sourceURL) {
+                    SafariView(url: url)
+                        .ignoresSafeArea(.all)
+                } else {
+                    VStack(spacing: 20) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 60))
+                            .foregroundStyle(.orange)
+                        Text("Invalid URL")
+                            .font(.system(size: 20, weight: .semibold))
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Safari View Controller Wrapper
+import SafariServices
+
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+    
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = false
+        config.barCollapsingEnabled = true
+        
+        let safariVC = SFSafariViewController(url: url, configuration: config)
+        safariVC.preferredControlTintColor = UIColor.systemBlue
+        safariVC.preferredBarTintColor = UIColor.systemBackground
+        safariVC.dismissButtonStyle = .close
+        
+        return safariVC
+    }
+    
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {
+        // No updates needed
     }
 }
 

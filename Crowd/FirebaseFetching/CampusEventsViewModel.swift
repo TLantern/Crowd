@@ -54,7 +54,7 @@ final class CampusEventsViewModel: ObservableObject {
 
             let docs = snap.documents
             let now = Date()
-            // Fast path: map immediately without geocoding so UI populates instantly
+            // Fast path: map immediately without geocoding or attendance so UI populates instantly
             var quickMapped: [CrowdEvent] = []
             for d in docs {
                 if var live = try? d.data(as: CampusEventLive.self) {
@@ -73,6 +73,7 @@ final class CampusEventsViewModel: ObservableObject {
             // Don't limit here - show all future events found
             await MainActor.run { self.crowdEvents = quickMapped }
             
+            // Slow path: fetch with attendance counts and geocoding
             let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) { () async -> [CrowdEvent] in
                 var tmp: [CrowdEvent] = []
                 for d in docs {
@@ -91,7 +92,8 @@ final class CampusEventsViewModel: ObservableObject {
                                 }
                             }
                         }
-                        if var ce = mapCampusEventLiveToCrowdEvent(live) {
+                        // Use async version to fetch attendance count
+                        if var ce = await mapCampusEventLiveToCrowdEventAsync(live) {
                             if let coord = geocoded { ce.coordinates = coord }
                             if let startDate = ce.time, startDate >= now { tmp.append(ce) }
                         }

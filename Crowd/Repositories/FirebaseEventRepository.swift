@@ -176,6 +176,9 @@ final class FirebaseEventRepository: EventRepository {
         
         // Source URL - Check multiple field name variations
         let sourceUrl: String? = {
+            // Check normalized.url first (this is where it actually is!)
+            if let url = normalized?["url"] as? String { return url }
+            // Then check top-level fields
             if let url = data["sourceURL"] as? String { return url }
             if let url = data["sourceUrl"] as? String { return url }
             if let url = data["source"] as? String { return url }
@@ -183,8 +186,12 @@ final class FirebaseEventRepository: EventRepository {
             if let url = data["originalURL"] as? String { return url }
             if let url = data["originalUrl"] as? String { return url }
             if let url = data["eventSourceURL"] as? String { return url }
+            // Then check eventDetails
             if let url = eventDetails?["sourceURL"] as? String { return url }
             if let url = eventDetails?["sourceUrl"] as? String { return url }
+            // Check other normalized fields
+            if let url = normalized?["sourceURL"] as? String { return url }
+            if let url = normalized?["sourceUrl"] as? String { return url }
             return nil
         }()
         
@@ -294,11 +301,47 @@ final class FirebaseEventRepository: EventRepository {
         try await db.collection("partyGoing").addDocument(data: goingData)
     }
     
+    /// Mark that a user is going to a school event (reuses partyGoing collection)
+    func markSchoolEventGoing(eventId: String, userId: String) async throws {
+        // Check if user already marked going
+        let existingQuery = try await db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: eventId)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+        
+        if !existingQuery.documents.isEmpty {
+            return // Already marked, no error
+        }
+        
+        // Create going record (reuse partyId field for school events too)
+        let goingData: [String: Any] = [
+            "partyId": eventId,
+            "userId": userId,
+            "clickedAt": FieldValue.serverTimestamp()
+        ]
+        
+        try await db.collection("partyGoing").addDocument(data: goingData)
+    }
+    
     /// Unmark that a user is going to a party
     func unmarkPartyGoing(partyId: String, userId: String) async throws {
         // Find user's going record
         let goingQuery = try await db.collection("partyGoing")
             .whereField("partyId", isEqualTo: partyId)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments()
+        
+        // Delete all matching records (should only be one)
+        for document in goingQuery.documents {
+            try await document.reference.delete()
+        }
+    }
+    
+    /// Unmark that a user is going to a school event
+    func unmarkSchoolEventGoing(eventId: String, userId: String) async throws {
+        // Find user's going record
+        let goingQuery = try await db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: eventId)
             .whereField("userId", isEqualTo: userId)
             .getDocuments()
         
@@ -317,10 +360,30 @@ final class FirebaseEventRepository: EventRepository {
         return goingQuery.documents.count
     }
     
+    /// Get the count of users going to a school event (reuses partyGoing collection)
+    func getSchoolEventGoingCount(eventId: String) async throws -> Int {
+        let goingQuery = try await db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: eventId)
+            .getDocuments()
+        
+        return goingQuery.documents.count
+    }
+    
     /// Check if a user is going to a party
     func isUserGoingToParty(partyId: String, userId: String) async throws -> Bool {
         let goingQuery = try await db.collection("partyGoing")
             .whereField("partyId", isEqualTo: partyId)
+            .whereField("userId", isEqualTo: userId)
+            .limit(to: 1)
+            .getDocuments()
+        
+        return !goingQuery.documents.isEmpty
+    }
+    
+    /// Check if a user is going to a school event
+    func isUserGoingToSchoolEvent(eventId: String, userId: String) async throws -> Bool {
+        let goingQuery = try await db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: eventId)
             .whereField("userId", isEqualTo: userId)
             .limit(to: 1)
             .getDocuments()
@@ -335,6 +398,21 @@ final class FirebaseEventRepository: EventRepository {
             .addSnapshotListener { snapshot, error in
                 if let error = error {
                     print("❌ Error listening to party going count: \(error.localizedDescription)")
+                    return
+                }
+                
+                let count = snapshot?.documents.count ?? 0
+                onChange(count)
+            }
+    }
+    
+    /// Listen to school event going count changes in real-time
+    func listenToSchoolEventGoingCount(eventId: String, onChange: @escaping (Int) -> Void) -> ListenerRegistration {
+        return db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: eventId)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("❌ Error listening to school event going count: \(error.localizedDescription)")
                     return
                 }
                 
@@ -420,35 +498,19 @@ final class FirebaseEventRepository: EventRepository {
     private func cleanAddressFromDateTime(_ address: String) -> String {
         var cleaned = address
         
-        print("🧹 [ADDRESS CLEAN] Original: '\(address)'")
-        
         // Aggressive Pattern: Remove everything starting from a month abbreviation followed by day/year pattern
         // This catches "TXDec 31, 2025..." and removes "Dec 31, 2025..." onwards
         let aggressivePattern = #"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d{1,2}.*$"#
         
         if let regex = try? NSRegularExpression(pattern: aggressivePattern, options: []) {
             let range = NSRange(cleaned.startIndex..., in: cleaned)
-            let matches = regex.matches(in: cleaned, options: [], range: range)
-            
-            if !matches.isEmpty {
-                print("🧹 [ADDRESS CLEAN] Aggressive pattern found \(matches.count) match(es)")
-                for match in matches {
-                    if let range = Range(match.range, in: cleaned) {
-                        print("🧹 [ADDRESS CLEAN]   Matched: '\(cleaned[range])'")
-                    }
-                }
-                cleaned = regex.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
-                print("🧹 [ADDRESS CLEAN] After aggressive removal: '\(cleaned)'")
-            }
+            cleaned = regex.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
         }
         
         // Clean up any trailing commas, spaces, or extra whitespace
         cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
         cleaned = cleaned.replacingOccurrences(of: #",\s*$"#, with: "", options: .regularExpression)
         cleaned = cleaned.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
-        
-        print("🧹 [ADDRESS CLEAN] Final result: '\(cleaned)'")
-        print("🧹 [ADDRESS CLEAN] ========================================")
         
         return cleaned.isEmpty ? address : cleaned
     }
