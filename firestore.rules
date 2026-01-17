@@ -199,6 +199,13 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // Official school events collection (events_from_official_raw) - read-only for users
+    match /events_from_official_raw/{eventId} {
+      allow read: if true;
+      // Only Cloud Functions can write
+      allow write: if false;
+    }
+    
     // User attendances collection (tracking which events users are attending)
     match /userAttendances/{attendanceId} {
       // Authenticated users can read attendances

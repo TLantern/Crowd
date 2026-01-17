@@ -2,7 +2,7 @@
 //  CampusEventsViewModel.swift
 //  Crowd
 //
-//  Listens to Firestore `campus_events_live` (the unified feed from IG + official).
+//  Listens to Firestore `events_from_official_raw` (official school events).
 //  Produces [CrowdEvent] ready for UI and map.
 //
 
@@ -41,70 +41,63 @@ final class CampusEventsViewModel: ObservableObject {
         }
         
         let db = Firestore.firestore()
-        print("🔄 CampusEventsViewModel: One-time fetch from campus_events_live (limit: \(limit))")
+        print("🔄 CampusEventsViewModel: One-time fetch from events_from_official_raw (limit: \(limit))")
         
         do {
-            // Fetch all documents (or a large batch) since we filter for future events client-side
-            // Order by createdAt descending to get most recent events first
-            // Use a high limit to ensure we get all future events even if many are past
-            let snap = try await db.collection("campus_events_live")
-                .order(by: "createdAt", descending: true)
+            // Fetch all documents from events_from_official_raw collection
+            // This collection contains official school events scraped from UNT sources
+            let snap = try await db.collection("events_from_official_raw")
                 .limit(to: 200)
                 .getDocuments()
 
             let docs = snap.documents
             let now = Date()
-            // Fast path: map immediately without geocoding or attendance so UI populates instantly
-            var quickMapped: [CrowdEvent] = []
-            for d in docs {
-                if var live = try? d.data(as: CampusEventLive.self) {
-                    live.id = d.documentID
-                    if let ce = mapCampusEventLiveToCrowdEvent(live),
-                       let startDate = ce.time, startDate >= now {
-                        quickMapped.append(ce)
-                    }
-                }
-            }
-            quickMapped.sort { (a, b) in
-                let aStart = a.time ?? .distantFuture
-                let bStart = b.time ?? .distantFuture
-                return aStart < bStart
-            }
-            // Don't limit here - show all future events found
-            await MainActor.run { self.crowdEvents = quickMapped }
+            let calendar = Calendar.current
+            let startOfToday = calendar.startOfDay(for: Date())
             
-            // Slow path: fetch with attendance counts and geocoding
+            // Parse events from events_from_official_raw collection
+            print("📊 Starting to parse \(docs.count) documents from Firebase...")
             let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) { () async -> [CrowdEvent] in
                 var tmp: [CrowdEvent] = []
+                var geocodingCount = 0
                 for d in docs {
-                    if var live = try? d.data(as: CampusEventLive.self) {
-                        live.id = d.documentID
-                        var geocoded: CLLocationCoordinate2D?
-                        if (live.latitude == nil || live.longitude == nil) {
-                            let trimmedName = live.locationName?.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let name: String? = (trimmedName?.isEmpty == false) ? live.locationName : live.location
-                            if let query = name, !query.isEmpty {
-                                // Check predefined locations first (e.g., Union) to avoid geocoding
-                                if let predefined = matchUNTLocationCoordinate(for: query) {
-                                    geocoded = predefined
-                                } else {
-                                    geocoded = await searchLocationOnAppleMapsCampus(query)
+                    let data = d.data()
+                    do {
+                        var event = try await self.parseOfficialEvent(from: data, documentId: d.documentID)
+                        
+                        // Only include future events (today or later)
+                        if let startDate = event.time, startDate >= startOfToday {
+                            // Try to geocode if coordinates are missing
+                            if event.latitude == 33.2100 && event.longitude == -97.1500 { // Default fallback coordinates
+                                if let locationName = event.rawLocationName, !locationName.isEmpty {
+                                    geocodingCount += 1
+                                    print("🗺️ Geocoding event #\(geocodingCount): \(event.title) at '\(locationName)'")
+                                    if let predefined = matchUNTLocationCoordinate(for: locationName) {
+                                        event.coordinates = predefined
+                                        print("   ✅ Found predefined coordinates")
+                                    } else {
+                                        print("   🔍 Searching Apple Maps...")
+                                        if let geocoded = await searchLocationOnAppleMapsCampus(locationName) {
+                                            event.coordinates = geocoded
+                                            print("   ✅ Geocoded successfully")
+                                        } else {
+                                            print("   ❌ Geocoding failed")
+                                        }
+                                    }
                                 }
                             }
+                            tmp.append(event)
                         }
-                        // Use async version to fetch attendance count
-                        if var ce = await mapCampusEventLiveToCrowdEventAsync(live) {
-                            if let coord = geocoded { ce.coordinates = coord }
-                            if let startDate = ce.time, startDate >= now { tmp.append(ce) }
-                        }
+                    } catch {
+                        print("❌ Failed to parse official event: \(error)")
                     }
                 }
+                print("✅ Parsed \(tmp.count) future events, geocoded \(geocodingCount) locations")
                 tmp.sort { a, b in
                     let aStart = a.time ?? .distantFuture
                     let bStart = b.time ?? .distantFuture
                     return aStart < bStart
                 }
-                // Don't limit here - return all future events found
                 return tmp
             }.value
 
@@ -124,87 +117,297 @@ final class CampusEventsViewModel: ObservableObject {
     func start() {
         let db = Firestore.firestore()
         
-        print("🔄 CampusEventsViewModel: Starting listener for campus_events_live collection")
+        print("🔄 CampusEventsViewModel: Starting listener for events_from_official_raw collection")
 
-        // Order by createdAt to get most recent events first
-        listener = db.collection("campus_events_live")
-            .order(by: "createdAt", descending: true)
+        // Listen to events_from_official_raw collection for real-time updates
+        listener = db.collection("events_from_official_raw")
             .addSnapshotListener { [weak self] snap, err in
                 guard let self = self else { return }
                 
                 if let err = err {
-                    print("❌ CampusEventsViewModel: Error fetching campus_events_live: \(err)")
+                    print("❌ CampusEventsViewModel: Error fetching events_from_official_raw: \(err)")
                     return
                 }
                 
                 guard let docs = snap?.documents else {
-                    print("⚠️ CampusEventsViewModel: No documents in campus_events_live collection")
+                    print("⚠️ CampusEventsViewModel: No documents in events_from_official_raw collection")
                     return
                 }
                 
-                print("📊 CampusEventsViewModel: Received \(docs.count) documents from campus_events_live")
+                print("📊 CampusEventsViewModel: Received \(docs.count) documents from events_from_official_raw")
                 print("📊 CampusEventsViewModel: Previous events count: \(self.crowdEvents.count)")
 
-                var mapped: [CrowdEvent] = []
-                let now = Date()
+                // Wrap async parsing in Task since listener closure must be synchronous
+                Task {
+                    var mapped: [CrowdEvent] = []
+                    let calendar = Calendar.current
+                    let startOfToday = calendar.startOfDay(for: Date())
 
-                for d in docs {
-                    do {
-                        var live = try d.data(as: CampusEventLive.self)
-                        // Use Firestore document ID as stable identifier
-                        live.id = d.documentID
-                        print("📝 CampusEventsViewModel: Parsed CampusEventLive: \(live.title) (id: \(d.documentID))")
-                        
-                        if let ce = mapCampusEventLiveToCrowdEvent(live) {
-                            // Filter for future events only
-                            if let startDate = ce.time, startDate >= now {
-                                print("✅ CampusEventsViewModel: Mapped to CrowdEvent: \(ce.title) (id: \(ce.id))")
-                                mapped.append(ce)
+                    for d in docs {
+                        let data = d.data()
+                        do {
+                            let event = try await self.parseOfficialEvent(from: data, documentId: d.documentID)
+                            
+                            // Filter for future events only (today or later)
+                            if let startDate = event.time, startDate >= startOfToday {
+                                print("✅ CampusEventsViewModel: Mapped official event: \(event.title) (id: \(event.id))")
+                                print("   📅 Start date: \(startDate)")
+                                mapped.append(event)
                             } else {
-                                print("⏭️ CampusEventsViewModel: Skipping past event: \(ce.title)")
+                                let dateStr = event.time.map { "\($0)" } ?? "nil"
+                                print("⏭️ CampusEventsViewModel: Skipping past event: \(event.title)")
+                                print("   📅 Parsed start date: \(dateStr)")
+                                print("   🕐 Start of today: \(startOfToday)")
                             }
-                        } else {
-                            print("❌ CampusEventsViewModel: Failed to map CampusEventLive to CrowdEvent: \(live.title)")
+                        } catch {
+                            print("❌ CampusEventsViewModel: Failed to parse official event: \(error)")
                         }
-                    } catch {
-                        print("❌ CampusEventsViewModel: Failed to parse document as CampusEventLive: \(error)")
                     }
-                }
 
-                // sort by soonest start time
-                mapped.sort { a, b in
-                    let aStart = a.time ?? .distantFuture
-                    let bStart = b.time ?? .distantFuture
-                    return aStart < bStart
-                }
+                    // sort by soonest start time
+                    mapped.sort { a, b in
+                        let aStart = a.time ?? .distantFuture
+                        let bStart = b.time ?? .distantFuture
+                        return aStart < bStart
+                    }
 
-                print("🎯 CampusEventsViewModel: Final mapped events count: \(mapped.count)")
-                let df = DateFormatter()
-                df.dateStyle = .medium
-                df.timeStyle = .short
-                df.locale = Locale(identifier: "en_US_POSIX")
-                df.timeZone = .current
-                for event in mapped {
-                    let startText = event.time.map { df.string(from: $0) } ?? "nil"
-                    print("   - \(event.title) (starts: \(startText))")
+                    print("🎯 CampusEventsViewModel: Final mapped events count: \(mapped.count)")
+                    let df = DateFormatter()
+                    df.dateStyle = .medium
+                    df.timeStyle = .short
+                    df.locale = Locale(identifier: "en_US_POSIX")
+                    df.timeZone = .current
+                    for event in mapped {
+                        let startText = event.time.map { df.string(from: $0) } ?? "nil"
+                        print("   - \(event.title) (starts: \(startText))")
+                    }
+                    
+                    await MainActor.run {
+                        let previousCount = self.crowdEvents.count
+                        self.crowdEvents = mapped
+                        
+                        // Save to cache after successful fetch
+                        self.saveToCache(mapped)
+                        
+                        if previousCount != mapped.count {
+                            print("🔄 CampusEventsViewModel: Event count changed from \(previousCount) to \(mapped.count)")
+                        }
+                    }
+                    
+                    await self.resolveMissingCoordinates(docs: docs)
                 }
-                
-                let previousCount = self.crowdEvents.count
-                self.crowdEvents = mapped
-                
-                // Save to cache after successful fetch
-                self.saveToCache(mapped)
-                
-                if previousCount != mapped.count {
-                    print("🔄 CampusEventsViewModel: Event count changed from \(previousCount) to \(mapped.count)")
-                }
-                Task { await self.resolveMissingCoordinates(docs: docs) }
             }
     }
 
     func stop() {
         listener?.remove()
         listener = nil
+    }
+    
+    // MARK: - Official Event Parsing
+    
+    /// Parse an official school event from events_from_official_raw collection
+    /// Collection structure:
+    /// - eventId: unique ID from source
+    /// - title: event title
+    /// - location: location name
+    /// - rawDateTime: "Thursday, January 22, 2026 at 7:30 PM to Thursday, January 22, 2026 at 9:00 PM"
+    /// - imageUrl: event image URL
+    /// - url: source URL (event page)
+    /// - tags: array of tags
+    /// - organization: "UNT Official"
+    private func parseOfficialEvent(from data: [String: Any], documentId: String) async throws -> CrowdEvent {
+        // Extract title - required field
+        guard let title = data["title"] as? String else {
+            throw CrowdError.invalidResponse
+        }
+        
+        // Use eventId from document if available, otherwise use Firestore document ID
+        let id = data["eventId"] as? String ?? documentId
+        
+        // Extract location
+        let rawLocationName = data["location"] as? String
+        
+        // Extract image URL
+        let imageURL = data["imageUrl"] as? String
+        
+        // Extract source URL (event page)
+        let sourceURL = data["url"] as? String
+        
+        // Extract and clean rawDateTime
+        // Transform "Thursday, January 22, 2026 at 7:30 PM to Thursday, January 22, 2026 at 9:00 PM"
+        // into "Thursday, January 22, 2026 at 7:30 PM"
+        var rawDateTime: String?
+        var time: Date?
+        
+        if let dateTimeStr = data["rawDateTime"] as? String {
+            // Remove everything after " to " using regex
+            let cleanedDateTime = dateTimeStr.replacingOccurrences(
+                of: " to .*$",
+                with: "",
+                options: .regularExpression
+            )
+            rawDateTime = cleanedDateTime
+            time = parseDateTimeString(cleanedDateTime)
+            
+            print("🔄 Cleaning rawDateTime:")
+            print("   Original: \(dateTimeStr)")
+            print("   Cleaned: \(cleanedDateTime)")
+            if let parsedTime = time {
+                print("   Parsed: \(parsedTime)")
+            } else {
+                print("   ⚠️ Failed to parse cleaned date")
+            }
+        }
+        
+        // Extract tags (we'll use these later)
+        let tags = data["tags"] as? [String] ?? ["official", "school"]
+        
+        // Default coordinates (UNT main campus) - will be geocoded if location name exists
+        let latitude = 33.2100
+        let longitude = -97.1500
+        
+        // Fetch going count for this school event
+        let goingCount = try? await getSchoolEventGoingCount(eventId: id)
+        
+        return CrowdEvent(
+            id: id,
+            title: title,
+            hostId: "UNT Official",
+            hostName: "UNT Official",
+            latitude: latitude,
+            longitude: longitude,
+            radiusMeters: 0,
+            time: time,
+            createdAt: Date(),
+            signalStrength: 0,
+            attendeeCount: goingCount ?? 0,
+            tags: tags.isEmpty ? ["official", "school"] : tags,
+            category: "School Event",
+            description: nil,
+            sourceURL: sourceURL,
+            rawLocationName: rawLocationName,
+            imageURL: imageURL,
+            ticketURL: nil,
+            dateTime: nil,
+            rawDateTime: rawDateTime
+        )
+    }
+    
+    /// Parse dateTime string in various formats for official events
+    private func parseDateTimeString(_ dateTimeString: String) -> Date? {
+        // First check if it's a Unix timestamp (numeric string)
+        if let timestamp = Double(dateTimeString) {
+            // If value is very large, it's likely milliseconds
+            if timestamp > 10000000000 {
+                return Date(timeIntervalSince1970: timestamp / 1000)
+            } else {
+                return Date(timeIntervalSince1970: timestamp)
+            }
+        }
+        
+        let formatters: [DateFormatter] = [
+            // Format from CrowdEventMapping: "Tuesday, October 28, 2025 at 10:00 AM"
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "EEEE, MMMM d, yyyy 'at' h:mm a"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            // ISO 8601 formats
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            // Common date/time formats
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMM d, yyyy 'at' h:mm a"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMMM d, yyyy 'at' h:mm a"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MM/dd/yyyy h:mm a"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MM/dd/yyyy HH:mm"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd HH:mm"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            // Date only formats (assume start of day)
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }(),
+            {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MM/dd/yyyy"
+                formatter.timeZone = TimeZone.current
+                return formatter
+            }()
+        ]
+        
+        for formatter in formatters {
+            if let date = formatter.date(from: dateTimeString) {
+                print("✅ Successfully parsed date using format: \(formatter.dateFormat ?? "standard")")
+                return date
+            }
+        }
+        
+        print("⚠️ Could not parse date string: \(dateTimeString)")
+        return nil
+    }
+    
+    /// Get the count of users going to a school event from partyGoing collection
+    private func getSchoolEventGoingCount(eventId: String) async throws -> Int {
+        let db = Firestore.firestore()
+        let goingQuery = try await db.collection("partyGoing")
+            .whereField("partyId", isEqualTo: eventId)
+            .getDocuments()
+        
+        return goingQuery.documents.count
     }
     
     // MARK: - Cache Management

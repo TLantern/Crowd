@@ -11,6 +11,30 @@ import FirebaseFunctions
 import FirebaseFirestore
 import MapKit
 
+// MARK: - URL Utilities
+func normalizeURLString(_ urlString: String) -> URL? {
+    var normalized = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    // Check if URL already has a scheme
+    if !normalized.lowercased().hasPrefix("http://") && !normalized.lowercased().hasPrefix("https://") {
+        // Add https:// if no scheme present
+        normalized = "https://\(normalized)"
+    }
+    
+    // Try to create URL
+    guard let url = URL(string: normalized) else { return nil }
+    
+    // Validate scheme
+    guard let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) else {
+        return nil
+    }
+    
+    // Validate host
+    guard url.host != nil else { return nil }
+    
+    return url
+}
+
 struct CalenderView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var campusEventsVM = CampusEventsViewModel.shared
@@ -90,12 +114,14 @@ struct CalenderView: View {
                                 VStack(spacing: 8) {
                                     Text("Parties")
                                         .font(.system(size: 24))
-                                        .foregroundColor(selectedTab == .parties ? .white : .white.opacity(0.3))
+                                        .foregroundColor(selectedTab == .parties ? Color(hex: 0xF5F7FA) : Color(hex: 0xF5F7FA).opacity(0.3))
+                                        .shadow(color: Color.black.opacity(0.07), radius: 15, x: 0, y: 3)  // Layer 1: Separation
+                                        .shadow(color: Color.black.opacity(0.14), radius: 7, x: 0, y: 1.5)  // Layer 2: Contact
                                     
                                     ZStack {
                                         if selectedTab == .parties {
                                             Capsule()
-                                                .fill(.white)
+                                                .fill(Color(hex: 0xF5F7FA))
                                                 .frame(width: 22, height: 3)
                                         }
                                     }
@@ -113,12 +139,14 @@ struct CalenderView: View {
                                 VStack(spacing: 6) {
                                     Text("School Events")
                                         .font(.system(size: 24))
-                                        .foregroundColor(selectedTab == .schoolEvents ? .white : .white.opacity(0.3))
+                                        .foregroundColor(selectedTab == .schoolEvents ? Color(hex: 0xF5F7FA) : Color(hex: 0xF5F7FA).opacity(0.3))
+                                        .shadow(color: Color.black.opacity(0.07), radius: 15, x: 0, y: 3)  // Layer 1: Separation
+                                        .shadow(color: Color.black.opacity(0.14), radius: 7, x: 0, y: 1.5)  // Layer 2: Contact
                                     
                                     ZStack {
                                         if selectedTab == .schoolEvents {
                                             Capsule()
-                                                .fill(.white)
+                                                .fill(Color(hex: 0xF5F7FA))
                                                 .frame(width: 22, height: 3)
                                         }
                                     }
@@ -226,7 +254,7 @@ struct CalenderView: View {
                     tabContent
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(selectedTab == .parties ? Color.clear : Color.white)
+                .background(Color.clear)
                 .zIndex(1)
                 
                 // Custom navigation bar
@@ -281,7 +309,10 @@ struct CalenderView: View {
             }
             .onAppear {
                 Task {
-                    await campusEventsVM.fetchOnce(limit: 25)
+                    // Fetch all future events (limit: 200) for calendar view
+                    print("📅 CalenderView: Fetching school events...")
+                    await campusEventsVM.fetchOnce(limit: 200)
+                    print("📅 CalenderView: Loaded \(campusEventsVM.crowdEvents.count) school events")
                     campusEventsVM.start()
                     await geocodeTodaysEventsIfNeeded()
                 }
@@ -396,7 +427,7 @@ struct EventCardView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let sourceURL = event.sourceURL {
                         Button(action: {
-                            if let url = URL(string: sourceURL) {
+                            if let url = normalizeURLString(sourceURL) {
                                 UIApplication.shared.open(url)
                             }
                         }) {
@@ -454,15 +485,15 @@ struct EventCardView: View {
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.primary)
                         
-                        Spacer()
-                        
-                        Button("Open") {
-                            if let src = event.sourceURL, let url = URL(string: src) {
-                                UIApplication.shared.open(url)
-                            }
+                    Spacer()
+                    
+                    Button("Open") {
+                        if let src = event.sourceURL, let url = normalizeURLString(src) {
+                            UIApplication.shared.open(url)
                         }
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.accentColor)
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.accentColor)
                     }
                 }
             }
@@ -470,7 +501,7 @@ struct EventCardView: View {
             HStack {
                 if let sourceURL = event.sourceURL {
                     Button(action: {
-                        if let url = URL(string: sourceURL) {
+                        if let url = normalizeURLString(sourceURL) {
                             UIApplication.shared.open(url)
                         }
                     }) {
@@ -696,7 +727,7 @@ struct SchoolEventsView: View {
     @StateObject private var imageLoader = OptimizedImageLoader.shared
     
     // Only show first 8 images initially, then load more as needed
-    private let initialLoadCount = 8
+    private let initialLoadCount = 10
     
     var body: some View {
         Group {
@@ -834,13 +865,14 @@ struct SchoolEventCardView: View {
     @State private var isAttending = false
     @State private var isJoining = false
     @State private var goingCount = 0
+    @State private var showMoreInfoSheet = false
     
     var body: some View {
         VStack(spacing: 0) {
             // Event Image - Top to Middle (Optimized)
             OptimizedEventImage(
                 imageURL: event.imageURL,
-                width: 350,
+                width: 500,
                 height: 300,
                 contentMode: .fill,
                 priority: priority
@@ -892,37 +924,104 @@ struct SchoolEventCardView: View {
                     }
                 }
                 
-                // I'm Attending / Share Button
-                Button(action: {
-                    if !isAttending {
-                        Task {
-                            await toggleAttending()
+                // Button Layout - Split if sourceURL exists, otherwise full width
+                if let sourceURL = event.sourceURL {
+                    // TWO BUTTONS: Split layout
+                    HStack(spacing: 8) {
+                        // I'm Attending / Share Button (half width)
+                        Button(action: {
+                            if !isAttending {
+                                Task {
+                                    await toggleAttending()
+                                }
+                            } else {
+                                shareEvent()
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                if isJoining {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                } else {
+                                    Image(systemName: isAttending ? "square.and.arrow.up" : "hand.thumbsup.fill")
+                                        .font(.system(size: 14))
+                                    Text(isAttending ? "Share" : "I'm Attending")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
+                                }
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(isJoining ? Color.green : Color.blue)
+                            )
                         }
-                    } else {
-                        shareEvent()
+                        .frame(maxWidth: .infinity)
+                        .disabled(isJoining)
+                        
+                        // More Info Button (half width)
+                        Button(action: {
+                            showMoreInfoSheet = true
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 14))
+                                Text("More Info")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .lineLimit(1)
+                            }
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(.systemGray5))
+                            )
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                }) {
-                    HStack {
-                        if isJoining {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .padding(.top, 4)
+                } else {
+                    // ONE BUTTON: Full width layout
+                    Button(action: {
+                        if !isAttending {
+                            Task {
+                                await toggleAttending()
+                            }
                         } else {
-                            Image(systemName: isAttending ? "square.and.arrow.up" : "hand.thumbsup.fill")
-                                .font(.system(size: 14))
-                            Text(isAttending ? "Share" : "I'm Attending")
-                                .font(.system(size: 14, weight: .semibold))
+                            shareEvent()
                         }
+                    }) {
+                        HStack(spacing: 6) {
+                            if isJoining {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Image(systemName: isAttending ? "square.and.arrow.up" : "hand.thumbsup.fill")
+                                    .font(.system(size: 14))
+                                Text(isAttending ? "Share" : "I'm Attending")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(isJoining ? Color.green : Color.blue)
+                        )
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(isJoining ? Color.green : (isAttending ? Color(hex: 0x676767) : Color.accentColor))
-                    )
+                    .disabled(isJoining)
+                    .padding(.top, 4)
                 }
-                .disabled(isJoining)
-                .padding(.top, 8)
             }
             .padding(16)
         }
@@ -937,6 +1036,12 @@ struct SchoolEventCardView: View {
                 .stroke(.primary.opacity(0.1), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+        .sheet(isPresented: $showMoreInfoSheet) {
+            if let sourceURL = event.sourceURL {
+                MoreInfoSheetView(sourceURL: sourceURL)
+                    .presentationDetents([.large])
+            }
+        }
         .onAppear {
             Task {
                 await loadAttendingStatus()
@@ -1257,7 +1362,7 @@ struct PartyCardView: View {
                 // Buy Ticket Button
                 if let ticketURL = party.ticketURL {
                     Button(action: {
-                        if let url = URL(string: ticketURL) {
+                        if let url = normalizeURLString(ticketURL) {
                             UIApplication.shared.open(url)
                         }
                     }) {
@@ -1678,7 +1783,7 @@ struct EventTypeSelectionView: View {
                 // Join a Kickoff Session link
                 Button {
                     // Open Kickoff Session URL
-                    if let url = URL(string: "https://calendly.com/your-kickoff-link") {
+                    if let url = normalizeURLString("https://calendly.com/your-kickoff-link") {
                         UIApplication.shared.open(url)
                     }
                 } label: {
@@ -2195,31 +2300,40 @@ struct EventTypeCard: View {
 // MARK: - More Info Sheet View
 struct MoreInfoSheetView: View {
     let sourceURL: String
-    @Environment(\.dismiss) var dismiss
+    @State private var showError = false
+    @State private var errorMessage = ""
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                if let url = URL(string: sourceURL) {
-                    SafariView(url: url)
-                        .ignoresSafeArea(.all)
-                } else {
-                    VStack(spacing: 20) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.orange)
-                        Text("Invalid URL")
-                            .font(.system(size: 20, weight: .semibold))
-                    }
+        Group {
+            if showError {
+                VStack(spacing: 20) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 60))
+                        .foregroundStyle(.orange)
+                    Text("Unable to Load")
+                        .font(.system(size: 20, weight: .semibold))
+                    Text(errorMessage)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
                 }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
+            } else if let url = normalizeURLString(sourceURL) {
+                SafariView(url: url, onError: { error in
+                    errorMessage = error
+                    showError = true
+                })
+                .ignoresSafeArea(.all)
+            } else {
+                VStack(spacing: 20) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 60))
+                        .foregroundStyle(.orange)
+                    Text("That link is cooked...")
+                        .font(.system(size: 20, weight: .semibold))
+                    Text("The URL provided is not valid")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -2231,6 +2345,16 @@ import SafariServices
 
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
+    let onError: ((String) -> Void)?
+    
+    init(url: URL, onError: ((String) -> Void)? = nil) {
+        self.url = url
+        self.onError = onError
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onError: onError)
+    }
     
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let config = SFSafariViewController.Configuration()
@@ -2241,12 +2365,27 @@ struct SafariView: UIViewControllerRepresentable {
         safariVC.preferredControlTintColor = UIColor.systemBlue
         safariVC.preferredBarTintColor = UIColor.systemBackground
         safariVC.dismissButtonStyle = .close
+        safariVC.delegate = context.coordinator
         
         return safariVC
     }
     
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {
         // No updates needed
+    }
+    
+    class Coordinator: NSObject, SFSafariViewControllerDelegate {
+        let onError: ((String) -> Void)?
+        
+        init(onError: ((String) -> Void)?) {
+            self.onError = onError
+        }
+        
+        func safariViewController(_ controller: SFSafariViewController, didCompleteInitialLoad didLoadSuccessfully: Bool) {
+            if !didLoadSuccessfully {
+                onError?("The page failed to load. Please check your connection and try again.")
+            }
+        }
     }
 }
 

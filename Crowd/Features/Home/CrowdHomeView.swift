@@ -903,9 +903,8 @@ struct CrowdHomeView: View {
                     await loadUpcomingEvents()
                     
                     // Preload calendar events in background while user is on map view
-                    Task {
-                        await preloadCalendarEvents()
-                    }
+                    // This ensures school events are fetched from Firebase even if user hasn't navigated to calendar yet
+                    await preloadCalendarEvents()
                     
                     // Load moderation data
                     await loadModerationData()

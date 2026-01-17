@@ -175,23 +175,9 @@ final class OptimizedImageLoader: ObservableObject {
             prefetchImage(for: imageURL, width: 350, height: 450)
         }
         
-        // Unload images 2+ screens away
-        let unloadIndices = loadedImages.keys.compactMap { urlString -> Int? in
-            guard let index = allEvents.firstIndex(where: { $0.imageURL == urlString }) else { return nil }
-            let minVisible = visibleIndices.min() ?? 0
-            let maxVisible = visibleIndices.max() ?? 0
-            let buffer = viewportSize * 2 // 2 screens buffer
-            if index < minVisible - buffer || index > maxVisible + buffer {
-                return index
-            }
-            return nil
-        }
-        
-        for index in unloadIndices {
-            guard index < allEvents.count,
-                  let imageURL = allEvents[index].imageURL else { continue }
-            unloadImage(for: imageURL)
-        }
+        // Keep all images in cache - don't unload
+        // Images stay in SDWebImage cache (150MB limit, 50 images max)
+        // System will handle memory pressure automatically
     }
     
     /// Prefetch image in background
