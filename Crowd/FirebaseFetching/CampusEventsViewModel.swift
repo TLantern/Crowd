@@ -16,12 +16,27 @@ final class CampusEventsViewModel: ObservableObject {
 
     private var listener: ListenerRegistration?
     private var geocodedIds: Set<String> = []
+    
+    // Cache key for persisting events to UserDefaults
+    private let cacheKey = "campus_events_cache_v1"
+    private let cacheTimestampKey = "campus_events_cache_timestamp"
+    
+    // Shared singleton instance for preloading events
+    // Step 1: Load minimal local cache immediately on initialization
+    @MainActor
+    static let shared: CampusEventsViewModel = {
+        let vm = CampusEventsViewModel()
+        // Load from cache synchronously on MainActor - this is fast and shows data immediately
+        vm.loadFromCache()
+        return vm
+    }()
 
-    // Energy-friendly single fetch used by calendar view (14-day feed already in Firestore)
+    /// Step 2 & 3: Fetch fresh data from Firebase and replace cache
+    /// This is called in parallel after cache load to refresh with latest server data
     func fetchOnce(limit: Int = 25) async {
-        // Clear existing events to ensure fresh data on each fetch
+        // Don't clear existing events - they might be from cache (Step 1)
+        // Step 3: Server data will replace cache when it arrives
         await MainActor.run {
-            self.crowdEvents = []
             self.geocodedIds.removeAll()
         }
         
@@ -45,14 +60,14 @@ final class CampusEventsViewModel: ObservableObject {
                 if var live = try? d.data(as: CampusEventLive.self) {
                     live.id = d.documentID
                     if let ce = mapCampusEventLiveToCrowdEvent(live),
-                       let startDate = ce.startsAt, startDate >= now {
+                       let startDate = ce.time, startDate >= now {
                         quickMapped.append(ce)
                     }
                 }
             }
             quickMapped.sort { (a, b) in
-                let aStart = a.startsAt ?? .distantFuture
-                let bStart = b.startsAt ?? .distantFuture
+                let aStart = a.time ?? .distantFuture
+                let bStart = b.time ?? .distantFuture
                 return aStart < bStart
             }
             // Don't limit here - show all future events found
@@ -78,24 +93,29 @@ final class CampusEventsViewModel: ObservableObject {
                         }
                         if var ce = mapCampusEventLiveToCrowdEvent(live) {
                             if let coord = geocoded { ce.coordinates = coord }
-                            if let startDate = ce.startsAt, startDate >= now { tmp.append(ce) }
+                            if let startDate = ce.time, startDate >= now { tmp.append(ce) }
                         }
                     }
                 }
                 tmp.sort { a, b in
-                    let aStart = a.startsAt ?? .distantFuture
-                    let bStart = b.startsAt ?? .distantFuture
+                    let aStart = a.time ?? .distantFuture
+                    let bStart = b.time ?? .distantFuture
                     return aStart < bStart
                 }
                 // Don't limit here - return all future events found
                 return tmp
             }.value
 
-            await MainActor.run { self.crowdEvents = mapped }
+            await MainActor.run { 
+                self.crowdEvents = mapped
+                // Save to cache after successful fetch
+                self.saveToCache(mapped)
+            }
             print("🎯 CampusEventsViewModel: Final mapped events count: \(mapped.count) (one-time)")
             await resolveMissingCoordinates(docs: docs)
         } catch {
             print("❌ CampusEventsViewModel: One-time fetch failed: \(error)")
+            // On error, keep existing cache data if available
         }
     }
 
@@ -135,7 +155,7 @@ final class CampusEventsViewModel: ObservableObject {
                         
                         if let ce = mapCampusEventLiveToCrowdEvent(live) {
                             // Filter for future events only
-                            if let startDate = ce.startsAt, startDate >= now {
+                            if let startDate = ce.time, startDate >= now {
                                 print("✅ CampusEventsViewModel: Mapped to CrowdEvent: \(ce.title) (id: \(ce.id))")
                                 mapped.append(ce)
                             } else {
@@ -151,8 +171,8 @@ final class CampusEventsViewModel: ObservableObject {
 
                 // sort by soonest start time
                 mapped.sort { a, b in
-                    let aStart = a.startsAt ?? .distantFuture
-                    let bStart = b.startsAt ?? .distantFuture
+                    let aStart = a.time ?? .distantFuture
+                    let bStart = b.time ?? .distantFuture
                     return aStart < bStart
                 }
 
@@ -163,12 +183,15 @@ final class CampusEventsViewModel: ObservableObject {
                 df.locale = Locale(identifier: "en_US_POSIX")
                 df.timeZone = .current
                 for event in mapped {
-                    let startText = event.startsAt.map { df.string(from: $0) } ?? "nil"
+                    let startText = event.time.map { df.string(from: $0) } ?? "nil"
                     print("   - \(event.title) (starts: \(startText))")
                 }
                 
                 let previousCount = self.crowdEvents.count
                 self.crowdEvents = mapped
+                
+                // Save to cache after successful fetch
+                self.saveToCache(mapped)
                 
                 if previousCount != mapped.count {
                     print("🔄 CampusEventsViewModel: Event count changed from \(previousCount) to \(mapped.count)")
@@ -180,6 +203,46 @@ final class CampusEventsViewModel: ObservableObject {
     func stop() {
         listener?.remove()
         listener = nil
+    }
+    
+    // MARK: - Cache Management
+    
+    /// Step 1: Load events from local cache
+    /// This loads cached events immediately on app start to show data instantly
+    /// The cache is then replaced with fresh server data when it arrives (Step 3)
+    @MainActor
+    func loadFromCache() {
+        guard let data = UserDefaults.standard.data(forKey: cacheKey),
+              let cached = try? JSONDecoder().decode([CrowdEvent].self, from: data) else {
+            print("📦 No cached events found")
+            return
+        }
+        
+        // Filter out expired events from cache
+        let now = Date()
+        let validCached = cached.filter { event in
+            guard let startsAt = event.time else { return true }
+            return startsAt >= now
+        }
+        
+        if !validCached.isEmpty {
+            self.crowdEvents = validCached
+            print("📦 Loaded \(validCached.count) events from cache (Step 1)")
+        } else {
+            print("📦 Cache contained only expired events")
+        }
+    }
+    
+    /// Save events to local cache
+    private func saveToCache(_ events: [CrowdEvent]) {
+        guard let data = try? JSONEncoder().encode(events) else {
+            print("⚠️ Failed to encode events for caching")
+            return
+        }
+        
+        UserDefaults.standard.set(data, forKey: cacheKey)
+        UserDefaults.standard.set(Date(), forKey: cacheTimestampKey)
+        print("💾 Saved \(events.count) events to cache")
     }
 }
 

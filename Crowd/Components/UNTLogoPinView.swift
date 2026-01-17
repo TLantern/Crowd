@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct UNTLogoPinView: View {
-    @StateObject private var imageLoader = OptimizedImageLoader.shared
     @State private var logoImage: UIImage?
     @State private var isLoading = true
     
@@ -62,26 +61,19 @@ struct UNTLogoPinView: View {
     }
     
     private func loadLogo() async {
-        // Try to get from cache first (synchronous)
-        if let cached = imageLoader.getCachedLocalAssetImage(named: "UNTLogo") {
+        // Load local asset from bundle (synchronous - no need for async or caching)
+        // UIImage(named:) already uses system caching
+        if let image = UIImage(named: "UNTLogo") {
+            // Optionally resize if needed
+            let resized = image.resized(to: CGSize(width: size * 2, height: size * 2))
             await MainActor.run {
-                logoImage = cached
+                logoImage = resized
                 isLoading = false
             }
-            return
-        }
-        
-        // Load and cache the logo
-        isLoading = true
-        let image = await imageLoader.loadLocalAssetImage(
-            named: "UNTLogo",
-            width: size * 2,
-            height: size * 2
-        )
-        
-        await MainActor.run {
-            logoImage = image
-            isLoading = false
+        } else {
+            await MainActor.run {
+                isLoading = false
+            }
         }
     }
 }

@@ -62,7 +62,8 @@ final class UserProfileService {
             friendsCount: 0,
             lastActive: Date(),
             createdAt: Date(),
-            termsAccepted: false
+            termsAccepted: false,
+            isVisible: false
         )
         
         print("🔧 UserProfileService: Profile object created, calling saveProfile...")
@@ -233,7 +234,7 @@ final class UserProfileService {
         }
     }
     
-    private func parseProfile(from data: [String: Any], userId: String) throws -> UserProfile {
+    func parseProfile(from data: [String: Any], userId: String) throws -> UserProfile {
         let displayName = data["displayName"] as? String ?? "Guest"
         let handle = data["handle"] as? String
         let bio = data["bio"] as? String
@@ -286,6 +287,7 @@ final class UserProfileService {
         
         let termsAccepted = data["termsAccepted"] as? Bool ?? false
         let blockedUsers = data["blockedUsers"] as? [String]
+        let isVisible = data["isVisible"] as? Bool ?? false
         
         return UserProfile(
             id: userId,
@@ -309,7 +311,8 @@ final class UserProfileService {
             geohash: geohash,
             lastLocationUpdate: lastLocationUpdate,
             termsAccepted: termsAccepted,
-            blockedUsers: blockedUsers
+            blockedUsers: blockedUsers,
+            isVisible: isVisible
         )
     }
     

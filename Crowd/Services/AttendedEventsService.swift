@@ -89,25 +89,18 @@ final class AttendedEventsService: ObservableObject {
         let now = Date()
         let originalCount = attendedEvents.count
         
-        // Remove events that have ended (immediately when end time is reached)
+        // Remove events that have ended (check if event time was more than 4 hours ago)
         let expiredEventIds = attendedEvents.filter { event in
-            guard let endsAt = event.endsAt else {
-                // If no end time, check if event started more than 4 hours ago
-                guard let startsAt = event.startsAt else { return false }
-                let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
-                return startsAt < fourHoursAgo
-            }
-            return endsAt < now
+            guard let time = event.time else { return false }
+            let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+            return time < fourHoursAgo
         }.map { $0.id }
         
         // Remove expired events from local storage
         attendedEvents.removeAll { event in
-            guard let endsAt = event.endsAt else {
-                guard let startsAt = event.startsAt else { return false }
-                let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
-                return startsAt < fourHoursAgo
-            }
-            return endsAt < now
+            guard let time = event.time else { return false }
+            let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+            return time < fourHoursAgo
         }
         
         let removedCount = originalCount - attendedEvents.count

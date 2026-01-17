@@ -13,7 +13,7 @@ import MapKit
 
 struct CalenderView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var campusEventsVM = CampusEventsViewModel()
+    @ObservedObject private var campusEventsVM = CampusEventsViewModel.shared
     @EnvironmentObject private var appState: AppState
     @State private var selectedCategories: Set<EventCategory> = []
     @State private var displayedEventCount = 10
@@ -29,7 +29,8 @@ struct CalenderView: View {
     @State private var hiddenEventIds: Set<String> = []
     @State private var bannedUserIds: Set<String> = []
     @State private var showEventCreationFlow = false
-    @State private var currentPartyImageURL: String?
+    @State private var currentPartyImageURLs: [String] = []
+    @State private var currentPartyIndices: [Int] = []
     @State private var currentSchoolEventImageURL: String?
     
     // Filtered events based on selected categories
@@ -59,8 +60,8 @@ struct CalenderView: View {
     // Upcoming events sorted by soonest start time
     var upcomingEvents: [CrowdEvent] {
         filteredEvents.sorted { (a, b) in
-            let aStart = a.startsAt ?? .distantFuture
-            let bStart = b.startsAt ?? .distantFuture
+            let aStart = a.time ?? .distantFuture
+            let bStart = b.time ?? .distantFuture
             return aStart < bStart
         }
     }
@@ -147,7 +148,10 @@ struct CalenderView: View {
     private var tabContent: some View {
         Group {
             if selectedTab == .parties {
-                PartiesView(currentPartyImageURL: $currentPartyImageURL)
+                PartiesView(
+                    currentPartyImageURLs: $currentPartyImageURLs,
+                    currentPartyIndices: $currentPartyIndices
+                )
             } else {
                 VStack(spacing: 0) {
                     if selectedTab == .schoolEvents {
@@ -172,7 +176,24 @@ struct CalenderView: View {
                 // Blurred background image - full page (for both parties and school events tabs)
                 GeometryReader { geometry in
                     ZStack {
-                        if let imageURL = selectedTab == .parties ? currentPartyImageURL : currentSchoolEventImageURL {
+                        if selectedTab == .parties {
+                            if let imageURL = currentPartyImageURLs.last {
+                                AsyncImage(url: URL(string: imageURL)) { phase in
+                                    if case .success(let image) = phase {
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: geometry.size.width, height: geometry.size.height)
+                                            .clipped()
+                                            .opacity(1)
+                                    } else {
+                                        Color.clear
+                                    }
+                                }
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .ignoresSafeArea(edges: .all)
+                            }
+                        } else if let imageURL = currentSchoolEventImageURL {
                             AsyncImage(url: URL(string: imageURL)) { phase in
                                 if case .success(let image) = phase {
                                     image
@@ -187,8 +208,10 @@ struct CalenderView: View {
                             }
                             .frame(width: geometry.size.width, height: geometry.size.height)
                             .ignoresSafeArea(edges: .all)
-                            
-                            // Glass background overlay
+                        }
+                        
+                        // Glass background overlay
+                        if (selectedTab == .parties && !currentPartyImageURLs.isEmpty) || (selectedTab == .schoolEvents && currentSchoolEventImageURL != nil) {
                             Color.clear
                                 .background(.ultraThinMaterial)
                                 .frame(width: geometry.size.width, height: geometry.size.height)
@@ -290,7 +313,7 @@ struct CalenderView: View {
         let functions = Functions.functions()
         let calendar = Calendar.current
         let todays = campusEventsVM.crowdEvents.filter { ev in
-            guard let s = ev.startsAt else { return false }
+            guard let s = ev.time else { return false }
             return calendar.isDateInToday(s)
         }
         for ev in todays {
@@ -398,9 +421,8 @@ struct EventCardView: View {
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
-                        if let startsAt = event.startsAt {
-                            let endText = event.endsAt.map { " – " + formatEventTime($0) } ?? ""
-                            Text(formatEventTime(startsAt) + endText)
+                        if let time = event.time {
+                            Text(formatEventTime(time))
                                 .font(.system(size: 14))
                                 .foregroundStyle(.secondary)
                         }
@@ -555,8 +577,8 @@ struct EventCardView: View {
             shareItems.append(description)
         }
         
-        if let startsAt = event.startsAt {
-            shareItems.append("Time: \(formatEventTime(startsAt))")
+        if let time = event.time {
+            shareItems.append("Time: \(formatEventTime(time))")
         }
         
         if let sourceURL = event.sourceURL {
@@ -836,7 +858,7 @@ struct SchoolEventCardView: View {
             OptimizedEventImage(
                 imageURL: event.imageURL,
                 width: 350,
-                height: 450,
+                height: 300,
                 contentMode: .fill,
                 priority: priority
             )
@@ -864,12 +886,12 @@ struct SchoolEventCardView: View {
                     }
                 }
                 
-                // Time with emoji
-                if let startsAt = event.startsAt {
+                // Time with emoji - show unformatted rawDateTime from Firebase for school events
+                if let rawDateTime = event.rawDateTime, !rawDateTime.isEmpty {
                     HStack(spacing: 6) {
                         Text("📅")
                             .font(.system(size: 14))
-                        Text(formatEventTime(startsAt))
+                        Text(rawDateTime)
                             .font(.system(size: 14))
                             .foregroundStyle(.secondary)
                     }
@@ -951,7 +973,7 @@ struct SchoolEventCardView: View {
             }
             .padding(16)
         }
-        .frame(maxWidth: 350, minHeight: 600)
+        .frame(maxWidth: 350, minHeight: 450)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)
@@ -1024,15 +1046,15 @@ struct SchoolEventDetailView: View {
                                 .padding(.top, 8)
                         }
                         
-                        // Date
-                        if let startsAt = event.startsAt {
+                        // Date - show unformatted rawDateTime from Firebase for school events
+                        if let rawDateTime = event.rawDateTime, !rawDateTime.isEmpty {
                             HStack(spacing: 4) {
                                 Text("Date:")
                                     .font(.system(size: 18, weight: .medium))
                                     .foregroundStyle(.secondary)
                                 Text("📅")
                                     .font(.system(size: 18))
-                                Text(formatFullDate(startsAt))
+                                Text(rawDateTime)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.primary)
                             }
@@ -1208,11 +1230,11 @@ struct SchoolEventDetailView: View {
             shareItems.append(description)
         }
         
-        if let startsAt = event.startsAt {
+        if let time = event.time {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
             formatter.timeStyle = .short
-            shareItems.append("Time: \(formatter.string(from: startsAt))")
+            shareItems.append("Time: \(formatter.string(from: time))")
         }
         
         if let sourceURL = event.sourceURL {
@@ -1249,7 +1271,8 @@ struct PartiesView: View {
     @State private var isLoading = false
     @State private var selectedParty: CrowdEvent? = nil
     @State private var currentPartyIndex: Int = 0
-    @Binding var currentPartyImageURL: String?
+    @Binding var currentPartyImageURLs: [String]
+    @Binding var currentPartyIndices: [Int]
     
     var body: some View {
         Group {
@@ -1298,9 +1321,10 @@ struct PartiesView: View {
                                 .id(index)
                                 .onAppear {
                                     currentPartyIndex = index
-                                    if index < parties.count {
-                                        currentPartyImageURL = parties[index].imageURL
-                                    }
+                                    updateCurrentEventAndImage(index: index, party: party)
+                                }
+                                .onDisappear {
+                                    removeEventFromArrays(index: index)
                                 }
                             }
                         }
@@ -1327,9 +1351,66 @@ struct PartiesView: View {
         }
         .onChange(of: currentPartyIndex) { oldValue, newValue in
             if newValue >= 0 && newValue < parties.count {
-                currentPartyImageURL = parties[newValue].imageURL
+                let party = parties[newValue]
+                updateCurrentEventAndImage(index: newValue, party: party)
             }
         }
+    }
+    
+    /// Updates the current event and image arrays to keep them synchronized
+    /// Ensures both arrays always have the same length and matching indices
+    /// Only tracks events that have a valid imageURL
+    private func updateCurrentEventAndImage(index: Int, party: CrowdEvent) {
+        // Only add to arrays if the party has a valid imageURL (not nil or empty)
+        guard let imageURL = party.imageURL, !imageURL.isEmpty else {
+            if party.imageURL == nil {
+                print("⚠️ Party '\(party.title)' has nil imageURL - skipping")
+            } else {
+                print("⚠️ Party '\(party.title)' has empty imageURL - skipping")
+            }
+            return
+        }
+        
+        // Find if this index already exists in the arrays
+        if let existingPosition = currentPartyIndices.firstIndex(of: index) {
+            // Update existing entry at the same position in both arrays
+            currentPartyIndices[existingPosition] = index
+            if existingPosition < currentPartyImageURLs.count {
+                currentPartyImageURLs[existingPosition] = imageURL
+            } else {
+                // If somehow out of sync, fix it
+                currentPartyImageURLs.append(imageURL)
+            }
+        } else {
+            // Add new entry to both arrays at the same time to keep them synchronized
+            currentPartyIndices.append(index)
+            currentPartyImageURLs.append(imageURL)
+        }
+        
+        // Ensure arrays are always the same length (safety check)
+        let minCount = min(currentPartyIndices.count, currentPartyImageURLs.count)
+        currentPartyIndices = Array(currentPartyIndices.prefix(minCount))
+        currentPartyImageURLs = Array(currentPartyImageURLs.prefix(minCount))
+    }
+    
+    /// Removes event from arrays when it disappears from view
+    /// Ensures both arrays are updated together to maintain synchronization
+    private func removeEventFromArrays(index: Int) {
+        // Only remove if it's not the currently visible index
+        guard index != currentPartyIndex else { return }
+        
+        if let arrayIndex = currentPartyIndices.firstIndex(of: index) {
+            // Remove from both arrays at the same position to keep them synchronized
+            currentPartyIndices.remove(at: arrayIndex)
+            if arrayIndex < currentPartyImageURLs.count {
+                currentPartyImageURLs.remove(at: arrayIndex)
+            }
+        }
+        
+        // Ensure arrays stay synchronized (safety check)
+        let minCount = min(currentPartyIndices.count, currentPartyImageURLs.count)
+        currentPartyIndices = Array(currentPartyIndices.prefix(minCount))
+        currentPartyImageURLs = Array(currentPartyImageURLs.prefix(minCount))
     }
     
     private func loadParties() async {
@@ -1355,8 +1436,8 @@ struct PartiesView: View {
             
             // Sort parties by date (soonest first)
             let sortedParties = fetchedParties.sorted { party1, party2 in
-                guard let date1 = party1.startsAt else { return false }
-                guard let date2 = party2.startsAt else { return true }
+                guard let date1 = party1.time else { return false }
+                guard let date2 = party2.time else { return true }
                 return date1 < date2
             }
             
@@ -1364,9 +1445,18 @@ struct PartiesView: View {
             await MainActor.run {
                 parties = sortedParties
                 currentPartyIndex = 0
-                // Set initial background image to first party
-                if !sortedParties.isEmpty {
-                    currentPartyImageURL = sortedParties[0].imageURL
+                // Initialize arrays with first party that has a valid imageURL (not nil or empty)
+                if !sortedParties.isEmpty, let firstImageURL = sortedParties[0].imageURL, !firstImageURL.isEmpty {
+                    currentPartyImageURLs = [firstImageURL]
+                    currentPartyIndices = [0]
+                    print("📸 Initialized arrays with first party imageURL: \(firstImageURL.prefix(50))...")
+                } else {
+                    currentPartyImageURLs = []
+                    currentPartyIndices = []
+                    if !sortedParties.isEmpty {
+                        let firstImageURL = sortedParties[0].imageURL
+                        print("⚠️ First party '\(sortedParties[0].title)' has invalid imageURL (nil: \(firstImageURL == nil), empty: \(firstImageURL?.isEmpty ?? false)) - arrays start empty")
+                    }
                 }
                 isLoading = false
             }
@@ -1383,13 +1473,21 @@ struct PartiesView: View {
 // MARK: - Party Card View
 struct PartyCardView: View {
     let party: CrowdEvent
+    @Environment(\.appEnvironment) var env
+    @State private var isAttending = false
+    @State private var isJoining = false
+    @State private var isUserAuthenticated = false
+    
+    private var canInteract: Bool {
+        isUserAuthenticated && !isJoining && !isAttending
+    }
     
     var body: some View {
         VStack(spacing: 0) {
             // Event Image - Top to Middle
             CachedEventImage(
                 imageURL: party.imageURL,
-                height: 450,
+                height: 300,
                 contentMode: .fill
             )
             .frame(maxWidth: .infinity)
@@ -1412,12 +1510,13 @@ struct PartyCardView: View {
                     }
                 }
                 
-                // Time with emoji
-                if let startsAt = party.startsAt {
+                // Time with emoji - using dateTime from Firebase (party events)
+                // Note: Firebase field is "dateTime", mapped to party.dateTime property
+                if let dateTime = party.dateTime, !dateTime.isEmpty {
                     HStack(spacing: 6) {
                         Text("📅")
                             .font(.system(size: 14))
-                        Text(formatEventTime(startsAt))
+                        Text(dateTime)
                             .font(.system(size: 14))
                             .foregroundStyle(.secondary)
                     }
@@ -1471,10 +1570,39 @@ struct PartyCardView: View {
                     }
                     .padding(.top, 8)
                 }
+                
+                // I'm Going Button
+                Button(action: {
+                    Task {
+                        await saveEventToProfile()
+                    }
+                }) {
+                    HStack {
+                        if isJoining {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Text("I'm going")
+                                .font(.system(size: 14, weight: .semibold))
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14))
+                        }
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.blue)
+                    )
+                }
+                .disabled(!canInteract)
+                .opacity(canInteract ? 1.0 : 0.6)
+                .padding(.top, 8)
             }
             .padding(16)
         }
-        .frame(maxWidth: 350, minHeight: 600)
+        .frame(maxWidth: 350, minHeight: 450)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)
@@ -1485,6 +1613,76 @@ struct PartyCardView: View {
                 .stroke(.primary.opacity(0.1), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+    }
+    
+    
+    private func saveEventToProfile() async {
+        // Try to authenticate if not already authenticated
+        if !isUserAuthenticated {
+            do {
+                let userId = try await FirebaseManager.shared.signInAnonymously()
+                print("✅ Signed in anonymously for attendance: \(userId)")
+                await MainActor.run {
+                    isUserAuthenticated = true
+                }
+            } catch {
+                print("❌ Failed to sign in anonymously: \(error.localizedDescription)")
+                await MainActor.run {
+                    isUserAuthenticated = false
+                }
+                return
+            }
+        }
+        
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            print("⚠️ Cannot save event - No authenticated user after sign-in attempt")
+            await MainActor.run {
+                isUserAuthenticated = false
+            }
+            return
+        }
+        
+        // Check if already attending
+        if isAttending {
+            return
+        }
+        
+        await MainActor.run {
+            isJoining = true
+        }
+        
+        do {
+            // Fetch current profile to get existing eventStatus
+            let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
+            var currentEventStatus = profile.eventStatus ?? []
+            
+            // Add event ID if not already present
+            if !currentEventStatus.contains(party.id) {
+                currentEventStatus.append(party.id)
+                
+                // Update profile with new event status
+                try await UserProfileService.shared.updateProfile(userId: userId, updates: [
+                    "eventStatus": currentEventStatus
+                ])
+                
+                print("✅ Saved event \(party.id) to user profile event status")
+                
+                await MainActor.run {
+                    isAttending = true
+                    isJoining = false
+                }
+            } else {
+                await MainActor.run {
+                    isAttending = true
+                    isJoining = false
+                }
+            }
+        } catch {
+            print("❌ Failed to save event to profile: \(error.localizedDescription)")
+            await MainActor.run {
+                isJoining = false
+            }
+        }
     }
     
     private func formatEventTime(_ date: Date) -> String {
@@ -1571,15 +1769,15 @@ struct PartyDetailView: View {
                                 .padding(.top, 8)
                         }
                         
-                        // Date
-                        if let startsAt = displayParty.startsAt {
+                        // Date - show unformatted dateTime string from Firebase for parties
+                        if let dateTime = displayParty.dateTime, !dateTime.isEmpty {
                             HStack(spacing: 4) {
                                 Text("Date:")
                                     .font(.system(size: 18, weight: .medium))
                                     .foregroundStyle(.secondary)
                                 Text("📅")
                                     .font(.system(size: 18))
-                                Text(formatFullDate(startsAt))
+                                Text(dateTime)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.primary)
                             }
@@ -1611,7 +1809,7 @@ struct PartyDetailView: View {
                             .padding(.vertical, 8)
                         
                         // Action Buttons
-                        VStack(spacing: 12) {
+                        VStack(spacing: 0) {
                             // Buy Tickets Button (Primary)
                             if let ticketURL = displayParty.ticketURL {
                                 Button(action: {
@@ -1667,6 +1865,7 @@ struct PartyDetailView: View {
                                         .fill(isAttending ? Color.green : Color.accentColor)
                                 )
                             }
+                            .padding(.top, 6)
                             .disabled(isJoining)
                             
                             // Share Button - Shares ticket URL

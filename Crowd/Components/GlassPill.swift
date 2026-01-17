@@ -50,7 +50,7 @@ struct GlassPill: View {
                 else { Text(text) }
             }
             .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(.black)
+            .foregroundStyle(.white)
             .lineLimit(1)
         )
     }

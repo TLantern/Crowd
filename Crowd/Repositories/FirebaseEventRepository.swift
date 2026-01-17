@@ -96,10 +96,7 @@ final class FirebaseEventRepository: EventRepository {
     
     /// Fetch parties from events_from_linktree_raw collection
     func fetchParties() async throws -> [CrowdEvent] {
-        print("🎉 Fetching parties from events_from_linktree_raw collection")
-        
         let partiesSnapshot = try await db.collection("events_from_linktree_raw").getDocuments()
-        print("📊 Found \(partiesSnapshot.documents.count) documents in events_from_linktree_raw")
         
         var parties: [CrowdEvent] = []
         var parseErrors = 0
@@ -110,18 +107,14 @@ final class FirebaseEventRepository: EventRepository {
         
         for document in partiesSnapshot.documents {
             let data = document.data()
-            print("📄 Document ID: \(document.documentID)")
-            print("📄 Document data keys: \(data.keys.sorted())")
             
             do {
                 let party = try await parseParty(from: data, documentId: document.documentID)
                 
                 // Only include upcoming parties (today or future)
-                if let startsAt = party.startsAt {
-                    if startsAt >= startOfToday {
+                if let time = party.time {
+                    if time >= startOfToday {
                         parties.append(party)
-                    } else {
-                        print("⏭️ Skipping past party: \(party.title) (date: \(startsAt))")
                     }
                 } else {
                     // Include parties without a date (they might be ongoing/TBD)
@@ -129,12 +122,8 @@ final class FirebaseEventRepository: EventRepository {
                 }
             } catch {
                 parseErrors += 1
-                print("⚠️ Failed to parse party document \(document.documentID): \(error.localizedDescription)")
-                print("📄 Data: \(data)")
             }
         }
-        
-        print("✅ Successfully parsed \(parties.count) upcoming parties, \(parseErrors) failed")
         
         // Trigger background cleanup of expired parties
         Task {
@@ -145,60 +134,18 @@ final class FirebaseEventRepository: EventRepository {
     }
     
     /// Parse party from events_from_linktree_raw collection
-    /// Fields: address, title, uploadedImageUrl, URL, description (contains date)
+    /// Only extracts: title, date/time, ticketURL, and attendance
     private func parseParty(from data: [String: Any], documentId: String) async throws -> CrowdEvent {
-        // Add detailed logging for debugging
-        print("📄 Parsing party document: \(documentId)")
-        print("📄 Available fields: \(data.keys.sorted())")
-        
-        // Extract nested dictionaries
+        // Extract nested dictionaries for date/time lookup
         let normalized = data["normalized"] as? [String: Any]
         let eventDetails = data["eventDetails"] as? [String: Any]
         
         // Title - check top level first, then eventDetails
         guard let title = data["title"] as? String ?? eventDetails?["title"] as? String else {
-            print("❌ Missing required 'title' field")
             throw CrowdError.invalidResponse
         }
         
         let id = documentId
-        
-        // Description - Check multiple field name variations (including nested)
-        let description = data["description"] as? String ?? 
-                         normalized?["description"] as? String ??
-                         eventDetails?["description"] as? String ??
-                         data["desc"] as? String ?? 
-                         data["details"] as? String ?? 
-                         data["about"] as? String ?? 
-                         data["info"] as? String ?? ""
-        print("📄 Description: \(description.isEmpty ? "empty" : String(description.prefix(50)))")
-        
-        // Address - Check multiple field name variations (including nested)
-        var address: String?
-        if let addr = data["address"] as? String { address = addr }
-        else if let addr = eventDetails?["address"] as? String { address = addr }
-        else if let addr = normalized?["address"] as? String { address = addr }
-        else if let addr = data["location"] as? String { address = addr }
-        else if let addr = eventDetails?["venue"] as? String { address = addr }
-        else if let addr = normalized?["locationName"] as? String { address = addr }
-        else if let addr = data["venue"] as? String { address = addr }
-        else if let addr = data["place"] as? String { address = addr }
-        else { address = data["where"] as? String }
-        print("📄 Address: \(address ?? "nil")")
-        
-        // Image URL - Check multiple possible field names (including nested)
-        var imageURL: String?
-        if let url = data["imageURL"] as? String { imageURL = url }
-        else if let url = data["imageUrl"] as? String { imageURL = url }
-        else if let url = normalized?["imageUrl"] as? String { imageURL = url }
-        else if let url = eventDetails?["imageUrl"] as? String { imageURL = url }
-        else if let url = eventDetails?["primaryImage"] as? String { imageURL = url }
-        else if let url = data["uploadedImageUrl"] as? String { imageURL = url }
-        else if let url = data["image"] as? String { imageURL = url }
-        else if let url = data["uploadedImage"] as? String { imageURL = url }
-        else if let url = data["flyerUrl"] as? String { imageURL = url }
-        else { imageURL = data["flyer"] as? String }
-        print("📄 Image URL: \(imageURL ?? "nil")")
         
         // Ticket URL - Check multiple field name variations
         let ticketURL = data["URL"] as? String ?? 
@@ -208,108 +155,118 @@ final class FirebaseEventRepository: EventRepository {
                        data["ticketLink"] as? String ??
                        data["eventLink"] as? String ??
                        data["url"] as? String
-        print("📄 Ticket URL: \(ticketURL ?? "nil")")
         
-        // Check for host/group name in multiple possible field names (including nested)
-        var hostName: String = "Party Host"
-        if let name = data["hostName"] as? String { hostName = name }
-        else if let name = normalized?["locationName"] as? String { hostName = name }
-        else if let name = eventDetails?["venue"] as? String { hostName = name }
-        else if let name = data["host_name"] as? String { hostName = name }
-        else if let name = data["groupName"] as? String { hostName = name }
-        else if let name = data["group_name"] as? String { hostName = name }
-        else if let name = normalized?["sourceOrg"] as? String { hostName = name }
-        else if let name = data["organization"] as? String { hostName = name }
-        else if let name = data["org"] as? String { hostName = name }
-        else if let name = data["host"] as? String { hostName = name }
-        else if let name = data["organizer"] as? String { hostName = name }
-        print("📄 Host Name: \(hostName)")
+        // Image URL - Check multiple field name variations
+        let imageURL: String? = {
+            if let url = data["imageURL"] as? String { return url }
+            if let url = data["imageUrl"] as? String { return url }
+            if let url = data["image"] as? String { return url }
+            if let url = data["image_url"] as? String { return url }
+            if let url = data["photoURL"] as? String { return url }
+            if let url = data["photoUrl"] as? String { return url }
+            if let url = data["photo"] as? String { return url }
+            if let url = data["thumbnailURL"] as? String { return url }
+            if let url = data["thumbnailUrl"] as? String { return url }
+            if let url = data["thumbnail"] as? String { return url }
+            if let url = eventDetails?["imageURL"] as? String { return url }
+            if let url = eventDetails?["imageUrl"] as? String { return url }
+            if let url = eventDetails?["image"] as? String { return url }
+            return nil
+        }()
         
-        // Try to get date from multiple field name variations
-        var startsAt: Date?
+        // Source URL - Check multiple field name variations
+        let sourceUrl: String? = {
+            if let url = data["sourceURL"] as? String { return url }
+            if let url = data["sourceUrl"] as? String { return url }
+            if let url = data["source"] as? String { return url }
+            if let url = data["source_url"] as? String { return url }
+            if let url = data["originalURL"] as? String { return url }
+            if let url = data["originalUrl"] as? String { return url }
+            if let url = data["eventSourceURL"] as? String { return url }
+            if let url = eventDetails?["sourceURL"] as? String { return url }
+            if let url = eventDetails?["sourceUrl"] as? String { return url }
+            return nil
+        }()
         
-        // Check dateTime field in various formats
-        if let dateTimeString = data["dateTime"] as? String {
-            print("📄 Found dateTime string: \(dateTimeString)")
-            startsAt = parseDateTimeString(dateTimeString)
-        } else if let dateTimeTimestamp = data["dateTime"] as? Timestamp {
-            print("📄 Found dateTime timestamp")
-            startsAt = dateTimeTimestamp.dateValue()
-        } else if let dateTimeSeconds = data["dateTime"] as? TimeInterval {
-            print("📄 Found dateTime interval: \(dateTimeSeconds)")
-            startsAt = Date(timeIntervalSince1970: dateTimeSeconds)
-        } else if let dateTimeMillis = data["dateTime"] as? Double {
-            print("📄 Found dateTime double: \(dateTimeMillis)")
+        // Address/Location - Check multiple field name variations
+        let rawAddress: String? = {
+            // Check top-level fields first
+            if let addr = data["address"] as? String, !addr.isEmpty { return addr }
+            if let addr = data["location"] as? String, !addr.isEmpty { return addr }
+            if let addr = data["locationName"] as? String, !addr.isEmpty { return addr }
+            if let addr = data["rawLocationName"] as? String, !addr.isEmpty { return addr }
+            if let addr = data["venue"] as? String, !addr.isEmpty { return addr }
+            if let addr = data["venueName"] as? String, !addr.isEmpty { return addr }
+            if let addr = data["place"] as? String, !addr.isEmpty { return addr }
+            if let addr = data["eventLocation"] as? String, !addr.isEmpty { return addr }
+            // Check nested eventDetails
+            if let addr = eventDetails?["address"] as? String, !addr.isEmpty { return addr }
+            if let addr = eventDetails?["location"] as? String, !addr.isEmpty { return addr }
+            if let addr = eventDetails?["locationName"] as? String, !addr.isEmpty { return addr }
+            if let addr = eventDetails?["venue"] as? String, !addr.isEmpty { return addr }
+            if let addr = eventDetails?["venueName"] as? String, !addr.isEmpty { return addr }
+            // Check normalized
+            if let addr = normalized?["address"] as? String, !addr.isEmpty { return addr }
+            if let addr = normalized?["location"] as? String, !addr.isEmpty { return addr }
+            if let addr = normalized?["locationName"] as? String, !addr.isEmpty { return addr }
+            return nil
+        }()
+        
+        // Clean the address by removing date/time patterns
+        let address = rawAddress.map { cleanAddressFromDateTime($0) }
+        
+        // Parse time from dateTime field - check both root level and eventDetails
+        var time: Date?
+        var dateTimeString: String? = nil  // Preserve the original dateTime string
+        
+        // Check dateTime field in various formats - try eventDetails first, then root level
+        if let dateTimeStr = eventDetails?["dateTime"] as? String ?? data["dateTime"] as? String {
+            dateTimeString = dateTimeStr  // Store the original string
+            time = parseDateTimeString(dateTimeStr)
+        } else if let dateTimeTimestamp = eventDetails?["dateTime"] as? Timestamp ?? data["dateTime"] as? Timestamp {
+            time = dateTimeTimestamp.dateValue()
+        } else if let dateTimeSeconds = eventDetails?["dateTime"] as? TimeInterval ?? data["dateTime"] as? TimeInterval {
+            time = Date(timeIntervalSince1970: dateTimeSeconds)
+        } else if let dateTimeMillis = eventDetails?["dateTime"] as? Double ?? data["dateTime"] as? Double {
             // Try as milliseconds if value is very large
             if dateTimeMillis > 10000000000 {
-                startsAt = Date(timeIntervalSince1970: dateTimeMillis / 1000)
+                time = Date(timeIntervalSince1970: dateTimeMillis / 1000)
             } else {
-                startsAt = Date(timeIntervalSince1970: dateTimeMillis)
+                time = Date(timeIntervalSince1970: dateTimeMillis)
             }
         }
         
-        // Try alternative date field names (including nested)
-        if startsAt == nil {
-            if let dateString = data["date"] as? String ?? eventDetails?["dateTime"] as? String {
-                print("📄 Found date string: \(dateString)")
-                startsAt = parseDateTimeString(dateString)
-            } else if let timeString = data["time"] as? String {
-                print("📄 Found time string: \(timeString)")
-                startsAt = parseDateTimeString(timeString)
-            } else if let startTimeString = data["startTime"] as? String {
-                print("📄 Found startTime string: \(startTimeString)")
-                startsAt = parseDateTimeString(startTimeString)
-            } else if let eventDateString = data["eventDate"] as? String {
-                print("📄 Found eventDate string: \(eventDateString)")
-                startsAt = parseDateTimeString(eventDateString)
-            } else if let startString = data["start"] as? String {
-                print("📄 Found start string: \(startString)")
-                startsAt = parseDateTimeString(startString)
-            } else if let normalizedStartTime = normalized?["startTimeLocal"] as? String {
-                print("📄 Found normalized startTimeLocal: \(normalizedStartTime)")
-                startsAt = parseDateTimeString(normalizedStartTime)
-            } else if let normalizedStartTimeISO = normalized?["startTimeISO"] as? String {
-                print("📄 Found normalized startTimeISO: \(normalizedStartTimeISO)")
-                startsAt = parseDateTimeString(normalizedStartTimeISO)
-            }
-        }
-        
-        // If no dateTime field, try to extract from description
-        if startsAt == nil && !description.isEmpty {
-            print("📄 Attempting to extract date from description")
-            startsAt = extractDateFromDescription(description)
-        }
-        
-        print("📄 Final parsed date: \(startsAt?.description ?? "nil")")
+        // Use time for both startsAt and endsAt
         
         // Default coordinates (can be geocoded later if needed)
         // Using UNT main campus coordinates as default
         let latitude = 33.210081
         let longitude = -97.147700
         
-        // Fetch going count for this party
+        // Fetch going count for this party (attendance)
         let goingCount = try? await getPartyGoingCount(partyId: id)
         
         return CrowdEvent(
             id: id,
             title: title,
             hostId: "",
-            hostName: hostName,
+            hostName: "Party Host",
             latitude: latitude,
             longitude: longitude,
             radiusMeters: 0,
-            startsAt: startsAt,
-            endsAt: nil,
+            time: time,
             createdAt: Date(),
             signalStrength: 0,
             attendeeCount: goingCount ?? 0,
             tags: ["party"],
             category: "Party",
-            description: description,
-            sourceURL: nil,
+            description: nil,
+            sourceURL: sourceUrl,
             rawLocationName: address,
             imageURL: imageURL,
-            ticketURL: ticketURL
+            ticketURL: ticketURL,
+            dateTime: dateTimeString,
+            rawDateTime: nil
         )
     }
     
@@ -317,8 +274,6 @@ final class FirebaseEventRepository: EventRepository {
     
     /// Mark that a user is going to a party
     func markPartyGoing(partyId: String, userId: String) async throws {
-        print("🎉 Marking party going: partyId=\(partyId), userId=\(userId)")
-        
         // Check if user already marked going
         let existingQuery = try await db.collection("partyGoing")
             .whereField("partyId", isEqualTo: partyId)
@@ -326,7 +281,6 @@ final class FirebaseEventRepository: EventRepository {
             .getDocuments()
         
         if !existingQuery.documents.isEmpty {
-            print("⚠️ User \(userId) already marked going for party \(partyId)")
             return // Already marked, no error
         }
         
@@ -338,13 +292,10 @@ final class FirebaseEventRepository: EventRepository {
         ]
         
         try await db.collection("partyGoing").addDocument(data: goingData)
-        print("✅ Successfully marked party going")
     }
     
     /// Unmark that a user is going to a party
     func unmarkPartyGoing(partyId: String, userId: String) async throws {
-        print("🎉 Unmarking party going: partyId=\(partyId), userId=\(userId)")
-        
         // Find user's going record
         let goingQuery = try await db.collection("partyGoing")
             .whereField("partyId", isEqualTo: partyId)
@@ -355,8 +306,6 @@ final class FirebaseEventRepository: EventRepository {
         for document in goingQuery.documents {
             try await document.reference.delete()
         }
-        
-        print("✅ Successfully unmarked party going")
     }
     
     /// Get the count of users going to a party
@@ -466,6 +415,44 @@ final class FirebaseEventRepository: EventRepository {
     }
     
     /// Parse dateTime string in various formats
+    /// Remove date/time information from address strings using regex patterns
+    /// Example: "Vice ParkDallas, TXDec 31, 2025 at 9 pm to Jan 1 at 2 am CST" -> "Vice ParkDallas, TX"
+    private func cleanAddressFromDateTime(_ address: String) -> String {
+        var cleaned = address
+        
+        print("🧹 [ADDRESS CLEAN] Original: '\(address)'")
+        
+        // Aggressive Pattern: Remove everything starting from a month abbreviation followed by day/year pattern
+        // This catches "TXDec 31, 2025..." and removes "Dec 31, 2025..." onwards
+        let aggressivePattern = #"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d{1,2}.*$"#
+        
+        if let regex = try? NSRegularExpression(pattern: aggressivePattern, options: []) {
+            let range = NSRange(cleaned.startIndex..., in: cleaned)
+            let matches = regex.matches(in: cleaned, options: [], range: range)
+            
+            if !matches.isEmpty {
+                print("🧹 [ADDRESS CLEAN] Aggressive pattern found \(matches.count) match(es)")
+                for match in matches {
+                    if let range = Range(match.range, in: cleaned) {
+                        print("🧹 [ADDRESS CLEAN]   Matched: '\(cleaned[range])'")
+                    }
+                }
+                cleaned = regex.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
+                print("🧹 [ADDRESS CLEAN] After aggressive removal: '\(cleaned)'")
+            }
+        }
+        
+        // Clean up any trailing commas, spaces, or extra whitespace
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        cleaned = cleaned.replacingOccurrences(of: #",\s*$"#, with: "", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        
+        print("🧹 [ADDRESS CLEAN] Final result: '\(cleaned)'")
+        print("🧹 [ADDRESS CLEAN] ========================================")
+        
+        return cleaned.isEmpty ? address : cleaned
+    }
+    
     private func parseDateTimeString(_ dateTimeString: String) -> Date? {
         // First check if it's a Unix timestamp (numeric string)
         if let timestamp = Double(dateTimeString) {
@@ -734,8 +721,8 @@ final class FirebaseEventRepository: EventRepository {
             "latitude": event.latitude,
             "longitude": event.longitude,
             "radiusMeters": event.radiusMeters,
-            "startsAt": event.startsAt?.timeIntervalSince1970 ?? Date().timeIntervalSince1970,
-            "endsAt": event.endsAt?.timeIntervalSince1970,
+            "startsAt": event.time?.timeIntervalSince1970 ?? Date().timeIntervalSince1970,
+            "endsAt": event.time?.timeIntervalSince1970,
             "tags": finalTags,
             "category": finalCategory,
             "geohash": geohash,
@@ -1278,20 +1265,21 @@ final class FirebaseEventRepository: EventRepository {
         let hostId = data["hostId"] as? String ?? ""
         let hostName = data["hostName"] as? String ?? "Guest"
         
-        // Parse timestamps
-        var startsAt: Date?
-        var endsAt: Date?
+        // Parse time from startsAt or endsAt field (for backward compatibility)
+        var time: Date?
         
         if let timestamp = data["startsAt"] as? Timestamp {
-            startsAt = timestamp.dateValue()
+            time = timestamp.dateValue()
         } else if let seconds = data["startsAt"] as? TimeInterval {
-            startsAt = Date(timeIntervalSince1970: seconds)
-        }
-        
-        if let timestamp = data["endsAt"] as? Timestamp {
-            endsAt = timestamp.dateValue()
+            time = Date(timeIntervalSince1970: seconds)
+        } else if let timestamp = data["endsAt"] as? Timestamp {
+            time = timestamp.dateValue()
         } else if let seconds = data["endsAt"] as? TimeInterval {
-            endsAt = Date(timeIntervalSince1970: seconds)
+            time = Date(timeIntervalSince1970: seconds)
+        } else if let timestamp = data["time"] as? Timestamp {
+            time = timestamp.dateValue()
+        } else if let seconds = data["time"] as? TimeInterval {
+            time = Date(timeIntervalSince1970: seconds)
         }
         
         // Parse tags - ensure never empty
@@ -1324,6 +1312,8 @@ final class FirebaseEventRepository: EventRepository {
         let rawLocationName = data["rawLocationName"] as? String
         let imageURL = data["imageURL"] as? String ?? data["imageUrl"] as? String ?? data["image"] as? String
         let ticketURL = data["ticketURL"] as? String ?? data["ticketUrl"] as? String ?? data["ticket"] as? String
+        let dateTime = data["dateTime"] as? String  // For parties
+        let rawDateTime = data["rawDateTime"] as? String  // For school events
         
         return CrowdEvent(
             id: id,
@@ -1333,8 +1323,7 @@ final class FirebaseEventRepository: EventRepository {
             latitude: lat,
             longitude: lon,
             radiusMeters: radiusMeters,
-            startsAt: startsAt,
-            endsAt: endsAt,
+            time: time,
             createdAt: createdAt,
             signalStrength: signalStrength,
             attendeeCount: attendeeCount,
@@ -1344,7 +1333,9 @@ final class FirebaseEventRepository: EventRepository {
             sourceURL: sourceURL,
             rawLocationName: rawLocationName,
             imageURL: imageURL,
-            ticketURL: ticketURL
+            ticketURL: ticketURL,
+            dateTime: dateTime,
+            rawDateTime: rawDateTime
         )
     }
 }

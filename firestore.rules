@@ -1,12 +1,26 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helpers
+    // ============================================
+    // Helper Functions (merged from both rule sets)
+    // ============================================
+    
+    // Authentication helpers
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Admin check
     function isAdmin() {
       return request.auth != null &&
              exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    // Expired event check
     function isExpired(ts) {
       // Event is expired if endsAt timestamp is in the past (no 1-hour buffer needed for cleanup)
       return ts != null && (
@@ -15,12 +29,72 @@ service cloud.firestore {
       );
     }
     
+    // Data validation helpers (from second rule set)
+    function isValidUserDataForCreate() {
+      return request.resource.data.keys().hasAll(['displayName', 'auraPoints', 'createdAt']) &&
+             request.resource.data.displayName is string &&
+             request.resource.data.auraPoints is int &&
+             request.resource.data.createdAt is timestamp &&
+             (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp) &&
+             (!('interests' in request.resource.data) || request.resource.data.interests is list);
+    }
+    
+    function isValidUserDataForUpdate() {
+      // For updates/merges, validate fields that are present but don't require all fields
+      return (!('displayName' in request.resource.data) || request.resource.data.displayName is string) &&
+             (!('auraPoints' in request.resource.data) || request.resource.data.auraPoints is int) &&
+             (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp) &&
+             (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp) &&
+             (!('interests' in request.resource.data) || request.resource.data.interests is list);
+    }
+    
+    function isValidEventData() {
+      return request.resource.data.keys().hasAll(['title', 'hostId', 'latitude', 'longitude', 'radiusMeters', 'createdAt', 'updatedAt']) &&
+             request.resource.data.title is string &&
+             request.resource.data.hostId is string &&
+             request.resource.data.latitude is number &&
+             request.resource.data.longitude is number &&
+             request.resource.data.radiusMeters is number &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.updatedAt is timestamp &&
+             (!('geohash' in request.resource.data) || request.resource.data.geohash is string) &&
+             (!('peopleCount' in request.resource.data) || request.resource.data.peopleCount is int);
+    }
+    
+    function isValidSignalData() {
+      return request.resource.data.keys().hasAll(['userId', 'eventId', 'signalStrength', 'createdAt', 'updatedAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.eventId is string &&
+             request.resource.data.signalStrength is int &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.updatedAt is timestamp &&
+             (!('latitude' in request.resource.data) || request.resource.data.latitude is number) &&
+             (!('longitude' in request.resource.data) || request.resource.data.longitude is number) &&
+             (!('geohash' in request.resource.data) || request.resource.data.geohash is string) &&
+             (!('peopleCount' in request.resource.data) || request.resource.data.peopleCount is int) &&
+             (!('color' in request.resource.data) || request.resource.data.color is string) &&
+             (!('radiusMeters' in request.resource.data) || request.resource.data.radiusMeters is int);
+    }
+    
+    function isValidPointData() {
+      return request.resource.data.keys().hasAll(['userId', 'points', 'reason', 'createdAt', 'updatedAt']) &&
+             request.resource.data.userId is string &&
+             request.resource.data.points is int &&
+             request.resource.data.reason is string &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.updatedAt is timestamp;
+    }
+    
+    // ============================================
+    // Collection Rules (keeping all from current + adding points)
+    // ============================================
+    
     // Official events collection
     match /events/{eventId} {
       allow read: if true;
       allow create, delete: if false; // Only Cloud Functions can create/delete
       // Allow authenticated users to update only attendeeCount and signalStrength (for joining)
-      allow update: if request.auth != null
+      allow update: if isAuthenticated()
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength']);
     }
     
@@ -30,23 +104,24 @@ service cloud.firestore {
       allow read: if true;
       
       // Authenticated users (including anonymous) can create events
-      allow create: if request.auth != null
-                    && request.resource.data.hostId == request.auth.uid;
+      allow create: if isAuthenticated()
+                    && request.resource.data.hostId == request.auth.uid
+                    && isValidEventData();
       
       // Delete allowed for:
       // - the host
       // - an admin (document exists at admins/{uid})
       // - any authenticated user if the event has expired (endsAt < request.time - 1h)
-      allow delete: if request.auth != null && (
+      allow delete: if isAuthenticated() && (
                       resource.data.hostId == request.auth.uid ||
                       isAdmin() ||
                       isExpired(resource.data.endsAt)
                     );
       
       // Users can update their own events OR update attendeeCount/signalStrength when joining
-      allow update: if request.auth != null && (
+      allow update: if isAuthenticated() && (
         // Host can update their own events
-        resource.data.hostId == request.auth.uid
+        (resource.data.hostId == request.auth.uid && isValidEventData())
         // OR anyone can update only attendeeCount and signalStrength (for joining)
         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength']))
       );
@@ -58,7 +133,9 @@ service cloud.firestore {
       allow read: if true;
       
       // Users can only write their own profile
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow create: if isOwner(userId) && isValidUserDataForCreate();
+      allow update: if isOwner(userId) && isValidUserDataForUpdate();
+      allow delete: if isOwner(userId);
       
       // Allow Cloud Functions (no auth) to update notification cooldowns only
       allow update: if request.resource.data.diff(resource.data).affectedKeys()
@@ -72,8 +149,13 @@ service cloud.firestore {
       
       // Authenticated users can create/update/delete their own signals
       // OR delete signals for expired events (for cleanup)
-      allow create, update: if request.auth != null;
-      allow delete: if request.auth != null && (
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       isValidSignalData();
+      allow update: if isAuthenticated() && 
+                       resource.data.userId == request.auth.uid &&
+                       isValidSignalData();
+      allow delete: if isAuthenticated() && (
         // User's own signal
         resource.data.userId == request.auth.uid ||
         // Or signal for an expired event (cleanup)
@@ -89,16 +171,16 @@ service cloud.firestore {
     // Event chat messages collection
     match /eventChats/{eventId}/messages/{messageId} {
       // Authenticated users can read messages
-      allow read: if request.auth != null;
+      allow read: if isAuthenticated();
       
       // Authenticated users can create messages (including anonymous users)
       // Allow if user is authenticated and the userId matches the auth uid
-      allow create: if request.auth != null
+      allow create: if isAuthenticated()
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.keys().hasAll(['userId', 'userName', 'text', 'timestamp']);
       
       // Users can only update/delete their own messages
-      allow update, delete: if request.auth != null
+      allow update, delete: if isAuthenticated()
                             && resource.data.userId == request.auth.uid;
     }
     
@@ -120,15 +202,15 @@ service cloud.firestore {
     // User attendances collection (tracking which events users are attending)
     match /userAttendances/{attendanceId} {
       // Authenticated users can read attendances
-      allow read: if request.auth != null;
+      allow read: if isAuthenticated();
       
       // Authenticated users can create their own attendances
-      allow create: if request.auth != null
+      allow create: if isAuthenticated()
                     && request.resource.data.userId == request.auth.uid;
       
       // Users can delete their own attendances
       // OR delete attendances for expired events (for cleanup)
-      allow delete: if request.auth != null && (
+      allow delete: if isAuthenticated() && (
         // User's own attendance
         resource.data.userId == request.auth.uid ||
         // Or attendance for an expired event (cleanup)
@@ -150,12 +232,12 @@ service cloud.firestore {
       allow read: if true;
       
       // Authenticated users can create their own going records
-      allow create: if request.auth != null
+      allow create: if isAuthenticated()
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.partyId != null;
       
       // Users can delete their own going records
-      allow delete: if request.auth != null
+      allow delete: if isAuthenticated()
                     && resource.data.userId == request.auth.uid;
       
       // No updates allowed (create/delete only)
@@ -165,7 +247,7 @@ service cloud.firestore {
     // Activity logs collection (for DAU tracking)
     match /activity_logs/{date}/events/{eventId} {
       // Authenticated users can create events (for logging their actions)
-      allow create: if request.auth != null
+      allow create: if isAuthenticated()
                     && request.resource.data.userId == request.auth.uid;
       
       // Only admins can read activity logs
@@ -190,17 +272,31 @@ service cloud.firestore {
       allow read: if true;
       
       // Authenticated users can write anchors (for syncing geocoded coordinates)
-      allow write: if request.auth != null;
+      allow write: if isAuthenticated();
     }
     
     // Anchor notification logs collection (for deduplication)
     match /anchor_notification_logs/{logId} {
       // Authenticated users can read logs (to check for duplicates)
-      allow read: if request.auth != null;
+      allow read: if isAuthenticated();
       
       // Authenticated users can write logs (to mark notifications as sent)
-      allow write: if request.auth != null;
+      allow write: if isAuthenticated();
+    }
+    
+    // Points collection (from second rule set)
+    match /points/{pointId} {
+      // Users can read their own points
+      allow read: if isOwner(resource.data.userId);
+      
+      // System can create points (via Cloud Functions)
+      allow create: if isValidPointData();
+      
+      // System can update points (via Cloud Functions)
+      allow update: if isValidPointData();
+      
+      // Points are typically not deleted, but allow system deletion
+      allow delete: if false; // Prevent manual deletion of points
     }
   }
 }
-

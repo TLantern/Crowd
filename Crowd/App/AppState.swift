@@ -24,6 +24,7 @@ final class AppState: ObservableObject {
             saveCurrentJoinedEvent()
         }
     }
+    @Published var isVisible: Bool = false
     
     private var locationUpdateCancellable: AnyCancellable?
     private var lastLocationSaveTime: Date?
@@ -118,7 +119,9 @@ final class AppState: ObservableObject {
             let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
             await MainActor.run {
                 self.sessionUser = profile
+                self.isVisible = profile.isVisible
                 print("✅ Loaded user profile: \(profile.displayName)")
+                print("👁️ Visibility state loaded: \(profile.isVisible)")
             }
             
             // Identify user in Superwall if profile exists (not anonymous)
@@ -202,12 +205,10 @@ final class AppState: ObservableObject {
         let now = Date()
         
         let eventHasFinished: Bool
-        if let endsAt = event.endsAt {
-            eventHasFinished = endsAt < now
-        } else if let startsAt = event.startsAt {
-            // If no end time, check if event started more than 4 hours ago
+        if let time = event.time {
+            // Check if event time was more than 4 hours ago
             let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
-            eventHasFinished = startsAt < fourHoursAgo
+            eventHasFinished = time < fourHoursAgo
         } else {
             eventHasFinished = false
         }

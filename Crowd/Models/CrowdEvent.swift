@@ -18,8 +18,7 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     var longitude: Double
     var radiusMeters: Double
 
-    var startsAt: Date?
-    var endsAt: Date?
+    var time: Date?
     var createdAt: Date
 
     var signalStrength: Int
@@ -32,6 +31,8 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     var rawLocationName: String?
     var imageURL: String?
     var ticketURL: String?
+    var dateTime: String?      // Unformatted dateTime string from Firebase (for parties)
+    var rawDateTime: String?   // Unformatted dateTime string from Firebase (for school events)
 
     var coordinates: CLLocationCoordinate2D {
         get { .init(latitude: latitude, longitude: longitude) }
@@ -43,7 +44,7 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     
     /// Formatted date string for display (e.g., "Today at 3:00 PM", "Tomorrow at 2:30 PM")
     var dateFormatted: String? {
-        guard let date = startsAt else { return nil }
+        guard let date = time else { return nil }
         
         let calendar = Calendar.current
         let now = Date()
@@ -75,12 +76,13 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
         hostName: String = "Guest",
         category: String? = nil,
         description: String? = nil,
-        startsAt: Date? = nil,
-        endsAt: Date? = nil,
+        time: Date? = nil,
         tags: [String] = [],
         sourceURL: String? = nil,
         rawLocationName: String? = nil,
-        imageURL: String? = nil
+        imageURL: String? = nil,
+        dateTime: String? = nil,
+        rawDateTime: String? = nil
     ) -> Self {
         // Ensure category is never nil - default to "Chill Hangout"
         let finalCategory = category ?? EventCategory.chillHangout.rawValue
@@ -103,8 +105,7 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             latitude: coord.latitude,
             longitude: coord.longitude,
             radiusMeters: 0,
-            startsAt: startsAt,
-            endsAt: endsAt,
+            time: time,
             createdAt: Date(),
             signalStrength: 0,
             attendeeCount: 0,
@@ -114,7 +115,9 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             sourceURL: sourceURL,
             rawLocationName: rawLocationName,
             imageURL: imageURL,
-            ticketURL: nil
+            ticketURL: nil,
+            dateTime: dateTime,
+            rawDateTime: rawDateTime
         )
     }
 }

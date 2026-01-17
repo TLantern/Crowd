@@ -97,12 +97,12 @@ struct EventDetailView: View {
                         }
                         
                         // Time
-                        if let start = event.startsAt, let end = event.endsAt {
+                        if let time = event.time {
                             VStack(spacing: 8) {
                                 Text("Time")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(.secondary)
-                                Text(formatTimeWithContext(start: start, end: end))
+                                Text(formatTime(time))
                                     .font(.system(size: 16))
                                     .foregroundColor(.primary)
                             }
@@ -157,14 +157,7 @@ struct EventDetailView: View {
                                     .foregroundColor(.secondary)
                                 HStack(spacing: 8) {
                                     ForEach(Array(chips.enumerated()), id: \.offset) { index, chip in
-                                        SUBadge(model: BadgeVM {
-                                            $0.title = chip
-                                            $0.color = vibeChipColor(for: index)
-                                            $0.style = .light
-                                            $0.font = .smButton
-                                            $0.cornerRadius = .full
-                                            $0.paddings = .init(horizontal: 10, vertical: 6)
-                                        })
+                                        BadgeView(title: chip)
                                     }
                                 }
                             }
@@ -437,30 +430,21 @@ struct EventDetailView: View {
         }
     }
     
-    private func formatTimeWithContext(start: Date, end: Date) -> String {
+    private func formatTime(_ date: Date) -> String {
         let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
         
-        // Determine day prefix
-        let dayPrefix: String
-        if calendar.isDateInToday(start) {
-            dayPrefix = "Today"
-        } else if calendar.isDateInTomorrow(start) {
-            dayPrefix = "Tomorrow"
+        if calendar.isDateInToday(date) {
+            return "Today at \(formatter.string(from: date))"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow at \(formatter.string(from: date))"
         } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEE"
-            dayPrefix = formatter.string(from: start)
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .medium
+            dateFormatter.timeStyle = .short
+            return dateFormatter.string(from: date)
         }
-        
-        // Format time based on minutes
-        func formatTimeComponent(_ date: Date) -> String {
-            let minute = calendar.component(.minute, from: date)
-            let formatter = DateFormatter()
-            formatter.dateFormat = minute == 0 ? "h a" : "h:mm a"
-            return formatter.string(from: date)
-        }
-        
-        return "\(dayPrefix) · \(formatTimeComponent(start)) – \(formatTimeComponent(end))"
     }
     
     private func generateVibeChips(tags: [String], title: String, description: String?) -> [String] {
@@ -622,10 +606,6 @@ struct EventDetailView: View {
         return Array(chips.prefix(3))
     }
     
-    private func vibeChipColor(for index: Int) -> ComponentColor {
-        let colors: [ComponentColor] = [.success, .accent, .warning]
-        return colors[index % colors.count]
-    }
     
     private func leaveEvent() {
         Task {
@@ -902,8 +882,7 @@ struct HostAvatarView: View {
         latitude: 33.2099,
         longitude: -97.1515,
         radiusMeters: 60,
-        startsAt: Date().addingTimeInterval(3600),
-        endsAt: Date().addingTimeInterval(7200),
+        time: Date().addingTimeInterval(3600),
         createdAt: Date(),
         signalStrength: 4,
         attendeeCount: 8,

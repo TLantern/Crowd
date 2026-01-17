@@ -48,9 +48,12 @@ struct UserProfile: Codable, Equatable, Identifiable {
     // Blocked users
     var blockedUsers: [String]?
     
+    // Visibility state - controls whether user's location is shared with others
+    var isVisible: Bool
+    
     // Computed property (not encoded/decoded)
     var avatarColor: Color {
-        Color(hexString: avatarColorHex)
+        Color(hexString: self.avatarColorHex)
     }
     
     enum CodingKeys: String, CodingKey {
@@ -79,6 +82,7 @@ struct UserProfile: Codable, Equatable, Identifiable {
         case eventStatus
         case termsAccepted
         case blockedUsers
+        case isVisible
     }
 
     static let anonymous = UserProfile(
@@ -106,6 +110,7 @@ struct UserProfile: Codable, Equatable, Identifiable {
         lastNotificationSent: nil,
         eventStatus: nil,
         termsAccepted: false,
-        blockedUsers: nil
+        blockedUsers: nil,
+        isVisible: false
     )
 }
