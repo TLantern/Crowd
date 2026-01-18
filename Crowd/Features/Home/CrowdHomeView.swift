@@ -436,17 +436,24 @@ struct CrowdHomeView: View {
     
     private func userLocationAnnotation(coordinate: CLLocationCoordinate2D) -> some MapContent {
         Annotation("", coordinate: coordinate) {
-            ZStack {
-                Circle()
-                    .fill(.primary.opacity(0.4))
-                    .frame(width: 16, height: 16)
-                    .blur(radius: 2)
-                    .offset(x: -30, y: 20)
-                
-                Circle()
-                    .fill(.primary.opacity(0.6))
-                    .frame(width: 10, height: 10)
-                    .offset(x: -30, y: 20)
+            ZStack(alignment: .center) {
+                // Blue pulse ring (only in visibility mode)
+                if appState.isVisible {
+                    LottiePulse(size: 60)
+                        .offset(x: -30, y: 20)
+                } else {
+                    // Dark shadow (when not visible)
+                    Circle()
+                        .fill(.primary.opacity(0.4))
+                        .frame(width: 16, height: 16)
+                        .blur(radius: 2)
+                        .offset(x: -30, y: 20)
+                    
+                    Circle()
+                        .fill(.primary.opacity(0.6))
+                        .frame(width: 10, height: 10)
+                        .offset(x: -30, y: 20)
+                }
                 
                 Image("UserLocationItem")
                     .resizable()
@@ -454,13 +461,16 @@ struct CrowdHomeView: View {
                     .frame(width: 50, height: 50)
                     .offset(x: -30, y: -2)
             }
+            .onAppear {
+                print("🎯 DEBUG: User annotation rendered at (\(coordinate.latitude), \(coordinate.longitude)), visible mode: \(appState.isVisible)")
+            }
         }
         .annotationTitles(.hidden)
     }
     
     private func otherUserAnnotation(coordinate: CLLocationCoordinate2D) -> some MapContent {
         Annotation("", coordinate: coordinate) {
-            ZStack {
+            ZStack(alignment: .center) {
                 Circle()
                     .fill(.primary.opacity(0.4))
                     .frame(width: 16, height: 16)
@@ -783,7 +793,7 @@ struct CrowdHomeView: View {
                             Button(action: {
                                 selectedUserProfile = user
                             }) {
-                                ZStack {
+                                ZStack(alignment: .center) {
                                     Circle()
                                         .fill(.primary.opacity(0.4))
                                         .frame(width: 16, height: 16)
