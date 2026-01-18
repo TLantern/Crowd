@@ -12,12 +12,14 @@ struct BadgeView: View {
     let emoji: String?
     let isSelected: Bool
     let onTap: (() -> Void)?
+    let textColor: Color?
     
-    init(title: String, emoji: String? = nil, isSelected: Bool = false, onTap: (() -> Void)? = nil) {
+    init(title: String, emoji: String? = nil, isSelected: Bool = false, onTap: (() -> Void)? = nil, textColor: Color? = nil) {
         self.title = title
         self.emoji = emoji
         self.isSelected = isSelected
         self.onTap = onTap
+        self.textColor = textColor
     }
     
     var body: some View {
@@ -33,6 +35,25 @@ struct BadgeView: View {
         }
     }
     
+    // Color schemes for badges based on title hash
+    private let colorSchemes: [(background: Color, border: Color, text: Color)] = [
+        (Color.blue.opacity(0.25), Color.blue.opacity(0.5), Color.blue),
+        (Color.green.opacity(0.25), Color.green.opacity(0.5), Color.green),
+        (Color.purple.opacity(0.25), Color.purple.opacity(0.5), Color.purple),
+        (Color.orange.opacity(0.25), Color.orange.opacity(0.5), Color.orange),
+        (Color.pink.opacity(0.25), Color.pink.opacity(0.5), Color.pink),
+        (Color.red.opacity(0.25), Color.red.opacity(0.5), Color.red),
+        (Color.cyan.opacity(0.25), Color.cyan.opacity(0.5), Color.cyan)
+    ]
+    
+    private var colorSchemeForTitle: (background: Color, border: Color, text: Color) {
+        if isSelected {
+            return (Color(hex: 0x02853E), Color(hex: 0x02853E).opacity(0.3), .white)
+        }
+        let hash = abs(title.hashValue)
+        return colorSchemes[hash % colorSchemes.count]
+    }
+    
     private var badgeContent: some View {
         HStack(spacing: 6) {
             if let emoji = emoji {
@@ -43,23 +64,13 @@ struct BadgeView: View {
             Text(title)
                 .font(.system(size: 14, weight: .medium))
         }
-        .foregroundStyle(isSelected ? .white : .primary)
+        .foregroundStyle(textColor ?? colorSchemeForTitle.text)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(
-            isSelected
-            ? Color(hex: 0x02853E)
-            : Color(.systemGray5)
-        )
-        .clipShape(Capsule())
+        .background(colorSchemeForTitle.background, in: Capsule())
         .overlay(
             Capsule()
-                .stroke(
-                    isSelected
-                    ? Color(hex: 0x02853E).opacity(0.3)
-                    : Color(.systemGray4),
-                    lineWidth: 1
-                )
+                .stroke(colorSchemeForTitle.border, lineWidth: 1)
         )
     }
 }

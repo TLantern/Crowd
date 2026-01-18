@@ -9,6 +9,7 @@ import SwiftUI
 import MapKit
 import Combine
 import FirebaseFirestore
+import FirebaseAuth
 
 struct CrowdHomeView: View {
     @Environment(\.appEnvironment) var env
@@ -70,7 +71,8 @@ struct CrowdHomeView: View {
     @State private var showNavigationModal = false
     
     // MARK: - Anchors
-    @StateObject private var anchorService = AnchorService.shared
+    // Commented out temporarily
+    // @StateObject private var anchorService = AnchorService.shared
     @State private var selectedAnchor: Anchor?
     @State private var showAnchorNavigationModal = false
     @State private var expandedAnchorGroupId: String? = nil // Track which anchor group is expanded
@@ -86,9 +88,17 @@ struct CrowdHomeView: View {
     // MARK: - Event End Timer
     @State private var eventEndCheckTimer: Timer? = nil
     
-    private var anchorsToDisplay: [Anchor] {
-        anchorService.activeAnchors
-    }
+    // MARK: - Visibility State
+    @State private var visibleUsers: [UserProfile] = []
+    @State private var visibleUsersListener: ListenerRegistration?
+    @State private var selectedUserProfile: UserProfile? // For showing user profile sheet
+    @State private var showVisibilityInfo = false // Show info sheet on first visibility toggle
+    @AppStorage("hasSeenVisibilityInfo") private var hasSeenVisibilityInfo = false
+    
+    // Commented out temporarily
+    // private var anchorsToDisplay: [Anchor] {
+    //     anchorService.activeAnchors
+    // }
     
     // Group anchors by location (same coordinates)
     private func groupAnchorsByLocation(_ anchors: [Anchor]) -> [[Anchor]] {
@@ -258,8 +268,10 @@ struct CrowdHomeView: View {
         
         // Filter out expired events (events that have ended)
         let activeEvents = combined.filter { event in
-            guard let endsAt = event.endsAt else { return true }
-            return endsAt >= now
+            guard let time = event.time else { return true }
+            // Check if event time was more than 4 hours ago
+            let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+            return time >= fourHoursAgo
         }
         
         // Filter out blocked/hidden/banned/objectionable content
@@ -285,8 +297,8 @@ struct CrowdHomeView: View {
         let twoDaysFromNow = Calendar.current.date(byAdding: .day, value: 2, to: now) ?? now
         
         return upcomingEvents.filter { event in
-            guard let startsAt = event.startsAt else { return false }
-            return startsAt >= now && startsAt <= twoDaysFromNow
+            guard let time = event.time else { return false }
+            return time >= now && time <= twoDaysFromNow
         }
     }
     
@@ -305,28 +317,15 @@ struct CrowdHomeView: View {
         let now = Date()
         
         return events.filter { event in
-            // First, check if event has ended
-            if let endsAt = event.endsAt {
-                // Event has ended if end time has passed
-                if endsAt < now {
+            // Check if event time is today
+            if let time = event.time {
+                // Check if time was more than 4 hours ago
+                let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+                if time < fourHoursAgo {
                     return false
                 }
-            } else if let startsAt = event.startsAt {
-                // If no end time but has start time, assume 4 hour duration
-                let fourHoursLater = Calendar.current.date(byAdding: .hour, value: 4, to: startsAt) ?? startsAt
-                if fourHoursLater < now {
-                    return false
-                }
-            }
-            
-            // If event has a start time, check if it's today
-            if let startsAt = event.startsAt {
-                return calendar.isDateInToday(startsAt)
-            }
-            
-            // If event has an end time but no start time, check if it ends today or later
-            if let endsAt = event.endsAt {
-                return calendar.isDateInToday(endsAt) || endsAt > now
+                // Check if time is today
+                return calendar.isDateInToday(time)
             }
             
             // If no time info, include events created today (for user-created events)
@@ -338,7 +337,7 @@ struct CrowdHomeView: View {
     var currentEventsClusters: [EventCluster] {
         let calendar = Calendar.current
         let filteredUpcoming = upcomingEvents.filter { ev in
-            guard let s = ev.startsAt else { return false }
+            guard let s = ev.time else { return false }
             return calendar.isDateInToday(s)
         }
         
@@ -410,7 +409,6 @@ struct CrowdHomeView: View {
                     value: expandedClusterId
                 )
                 .onTapGesture {
-                    print("📍 Expanded event tapped: \(event.title)")
                     handleEventTap(event)
                 }
             }
@@ -438,7 +436,41 @@ struct CrowdHomeView: View {
     
     private func userLocationAnnotation(coordinate: CLLocationCoordinate2D) -> some MapContent {
         Annotation("", coordinate: coordinate) {
-            ZStack {
+            ZStack(alignment: .center) {
+                // Blue pulse ring (only in visibility mode)
+                if appState.isVisible {
+                    LottiePulse(size: 60)
+                        .offset(x: -30, y: 20)
+                } else {
+                    // Dark shadow (when not visible)
+                    Circle()
+                        .fill(.primary.opacity(0.4))
+                        .frame(width: 16, height: 16)
+                        .blur(radius: 2)
+                        .offset(x: -30, y: 20)
+                    
+                    Circle()
+                        .fill(.primary.opacity(0.6))
+                        .frame(width: 10, height: 10)
+                        .offset(x: -30, y: 20)
+                }
+                
+                Image("UserLocationItem")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 50, height: 50)
+                    .offset(x: -30, y: -2)
+            }
+            .onAppear {
+                print("🎯 DEBUG: User annotation rendered at (\(coordinate.latitude), \(coordinate.longitude)), visible mode: \(appState.isVisible)")
+            }
+        }
+        .annotationTitles(.hidden)
+    }
+    
+    private func otherUserAnnotation(coordinate: CLLocationCoordinate2D) -> some MapContent {
+        Annotation("", coordinate: coordinate) {
+            ZStack(alignment: .center) {
                 Circle()
                     .fill(.primary.opacity(0.4))
                     .frame(width: 16, height: 16)
@@ -450,7 +482,7 @@ struct CrowdHomeView: View {
                     .frame(width: 10, height: 10)
                     .offset(x: -30, y: 20)
                 
-                Image("UserLocationItem")
+                Image("OtherUsersLocation")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 50, height: 50)
@@ -460,7 +492,23 @@ struct CrowdHomeView: View {
         .annotationTitles(.hidden)
     }
     
-    private func expandedAnchorAnnotations(group: [Anchor], center: CLLocationCoordinate2D, groupId: String) -> some MapContent {
+    private func untLocationAnnotation() -> some MapContent {
+        let untCoordinate = CLLocationCoordinate2D(
+            latitude: 33.21264835416883,
+            longitude: -97.14748405043815
+        )
+        return Annotation("", coordinate: untCoordinate) {
+            UNTLogoPinView(size: 60)
+                .zIndex(200)
+        }
+        .annotationTitles(.hidden)
+    }
+    
+    // Helper struct to represent combined groups for rendering
+    // Commented out temporarily - starts here
+    /*
+    
+    func expandedAnchorAnnotations(group: [Anchor], center: CLLocationCoordinate2D, groupId: String) -> some MapContent {
         ForEach(Array(group), id: \.id) { anchor in
             let displayCoord = expandedAnchorCoordinate(
                 anchor: anchor,
@@ -481,7 +529,7 @@ struct CrowdHomeView: View {
         }
     }
     
-    private func collapsedAnchorAnnotation(anchor: Anchor, count: Int?, center: CLLocationCoordinate2D, group: [Anchor], groupId: String) -> some MapContent {
+    func collapsedAnchorAnnotation(anchor: Anchor, count: Int?, center: CLLocationCoordinate2D, group: [Anchor], groupId: String) -> some MapContent {
         Annotation("", coordinate: center) {
             AnchorAnnotationView(
                 anchor: anchor,
@@ -495,7 +543,7 @@ struct CrowdHomeView: View {
     }
     
     @MapContentBuilder
-    private func anchorGroupAnnotations(group: [Anchor]) -> some MapContent {
+    func anchorGroupAnnotations(group: [Anchor]) -> some MapContent {
         if let firstAnchor = group.first,
            let centerCoord = firstAnchor.coordinates {
             let groupId = anchorGroupId(for: group)
@@ -515,8 +563,8 @@ struct CrowdHomeView: View {
         }
     }
     
-    // Helper struct to represent combined groups for rendering
-    private struct CombinedGroup: Identifiable {
+    
+    struct CombinedGroup: Identifiable {
         let id: String
         let anchorGroup: [Anchor]
         let cluster: EventCluster
@@ -524,13 +572,13 @@ struct CrowdHomeView: View {
     }
     
     // Helper struct to represent standalone anchor groups
-    private struct StandaloneAnchorGroup: Identifiable {
+    struct StandaloneAnchorGroup: Identifiable {
         let id: String
         let group: [Anchor]
     }
     
     // Compute combined groups and standalone groups
-    private var combinedGroups: [CombinedGroup] {
+    var combinedGroups: [CombinedGroup] {
         let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
         let clusters = currentEventsClusters
         var processedClusters = Set<String>()
@@ -558,7 +606,7 @@ struct CrowdHomeView: View {
     }
     
     // Compute standalone anchor groups (not overlapping with clusters)
-    private var standaloneAnchorGroups: [StandaloneAnchorGroup] {
+    var standaloneAnchorGroups: [StandaloneAnchorGroup] {
         let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
         let clusters = currentEventsClusters
         var processedAnchorIndices = Set<Int>()
@@ -586,7 +634,7 @@ struct CrowdHomeView: View {
     }
     
     @MapContentBuilder
-    private func anchorAnnotations() -> some MapContent {
+    func anchorAnnotations() -> some MapContent {
         // Render combined groups (anchors + events at same location)
         ForEach(combinedGroups) { combinedGroup in
             let isExpanded = expandedCombinedGroupId == combinedGroup.id
@@ -613,9 +661,12 @@ struct CrowdHomeView: View {
             anchorGroupAnnotations(group: standaloneGroup.group)
         }
     }
+    */
     
+    // Commented out temporarily
+    /*
     @MapContentBuilder
-    private func combinedGroupExpandedAnnotations(
+    func combinedGroupExpandedAnnotations(
         anchorGroup: [Anchor],
         cluster: EventCluster,
         center: CLLocationCoordinate2D,
@@ -667,7 +718,7 @@ struct CrowdHomeView: View {
     }
     
     @MapContentBuilder
-    private func combinedGroupCollapsedAnnotation(
+    func combinedGroupCollapsedAnnotation(
         anchorGroup: [Anchor],
         cluster: EventCluster,
         center: CLLocationCoordinate2D,
@@ -688,9 +739,13 @@ struct CrowdHomeView: View {
             .annotationTitles(.hidden)
         }
     }
+    */
     
     // Compute clusters that don't overlap with anchors
     private var standaloneClusters: [EventCluster] {
+        // Commented out anchor filtering - return all clusters
+        return currentEventsClusters
+        /*
         let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
         let clusters = currentEventsClusters
         var processedClusters = Set<String>()
@@ -707,6 +762,7 @@ struct CrowdHomeView: View {
         
         // Return clusters that don't overlap
         return clusters.filter { !processedClusters.contains($0.id) }
+        */
     }
     
     // MARK: - Map View
@@ -722,7 +778,49 @@ struct CrowdHomeView: View {
             }
             
             // Anchor annotations (includes combined groups)
-            anchorAnnotations()
+            // Commented out temporarily
+            // anchorAnnotations()
+            
+            // UNT location annotation
+            untLocationAnnotation()
+            
+            // Other visible users annotations (only when visibility is enabled)
+            if appState.isVisible {
+                ForEach(visibleUsers) { user in
+                    if let latitude = user.latitude, let longitude = user.longitude {
+                        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+                        Annotation("", coordinate: coordinate) {
+                            Button(action: {
+                                selectedUserProfile = user
+                            }) {
+                                ZStack(alignment: .center) {
+                                    Circle()
+                                        .fill(.primary.opacity(0.4))
+                                        .frame(width: 16, height: 16)
+                                        .blur(radius: 2)
+                                        .offset(x: -30, y: 20)
+                                    
+                                    Circle()
+                                        .fill(.primary.opacity(0.6))
+                                        .frame(width: 10, height: 10)
+                                        .offset(x: -30, y: 20)
+                                    
+                                    Image("OtherUsersLocation")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 50, height: 50)
+                                        .offset(x: -30, y: -2)
+                                }
+                                .opacity(appState.isVisible ? 1.0 : 0.0)
+                                .scaleEffect(appState.isVisible ? 1.0 : 0.3)
+                                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: appState.isVisible)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .annotationTitles(.hidden)
+                    }
+                }
+            }
             
             // User location annotation (rendered last to ensure it's always on top)
             if let userLocation = locationService.lastKnown {
@@ -739,6 +837,8 @@ struct CrowdHomeView: View {
                     } else if showSearchResults {
                         isSearchFocused = false
                         showSearchResults = false
+                    // Commented out anchor-related tap handlers
+                    /*
                     } else if expandedCombinedGroupId != nil {
                         // Collapse expanded combined groups when tapping on map
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -749,11 +849,11 @@ struct CrowdHomeView: View {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             expandedAnchorGroupId = nil
                         }
+                    */
                     } else if expandedClusterId != nil {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                             expandedClusterId = nil
                         }
-                        print("📍 Collapsed cluster via background tap")
                     }
                 }
         )
@@ -763,6 +863,11 @@ struct CrowdHomeView: View {
             snapTo(selectedRegion)
             AnalyticsService.shared.trackScreenView("home")
             AnalyticsService.shared.track("map_viewed", props: [:])
+            
+            // Start visible users listener if visibility is enabled
+            if appState.isVisible {
+                startVisibleUsersListener()
+            }
             
             // Capture location synchronously to avoid concurrency warnings
             let location = locationService.lastKnown
@@ -787,25 +892,21 @@ struct CrowdHomeView: View {
         currentCamera = ctx.camera
         currentCameraDistance = ctx.camera.distance
         
-        if expandedCombinedGroupId != nil && currentCameraDistance >= 3000 {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                expandedCombinedGroupId = nil
-            }
-            print("📍 Auto-collapsed combined group at distance 3000")
-        }
-        
         if expandedClusterId != nil && currentCameraDistance >= 3000 {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 expandedClusterId = nil
             }
-            print("📍 Auto-collapsed cluster at distance 3000")
         }
+        // Commented out anchor-related camera change handlers end here
         
-        if expandedAnchorGroupId != nil && currentCameraDistance >= 3000 {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                expandedAnchorGroupId = nil
+        // Update visible users query when camera changes (debounced)
+        if appState.isVisible {
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms debounce
+                if appState.isVisible {
+                    startVisibleUsersListener()
+                }
             }
-            print("📍 Auto-collapsed anchor group at distance 3000")
         }
         
         let spec = selectedRegion.spec
@@ -845,23 +946,27 @@ struct CrowdHomeView: View {
                     await loadFirebaseEvents()
                     await loadUpcomingEvents()
                     
+                    // Preload calendar events in background while user is on map view
+                    // This ensures school events are fetched from Firebase even if user hasn't navigated to calendar yet
+                    await preloadCalendarEvents()
+                    
                     // Load moderation data
                     await loadModerationData()
                     
                     // Load anchors
-                    await anchorService.loadAnchors()
-                    anchorService.startPeriodicUpdates()
+                    // Commented out temporarily
+                    // await anchorService.loadAnchors()
+                    // anchorService.startPeriodicUpdates()
                     
                     // Debug: Print anchor status
-                    print("📍 CrowdHomeView: Loaded \(anchorService.anchors.count) total anchors")
-                    print("📍 CrowdHomeView: \(anchorService.activeAnchors.count) active anchors")
+                    // print("📍 CrowdHomeView: Loaded \(anchorService.anchors.count) total anchors")
+                    // print("📍 CrowdHomeView: \(anchorService.activeAnchors.count) active anchors")
                     
                     // Clean up expired events from database on app start
                     if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
                         do {
                             try await firebaseRepo.deleteExpiredEvents()
                         } catch {
-                            print("❌ Failed to delete expired events on app start: \(error.localizedDescription)")
                         }
                     }
                     
@@ -873,6 +978,44 @@ struct CrowdHomeView: View {
                     stopNewEventListeners()
                     bannerDismissTimer?.invalidate()
                     bannerDismissTimer = nil
+                    stopVisibleUsersListener()
+                }
+                .onChange(of: appState.isVisible) { _, isVisible in
+                    if isVisible {
+                        startVisibleUsersListener()
+                    } else {
+                        stopVisibleUsersListener()
+                        visibleUsers = []
+                    }
+                }
+                .sheet(item: $selectedUserProfile) { user in
+                    UserProfileSheetView(user: user)
+                        .presentationDetents([.height(600), .large])
+                        .presentationDragIndicator(.visible)
+                }
+                .sheet(isPresented: $showVisibilityInfo) {
+                    VisibilityInfoSheet {
+                        hasSeenVisibilityInfo = true
+                        // Proceed with toggling visibility
+                        Task {
+                            guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+                                return
+                            }
+                            
+                            do {
+                                try await VisibilityService.shared.toggleVisibility(userId: userId)
+                                
+                                let updatedProfile = try await UserProfileService.shared.fetchProfile(userId: userId)
+                                
+                                await MainActor.run {
+                                    appState.sessionUser = updatedProfile
+                                    appState.isVisible = updatedProfile.isVisible
+                                }
+                            } catch {
+                                // Handle error silently or show user feedback
+                            }
+                        }
+                    }
                 }
                 .onChange(of: selectedRegion) { _, newRegion in
                     Task {
@@ -882,19 +1025,20 @@ struct CrowdHomeView: View {
                 .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
                     removeExpiredEvents()
                     Task {
-                        await anchorService.updateActiveAnchors()
-                        // Track anchor activations for analytics
-                        for anchor in anchorService.activeAnchors {
-                            if let coordinate = anchor.coordinates {
-                                let zone = coordinate.geohash(precision: 4)
-                                AnalyticsService.shared.trackAnchorActivated(
-                                    anchorId: anchor.id,
-                                    anchorName: anchor.name,
-                                    location: anchor.location,
-                                    zone: zone
-                                )
-                            }
-                        }
+                        // Commented out temporarily
+                        // await anchorService.updateActiveAnchors()
+                        // // Track anchor activations for analytics
+                        // for anchor in anchorService.activeAnchors {
+                        //     if let coordinate = anchor.coordinates {
+                        //         let zone = coordinate.geohash(precision: 4)
+                        //         AnalyticsService.shared.trackAnchorActivated(
+                        //             anchorId: anchor.id,
+                        //             anchorName: anchor.name,
+                        //             location: anchor.location,
+                        //             zone: zone
+                        //         )
+                        //     }
+                        // }
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { notification in
@@ -974,7 +1118,6 @@ struct CrowdHomeView: View {
         eventListener = eventRef.addSnapshotListener { snapshot, error in
             Task { @MainActor in
                 if let error = error {
-                    print("⚠️ CrowdHomeView: Error listening to event: \(error)")
                     // Try userEvents collection as fallback
                     tryUserEventsListener(for: event)
                     return
@@ -983,7 +1126,6 @@ struct CrowdHomeView: View {
                 if let data = snapshot?.data(),
                    let attendeeCount = data["attendeeCount"] as? Int {
                     liveAttendeeCount = attendeeCount
-                    print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
                 } else if !(snapshot?.exists ?? false) {
                     // Document doesn't exist in events, try userEvents
                     tryUserEventsListener(for: event)
@@ -1000,17 +1142,52 @@ struct CrowdHomeView: View {
         eventListener = eventRef.addSnapshotListener { snapshot, error in
             Task { @MainActor in
                 if let error = error {
-                    print("⚠️ CrowdHomeView: Error listening to userEvent: \(error)")
                     return
                 }
                 
                 if let data = snapshot?.data(),
                    let attendeeCount = data["attendeeCount"] as? Int {
                     liveAttendeeCount = attendeeCount
-                    print("📊 CrowdHomeView: Updated attendee count to \(attendeeCount)")
                 }
             }
         }
+    }
+    
+    // MARK: - Visible Users Listener
+    
+    private func startVisibleUsersListener() {
+        // Stop existing listener
+        stopVisibleUsersListener()
+        
+        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+            return
+        }
+        
+        guard appState.isVisible else {
+            return
+        }
+        
+        // Use currentCamera from handleCameraChange
+        let camera = currentCamera
+        
+        // Get blocked user IDs
+        let blockedUserIds = blockedUserIds
+        
+        // Set up listener
+        visibleUsersListener = VisibilityService.shared.listenToVisibleUsers(
+            in: camera,
+            currentUserId: userId,
+            blockedUserIds: blockedUserIds
+        ) { [self] (users: [UserProfile]) in
+            Task { @MainActor in
+                self.visibleUsers = users
+            }
+        }
+    }
+    
+    private func stopVisibleUsersListener() {
+        visibleUsersListener?.remove()
+        visibleUsersListener = nil
     }
     
     // MARK: - Event End Check Timer
@@ -1031,18 +1208,15 @@ struct CrowdHomeView: View {
                 let now = Date()
                 var eventHasEnded = false
                 
-                if let endsAt = joinedEvent.endsAt {
-                    eventHasEnded = endsAt < now
-                } else if let startsAt = joinedEvent.startsAt {
-                    // If no end time, assume 4 hour duration
-                    let fourHoursLater = Calendar.current.date(byAdding: .hour, value: 4, to: startsAt) ?? startsAt
-                    eventHasEnded = fourHoursLater < now
+                if let time = joinedEvent.time {
+                    // Check if event time was more than 4 hours ago
+                    let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+                    eventHasEnded = time < fourHoursAgo
                 }
                 
                 if eventHasEnded {
                     // Clear the joined event
                     state.currentJoinedEvent = nil
-                    print("✅ Cleared ended joined event: \(joinedEvent.title)")
                 }
             }
         }
@@ -1059,17 +1233,13 @@ struct CrowdHomeView: View {
         let now = Date()
         var eventHasEnded = false
         
-        if let endsAt = joinedEvent.endsAt {
-            // Event has ended if end time has passed
-            eventHasEnded = endsAt < now
-        } else if let startsAt = joinedEvent.startsAt {
-            // If no end time but has start time, assume 4 hour duration
-            let fourHoursLater = Calendar.current.date(byAdding: .hour, value: 4, to: startsAt) ?? startsAt
-            eventHasEnded = fourHoursLater < now
+        if let time = joinedEvent.time {
+            // Check if event time was more than 4 hours ago
+            let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+            eventHasEnded = time < fourHoursAgo
         }
         
         if eventHasEnded {
-            print("⏰ Event '\(joinedEvent.title)' has ended, clearing from map and chat")
             appState.currentJoinedEvent = nil
             eventListener?.remove()
             eventListener = nil
@@ -1098,7 +1268,6 @@ struct CrowdHomeView: View {
             .addSnapshotListener { snapshot, error in
                 Task { @MainActor in
                     if let error = error {
-                        print("❌ CrowdHomeView: Error listening to new events: \(error)")
                         return
                     }
                     
@@ -1128,7 +1297,6 @@ struct CrowdHomeView: View {
             .addSnapshotListener { snapshot, error in
                 Task { @MainActor in
                     if let error = error {
-                        print("❌ CrowdHomeView: Error listening to new userEvents: \(error)")
                         return
                     }
                     
@@ -1183,10 +1351,7 @@ struct CrowdHomeView: View {
             // Show banner
             newEventBanner = event
             startBannerDismissTimer()
-            
-            print("🔔 New event detected: \(event.title) (ID: \(eventId))")
         } catch {
-            print("❌ Failed to parse new event: \(error)")
         }
     }
     
@@ -1215,7 +1380,6 @@ struct CrowdHomeView: View {
             // Leave previous event if user is already in one
             let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
             if let previousEvent = attendedEvents.first(where: { $0.id != event.id }) {
-                print("🔄 Leaving previous event before joining new one: \(previousEvent.id)")
                 let viewModel = EventDetailViewModel(eventRepo: env.eventRepo)
                 await viewModel.leaveEvent(event: previousEvent)
                 
@@ -1305,9 +1469,9 @@ struct CrowdHomeView: View {
                 let panelHeight: CGFloat = 140
 
                 VStack(spacing: 0) {
-                    // === Centered main navbar (region picker) ===
-                    VStack(spacing: 8) {
-                        // Main region picker (centered)
+                    // === Centered main navbar (region picker) with eye button ===
+                    ZStack {
+                        // Region picker (centered)
                         Menu {
                             ForEach(CampusRegion.allCases) { region in
                                 Button {
@@ -1322,18 +1486,60 @@ struct CrowdHomeView: View {
                                 HStack(spacing: 10) {
                                     Text(selectedRegion.displayName)
                                         .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(.primary)
+                                        .foregroundStyle(.black)
                                         .lineLimit(1)
                                     Image(systemName: "chevron.down")
                                         .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(.primary.opacity(0.8))
+                                        .foregroundStyle(.black.opacity(0.8))
                                 }
                                 .padding(.horizontal, 12)
                             }
                         }
                         .fixedSize()
-                        .frame(maxWidth: geo.size.width * 0.9)
+                        
+                        // Eye icon button (visibility toggle) - absolute positioned to right
+                        HStack {
+                            Spacer()
+                            
+                            FrostedEyesButton(
+                                baseSize: 54,
+                                targetSize: 54,
+                                frostOpacity: 1.0,
+                                highlightColor: Color(hex: 0x8A5A3C),
+                                containerColor: Color(hex: 0xFFFFFF),
+                                isGhostMode: appState.isVisible // Show ghost when visible, eyes when not
+                            ) {
+                                Haptics.light()
+                                
+                                // Show info sheet on first use
+                                if !hasSeenVisibilityInfo && !appState.isVisible {
+                                    showVisibilityInfo = true
+                                } else {
+                                    Task {
+                                        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+                                            return
+                                        }
+                                        
+                                        do {
+                                            try await VisibilityService.shared.toggleVisibility(userId: userId)
+                                            
+                                            // Reload profile to get updated visibility state and expiration
+                                            let updatedProfile = try await UserProfileService.shared.fetchProfile(userId: userId)
+                                            
+                                            await MainActor.run {
+                                                appState.sessionUser = updatedProfile
+                                                appState.isVisible = updatedProfile.isVisible
+                                            }
+                                        } catch {
+                                            // Handle error silently or show user feedback
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.trailing, 16)
+                        }
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.top, 0)
                     .offset(y: -18)
                     .zIndex(5)
@@ -1359,118 +1565,13 @@ struct CrowdHomeView: View {
 
                     Spacer(minLength: 0)
 
-                    // Event Search Bar
-                    VStack(spacing: 0) {
-                        GlassPill(height: 40, horizontalPadding: 12) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(.primary.opacity(0.6))
-                                
-                                TextField("Search by Name…", text: $searchText)
-                                    .focused($isSearchFocused)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(.primary)
-                                    .onChange(of: searchText) { _, newValue in
-                                        // Debounce search results update
-                                        Task { @MainActor in
-                                            try? await Task.sleep(nanoseconds: 200_000_000)
-                                            if searchText == newValue {
-                                                showSearchResults = !newValue.isEmpty
-                                            }
-                                        }
-                                    }
-                                    .onSubmit {
-                                        if let firstEvent = filteredEvents.first {
-                                            navigateToEvent(firstEvent)
-                                        }
-                                    }
-                                
-                                if !searchText.isEmpty {
-                                    Button(action: {
-                                        searchText = ""
-                                        isSearchFocused = false
-                                        showSearchResults = false
-                                    }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 14, weight: .medium))
-                                            .foregroundStyle(.primary.opacity(0.5))
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                        }
-                        .frame(maxWidth: min(geo.size.width * 0.42, 260))
-                        .padding(.bottom, 12)
-                        
-                        // Search Results Dropdown
-                        if showSearchResults && !filteredEvents.isEmpty {
-                            ScrollView {
-                                VStack(spacing: 0) {
-                                    ForEach(filteredEvents) { event in
-                                        Button(action: {
-                                            navigateToEvent(event)
-                                        }) {
-                                            HStack(spacing: 12) {
-                                                VStack(alignment: .leading, spacing: 4) {
-                                                    Text(event.title)
-                                                        .font(.system(size: 16, weight: .semibold))
-                                                        .foregroundStyle(.primary)
-                                                        .lineLimit(1)
-                                                    
-                                                    if let dateFormatted = event.dateFormatted {
-                                                        Text(dateFormatted)
-                                                            .font(.system(size: 13))
-                                                            .foregroundStyle(.secondary)
-                                                    }
-                                                }
-                                                
-                                                Spacer()
-                                                
-                                                Image(systemName: "chevron.right")
-                                                    .font(.system(size: 14, weight: .semibold))
-                                                    .foregroundStyle(.secondary.opacity(0.5))
-                                            }
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 12)
-                                            .background(.ultraThinMaterial)
-                                        }
-                                        .buttonStyle(.plain)
-                                        
-                                        if event.id != filteredEvents.last?.id {
-                                            Divider()
-                                                .padding(.leading, 16)
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(maxHeight: 300)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(.white.opacity(0.12), lineWidth: 1)
-                            )
-                            .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
-                            .frame(maxWidth: min(geo.size.width * 0.84, 520))
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.bottom, 8)
-
                     // Bottom frosted panel + FAB cluster
                     ZStack {
-                        // Frosted base
+                        // Frosted base with dual shadow layers
                         RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                    .stroke(.white.opacity(0.12), lineWidth: 1)
-                            )
-                            .background(
-                                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                            )
-                            .shadow(color: .black.opacity(0.12), radius: 14, x: 0, y: 8)
+                            .fill(Color(hex: 0xF5F7FA))
+                            .shadow(color: Color.black.opacity(0.07), radius: 15, x: 0, y: 3)  // Layer 1: Separation
+                            .shadow(color: Color.black.opacity(0.14), radius: 7, x: 0, y: 1.5)  // Layer 2: Contact
                             .frame(width: panelWidth, height: panelHeight)
                             .allowsHitTesting(false)
 
@@ -1481,43 +1582,55 @@ struct CrowdHomeView: View {
                             let sideYOffset: CGFloat = panelHeight * 0.16
 
                             ZStack {
-                                // Center FAB — Host
-                                FABPlusButton(size: fabSize, color: Color(hex: 0x02853E)) {
+                                // Center FAB — Host (Fire animation)
+                                FrostedFireButton(
+                                    baseSize: fabSize,
+                                    targetSize: 82,
+                                    frostOpacity: 1.0,
+                                    highlightColor: Color(hex: 0xff8a00),
+                                    containerColor: Color(hex: 0xFFFFFF)
+                                ) {
                                     showHostSheet = true
                                     Haptics.light()
                                 }
                                 .offset(y: centerYOffset)
 
                                  // Left — Profile (open at 3/4 screen)
-                                 FrostedIconButton(
-                                     systemName: "person",
-                                     baseSize: 54,
-                                     targetSize: 72,
-                                     frostOpacity: 0.22,
-                                     iconBaseColor: .primary,
-                                     highlightColor: Color(red: 0.63, green: 0.82, blue: 1.0)
-                                 ) {
-                                     route = .profile
-                                     overlaySnapIndex = 1
-                                     overlayPresented = true
-                                     Haptics.light()
+                                 ZStack {
+                                     FrostedIconButton(
+                                         systemName: "person",
+                                         baseSize: 54,
+                                         targetSize: 72,
+                                         frostOpacity: 1.0,
+                                         iconBaseColor: Color(hex: 0x5880ad),
+                                         highlightColor: Color(hex: 0x5880ad),
+                                         containerColor: Color(hex: 0xFFFFFF)
+                                     ) {
+                                         route = .profile
+                                         overlaySnapIndex = 1
+                                         overlayPresented = true
+                                         Haptics.light()
+                                     }
+                                     .accessibilityLabel("Open profile")
                                  }
-                                 .accessibilityLabel("Open profile")
                                  .offset(x: -spread, y: sideYOffset)
 
                                 // Right — Calendar
-                                FrostedIconButton(
-                                    systemName: "calendar",
-                                    baseSize: 54,
-                                    targetSize: 72,
-                                    frostOpacity: 0.22,
-                                    iconBaseColor: .primary,
-                                    highlightColor: .blue
-                                ) {
-                                    showCalendar = true
-                                    Haptics.light()
+                                ZStack {
+                                    FrostedIconButton(
+                                        systemName: "calendar",
+                                        baseSize: 54,
+                                        targetSize: 72,
+                                        frostOpacity: 1.0,
+                                        iconBaseColor: Color(hex: 0x8B0F1A),
+                                        highlightColor: Color(hex: 0x8B0F1A),
+                                        containerColor: Color(hex: 0xFFFFFF)
+                                    ) {
+                                        showCalendar = true
+                                        Haptics.light()
+                                    }
+                                    .accessibilityLabel("Open calendar")
                                 }
-                                .accessibilityLabel("Open calendar")
                                 .offset(x: spread, y: sideYOffset)
                             }
 
@@ -1621,7 +1734,6 @@ struct CrowdHomeView: View {
                 
                 do {
                     try await env.eventRepo.create(event: event)
-                    print("✅ Event created in Firebase: \(event.id)")
                     
                     // Track analytics with zone
                     let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
@@ -1652,10 +1764,7 @@ struct CrowdHomeView: View {
                             
                             // Track analytics
                             AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title, zone: zone)
-                            
-                            print("✅ Automatically joined created event: \(event.id)")
                         } catch {
-                            print("⚠️ Failed to auto-join created event: \(error)")
                         }
                     }
                     
@@ -1678,7 +1787,6 @@ struct CrowdHomeView: View {
                         }
                     }
                 } catch {
-                    print("❌ Failed to create event in Firebase: \(error)")
                     await MainActor.run {
                         hostedEvents.append(event)
                     }
@@ -1725,8 +1833,6 @@ struct CrowdHomeView: View {
             userEventsFromFirebase.removeAll { $0.id == eventId }
             upcomingEvents.removeAll { $0.id == eventId }
             
-            print("🗑️ Removed deleted event from all arrays: \(eventId)")
-            
             if expandedClusterId != nil {
                 withAnimation(.easeOut(duration: 0.3)) {
                     expandedClusterId = nil
@@ -1737,8 +1843,6 @@ struct CrowdHomeView: View {
     
     private func handleNavigateToEvent(_ notification: Notification) {
         if let eventId = notification.userInfo?["eventId"] as? String {
-            print("📲 Navigating to event from notification: \(eventId)")
-            
             if let event = allEvents.first(where: { $0.id == eventId }) {
                 selectedEvent = event
             } else {
@@ -1771,9 +1875,6 @@ struct CrowdHomeView: View {
                     // Track seen event IDs
                     let allLoadedEvents = official + userCreated
                     seenEventIds = Set(allLoadedEvents.map { $0.id })
-                    
-                    print("✅ Loaded \(official.count) official events and \(userCreated.count) user-created events from Firebase")
-                    print("📋 Tracking \(seenEventIds.count) seen event IDs")
                 }
             } else {
                 // Fallback for mock repository or other implementations
@@ -1782,7 +1883,6 @@ struct CrowdHomeView: View {
                     officialEvents = events
                     userEventsFromFirebase = []
                     isLoadingEvents = false
-                    print("✅ Loaded \(events.count) events from repository (using fallback)")
                 }
             }
         } catch {
@@ -1790,7 +1890,6 @@ struct CrowdHomeView: View {
                 officialEvents = []
                 userEventsFromFirebase = []
                 isLoadingEvents = false
-                print("❌ Failed to load Firebase events: \(error.localizedDescription)")
             }
         }
     }
@@ -1804,9 +1903,21 @@ struct CrowdHomeView: View {
         try? await Task.sleep(nanoseconds: 1_000_000_000)
         await MainActor.run {
             upcomingEvents = campusEventsVM.crowdEvents
-            print("✅ Loaded \(upcomingEvents.count) upcoming events")
         }
         campusEventsVM.stop()
+    }
+    
+    // MARK: - Calendar Events Preloading
+    
+    /// Preloads calendar events (parties/school events) using cache-and-refresh pattern:
+    /// Step 1: Cache loads immediately on app start (in singleton init)
+    /// Step 2: Fire fresh Firebase fetch in parallel
+    /// Step 3: Replace cache with server data when it arrives
+    /// This ensures low latency when navigating to CalendarView
+    private func preloadCalendarEvents() async {
+        // Step 2: Fire fresh fetch in parallel (cache already loaded in Step 1)
+        let sharedVM = await CampusEventsViewModel.shared
+        await sharedVM.fetchOnce(limit: 200) // Preload with high limit to get all future events
     }
     
     // MARK: - Moderation Data Loading
@@ -1825,10 +1936,8 @@ struct CrowdHomeView: View {
                 blockedUserIds = blockedResult
                 hiddenEventIds = hiddenResult
                 bannedUserIds = bannedResult
-                print("✅ Loaded moderation data: \(blockedResult.count) blocked, \(hiddenResult.count) hidden, \(bannedResult.count) banned")
             }
         } catch {
-            print("⚠️ Failed to load moderation data: \(error.localizedDescription)")
         }
     }
     
@@ -1841,31 +1950,41 @@ struct CrowdHomeView: View {
         let expiredEventIds = Set(
             (upcomingEvents + officialEvents + userEventsFromFirebase + hostedEvents)
                 .filter { event in
-                    guard let endsAt = event.endsAt else { return false }
-                    return endsAt < now
+                    guard let time = event.time else { return false }
+                    // Check if event time was more than 4 hours ago
+                    let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+                    return time < fourHoursAgo
                 }
                 .map { $0.id }
         )
         
         // Remove events that have ended (immediately when end time is reached)
         upcomingEvents.removeAll { event in
-            guard let endsAt = event.endsAt else { return false }
-            return endsAt < now
+            guard let time = event.time else { return false }
+            // Check if event time was more than 4 hours ago
+            let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+            return time < fourHoursAgo
         }
         
         officialEvents.removeAll { event in
-            guard let endsAt = event.endsAt else { return false }
-            return endsAt < now
+            guard let time = event.time else { return false }
+            // Check if event time was more than 4 hours ago
+            let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+            return time < fourHoursAgo
         }
         
         userEventsFromFirebase.removeAll { event in
-            guard let endsAt = event.endsAt else { return false }
-            return endsAt < now
+            guard let time = event.time else { return false }
+            // Check if event time was more than 4 hours ago
+            let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+            return time < fourHoursAgo
         }
         
         hostedEvents.removeAll { event in
-            guard let endsAt = event.endsAt else { return false }
-            return endsAt < now
+            guard let time = event.time else { return false }
+            // Check if event time was more than 4 hours ago
+            let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
+            return time < fourHoursAgo
         }
         
         // Remove expired events from attended events service (this will hide the join button)
@@ -1892,7 +2011,6 @@ struct CrowdHomeView: View {
                     do {
                         try await firebaseRepo.deleteExpiredEvents()
                     } catch {
-                        print("❌ Failed to delete expired events from database: \(error.localizedDescription)")
                     }
                 }
             }
@@ -1917,7 +2035,6 @@ struct CrowdHomeView: View {
                         batch.deleteDocument(doc.reference)
                     }
                     try await batch.commit()
-                    print("✅ Removed \(signalsSnapshot.documents.count) signal(s) for expired event \(eventId)")
                 }
                 
                 // Delete attendances for this event
@@ -1931,10 +2048,8 @@ struct CrowdHomeView: View {
                         batch.deleteDocument(doc.reference)
                     }
                     try await batch.commit()
-                    print("✅ Removed \(attendancesSnapshot.documents.count) attendance(s) for expired event \(eventId)")
                 }
             } catch {
-                print("❌ Failed to remove users from expired event \(eventId): \(error)")
             }
         }
     }
@@ -1948,16 +2063,13 @@ struct CrowdHomeView: View {
     
     // MARK: - Cluster Handlers
     private func handleClusterTap(_ cluster: EventCluster) {
-        print("🎯 handleClusterTap called - isSingleEvent: \(cluster.isSingleEvent), count: \(cluster.eventCount)")
         if cluster.isSingleEvent {
             // Single event - show detail directly
             if let event = cluster.events.first {
-                print("✅ Showing detail for single event: \(event.title)")
                 selectedEvent = event
             }
         } else {
             // Multi-event cluster - show dropdown list (NO ZOOM)
-            print("📋 Showing dropdown for \(cluster.eventCount) events")
             Haptics.light()
             
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -1977,13 +2089,13 @@ struct CrowdHomeView: View {
     }
     
     private func handleEventTap(_ event: CrowdEvent) {
-        print("✅ handleEventTap called for: \(event.title)")
         selectedEvent = event
     }
     
     // MARK: - Anchor Handlers
-    
-    private func handleAnchorGroupTap(group: [Anchor], groupId: String) {
+    // Commented out temporarily
+    /*
+    func handleAnchorGroupTap(group: [Anchor], groupId: String) {
         // If single anchor, open modal directly
         if group.count == 1, let anchor = group.first {
             handleAnchorTap(anchor)
@@ -2003,7 +2115,7 @@ struct CrowdHomeView: View {
         }
     }
     
-    private func handleCombinedGroupTap(anchorGroup: [Anchor], cluster: EventCluster, groupId: String) {
+    func handleCombinedGroupTap(anchorGroup: [Anchor], cluster: EventCluster, groupId: String) {
         // If single anchor and single event, show anchor modal
         if anchorGroup.count == 1 && cluster.eventCount == 1, let anchor = anchorGroup.first {
             handleAnchorTap(anchor)
@@ -2028,9 +2140,7 @@ struct CrowdHomeView: View {
         }
     }
     
-    private func handleAnchorTap(_ anchor: Anchor) {
-        print("📍 Anchor tapped: \(anchor.name)")
-        
+    func handleAnchorTap(_ anchor: Anchor) {
         // Start chat listening immediately (before modal opens) if user ID is available
         if let userId = FirebaseManager.shared.getCurrentUserId() {
             EventChatService.shared.startListening(eventId: anchor.id, currentUserId: userId)
@@ -2054,6 +2164,7 @@ struct CrowdHomeView: View {
             }
         }
     }
+    */
     
     // MARK: - Event Search Navigation
     private func navigateToEvent(_ event: CrowdEvent) {
@@ -2194,17 +2305,6 @@ private struct BottomOverlay<Content: View>: View {
         let open = (targets.last ?? 1)
         let visible = min(1, currentHeight(targets: targets) / open)
         return Double(0.45 * visible)
-    }
-}
-
-// MARK: - Safe indexing helpers
-private extension Array where Element == CGFloat {
-    subscript(safe index: Int) -> CGFloat? {
-        indices.contains(index) ? self[index] : nil
-    }
-    subscript(clamped index: Int) -> CGFloat {
-        if isEmpty { return 0 }
-        return self[Swift.max(0, Swift.min(index, count - 1))]
     }
 }
 

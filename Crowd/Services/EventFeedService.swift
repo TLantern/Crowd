@@ -120,8 +120,7 @@ private func mapInstagramRecordToCrowdEvent(
         hostName: hostName,
         category: nil,
         description: description,
-        startsAt: startDate,
-        endsAt: nil
+        time: startDate
     )
 
     return ev
@@ -170,8 +169,8 @@ final class InstagramEventsViewModel: ObservableObject {
 
                 // Sort soonest first using startsAt if present
                 nextEvents.sort { a, b in
-                    let aStart = a.startsAt ?? .distantFuture
-                    let bStart = b.startsAt ?? .distantFuture
+                    let aStart = a.time ?? .distantFuture
+                    let bStart = b.time ?? .distantFuture
                     return aStart < bStart
                 }
 

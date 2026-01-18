@@ -24,7 +24,9 @@ final class AppState: ObservableObject {
             saveCurrentJoinedEvent()
         }
     }
+    @Published var isVisible: Bool = false
     
+    private var visibilityCheckTimer: Timer?
     private var locationUpdateCancellable: AnyCancellable?
     private var lastLocationSaveTime: Date?
     private let userDefaults = UserDefaults.standard
@@ -51,6 +53,9 @@ final class AppState: ObservableObject {
             
             // Load user profile
             await loadUserProfile(userId: userId)
+            
+            // Start visibility expiration check
+            startVisibilityExpirationCheck(userId: userId)
             
             // Start monitoring location updates
             startLocationMonitoring(userId: userId)
@@ -118,7 +123,24 @@ final class AppState: ObservableObject {
             let profile = try await UserProfileService.shared.fetchProfile(userId: userId)
             await MainActor.run {
                 self.sessionUser = profile
+                
+                // Check if visibility has expired
+                if let expiresAt = profile.visibilityExpiresAt, Date() > expiresAt {
+                    self.isVisible = false
+                    // Auto-disable expired visibility
+                    Task {
+                        try? await VisibilityService.shared.updateVisibilityInFirestore(
+                            userId: userId,
+                            isVisible: false,
+                            expiresAt: nil
+                        )
+                    }
+                } else {
+                self.isVisible = profile.isVisible
+                }
+                
                 print("✅ Loaded user profile: \(profile.displayName)")
+                print("👁️ Visibility state loaded: \(self.isVisible)")
             }
             
             // Identify user in Superwall if profile exists (not anonymous)
@@ -129,6 +151,37 @@ final class AppState: ObservableObject {
         } catch {
             print("⚠️ Failed to load user profile: \(error.localizedDescription)")
             // Keep anonymous profile as fallback
+        }
+    }
+    
+    // MARK: - Visibility Expiration Check
+    
+    private func startVisibilityExpirationCheck(userId: String) {
+        // Check every 60 seconds if visibility has expired
+        visibilityCheckTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self,
+                      let profile = self.sessionUser,
+                      profile.isVisible,
+                      let expiresAt = profile.visibilityExpiresAt else { return }
+                
+                if Date() > expiresAt {
+                    print("👁️ Visibility expired, auto-disabling")
+                    self.isVisible = false
+                    
+                    // Update Firestore
+                    try? await VisibilityService.shared.updateVisibilityInFirestore(
+                        userId: userId,
+                        isVisible: false,
+                        expiresAt: nil
+                    )
+                    
+                    // Reload profile to sync
+                    if let updated = try? await UserProfileService.shared.fetchProfile(userId: userId) {
+                        self.sessionUser = updated
+                    }
+                }
+            }
         }
     }
     
@@ -202,12 +255,10 @@ final class AppState: ObservableObject {
         let now = Date()
         
         let eventHasFinished: Bool
-        if let endsAt = event.endsAt {
-            eventHasFinished = endsAt < now
-        } else if let startsAt = event.startsAt {
-            // If no end time, check if event started more than 4 hours ago
+        if let time = event.time {
+            // Check if event time was more than 4 hours ago
             let fourHoursAgo = Calendar.current.date(byAdding: .hour, value: -4, to: now) ?? now
-            eventHasFinished = startsAt < fourHoursAgo
+            eventHasFinished = time < fourHoursAgo
         } else {
             eventHasFinished = false
         }

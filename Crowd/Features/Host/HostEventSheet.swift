@@ -231,15 +231,12 @@ struct HostEventSheet: View {
     // MARK: - Create Event
     
     private func createEvent() {
-        let finalStartsAt: Date?
-        let finalEndsAt: Date?
+        let finalTime: Date?
         
         if timeMode == .now {
-            finalStartsAt = Date()
-            finalEndsAt = Date().addingTimeInterval(7200) // 2 hours default
+            finalTime = Date()
         } else {
-            finalStartsAt = startDate
-            finalEndsAt = endDate
+            finalTime = startDate
         }
         
         // Debug: Print coordinate BEFORE creating event
@@ -257,8 +254,7 @@ struct HostEventSheet: View {
             hostName: appState.sessionUser?.displayName ?? "Guest",
             category: category.rawValue,
             description: eventDescription.isEmpty ? nil : eventDescription,
-            startsAt: finalStartsAt,
-            endsAt: finalEndsAt,
+            time: finalTime,
             tags: tags
         )
         

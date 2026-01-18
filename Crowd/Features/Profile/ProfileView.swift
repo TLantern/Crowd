@@ -576,8 +576,8 @@ struct AttendedEventRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 
-                if let startsAt = event.startsAt {
-                    Text(formatEventDate(startsAt))
+                if let time = event.time {
+                    Text(formatEventDate(time))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }

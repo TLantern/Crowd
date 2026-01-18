@@ -34,68 +34,69 @@ struct ClusterEventFloatingCard: View {
             
             Divider()
             
-            // Scrollable event list
-            ScrollView(showsIndicators: true) {
-                VStack(spacing: 0) {
-                    ForEach(cluster.events) { event in
-                        Button(action: { 
-                            onSelect(event)
-                        }) {
-                            HStack(alignment: .top, spacing: 12) {
-                                // Event emoji
-                                Text(event.categoryEmoji)
-                                    .font(.system(size: 32))
-                                    .frame(width: 44, height: 44)
-                                
-                                // Event details
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(event.title)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                        .multilineTextAlignment(.leading)
-                                        .lineLimit(2)
+            // Scrollable event list - one event at a time
+            GeometryReader { geometry in
+                let scrollViewHeight = min(CGFloat(cluster.eventCount) * 90, 320)
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        ForEach(cluster.events) { event in
+                            Button(action: { 
+                                onSelect(event)
+                            }) {
+                                HStack(alignment: .top, spacing: 12) {
+                                    // Event emoji
+                                    Text(event.categoryEmoji)
+                                        .font(.system(size: 32))
+                                        .frame(width: 44, height: 44)
                                     
-                                    if let timeText = event.dateFormatted {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "clock")
-                                                .font(.caption)
-                                            Text(timeText)
-                                                .font(.subheadline)
+                                    // Event details
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(event.title)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(.primary)
+                                            .multilineTextAlignment(.leading)
+                                            .lineLimit(2)
+                                        
+                                        if let timeText = event.dateFormatted {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "clock")
+                                                    .font(.caption)
+                                                Text(timeText)
+                                                    .font(.subheadline)
+                                            }
+                                            .foregroundColor(.secondary)
                                         }
-                                        .foregroundColor(.secondary)
+                                        
+                                        // Attendee count
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "person.2.fill")
+                                                .font(.caption)
+                                            Text("\(event.attendeeCount) attending")
+                                                .font(.caption)
+                                        }
+                                        .foregroundColor(.blue)
                                     }
                                     
-                                    // Attendee count
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "person.2.fill")
-                                            .font(.caption)
-                                        Text("\(event.attendeeCount) attending")
-                                            .font(.caption)
-                                    }
-                                    .foregroundColor(.blue)
+                                    Spacer()
+                                    
+                                    // Chevron
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
                                 }
-                                
-                                Spacer()
-                                
-                                // Chevron
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(.tertiary)
+                                .padding(.vertical, 14)
+                                .padding(.horizontal, 16)
+                                .background(Color(uiColor: .systemBackground))
                             }
-                            .padding(.vertical, 14)
-                            .padding(.horizontal, 16)
-                            .background(Color(uiColor: .systemBackground))
-                        }
-                        .buttonStyle(.plain)
-                        
-                        if event.id != cluster.events.last?.id {
-                            Divider()
-                                .padding(.leading, 72)
+                            .buttonStyle(.plain)
+                            .frame(width: geometry.size.width, height: scrollViewHeight)
+                            .id(event.id)
                         }
                     }
                 }
+                .scrollTargetBehavior(.paging)
             }
-            .frame(maxHeight: min(CGFloat(cluster.eventCount) * 90, 320))
+            .frame(height: min(CGFloat(cluster.eventCount) * 90, 320))
         }
         .background(
             RoundedRectangle(cornerRadius: 20)
@@ -103,6 +104,7 @@ struct ClusterEventFloatingCard: View {
                 .shadow(color: .black.opacity(0.2), radius: 16, x: 0, y: 8)
         )
         .frame(width: 340)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
         .overlay(
             RoundedRectangle(cornerRadius: 20)
                 .stroke(Color.primary.opacity(0.15), lineWidth: 1)
@@ -153,8 +155,7 @@ extension CrowdEvent {
                     latitude: 33.21,
                     longitude: -97.15,
                     radiusMeters: 60,
-                    startsAt: Date().addingTimeInterval(3600),
-                    endsAt: Date().addingTimeInterval(7200),
+                    time: Date().addingTimeInterval(3600),
                     createdAt: Date(),
                     signalStrength: 3,
                     attendeeCount: 5,
@@ -170,8 +171,7 @@ extension CrowdEvent {
                     latitude: 33.21,
                     longitude: -97.15,
                     radiusMeters: 60,
-                    startsAt: Date().addingTimeInterval(1800),
-                    endsAt: Date().addingTimeInterval(5400),
+                    time: Date().addingTimeInterval(1800),
                     createdAt: Date(),
                     signalStrength: 4,
                     attendeeCount: 12,
@@ -187,8 +187,7 @@ extension CrowdEvent {
                     latitude: 33.21,
                     longitude: -97.15,
                     radiusMeters: 60,
-                    startsAt: Date(),
-                    endsAt: Date().addingTimeInterval(3600),
+                    time: Date(),
                     createdAt: Date(),
                     signalStrength: 2,
                     attendeeCount: 3,

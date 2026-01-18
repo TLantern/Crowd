@@ -13,7 +13,7 @@ struct CampusEventLive: Codable, Identifiable {
     let title: String
     let locationName: String?
     let location: String?
-    let startTimeLocal: String?
+    let rawDateTime: String?  // Firebase dateTime field for school events
     let endTimeLocal: String?
 
     let sourceType: String        // "instagram" or "official"

@@ -18,6 +18,7 @@ struct FrostedIconButton: View {
     var frostOpacity: Double = 0.22
     var iconBaseColor: Color = .black
     var highlightColor: Color               // e.g. yellow or baby blue
+    var containerColor: Color? = nil        // Optional solid container color
     var action: () -> Void
 
     @State private var isActive = false     // drives both size + color
@@ -27,11 +28,18 @@ struct FrostedIconButton: View {
 
     var body: some View {
         ZStack {
+            if let containerColor = containerColor {
+                Circle()
+                    .fill(containerColor)
+                    .shadow(color: highlightColor.opacity(isActive ? 0.45 : 0.0),
+                            radius: isActive ? 12 : 0, x: 0, y: 0)
+            } else {
             Circle()
                 .fill(.ultraThinMaterial)
                 .overlay(Circle().fill(Color.white.opacity(frostOpacity)))
                 .shadow(color: highlightColor.opacity(isActive ? 0.45 : 0.0),
                         radius: isActive ? 12 : 0, x: 0, y: 0)
+            }
 
             Image(systemName: systemName)
                 .font(.system(size: iconSize, weight: .semibold))

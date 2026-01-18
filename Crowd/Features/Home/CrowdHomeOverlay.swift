@@ -113,7 +113,7 @@ struct CrowdHomeOverlay<Content: View>: View {
 }
 
 // MARK: - Helpers
-private extension Array where Element == CGFloat {
+extension Array where Element == CGFloat {
     subscript(safe index: Int) -> CGFloat? {
         indices.contains(index) ? self[index] : nil
     }

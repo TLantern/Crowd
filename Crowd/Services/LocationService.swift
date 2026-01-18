@@ -21,10 +21,10 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         manager.distanceFilter = 10 // Update every 10 meters
         authorizationStatus = manager.authorizationStatus
         
-        // Set initial fallback location (UNT Union) until GPS is available
+        // Set initial mock location at Bruce Hall for testing - always visible in DEBUG
         #if DEBUG
-        lastKnown = CLLocationCoordinate2D(latitude: 33.2099, longitude: -97.1515)
-        print("📍 Using fallback location for testing")
+        lastKnown = CLLocationCoordinate2D(latitude: 33.2087, longitude: -97.1524)
+        print("📍 DEBUG: Mock user location set at Bruce Hall (33.2087, -97.1524)")
         #endif
     }
 
@@ -80,8 +80,8 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         
         // Fallback to debug location
         #if DEBUG
-        let fallbackLocation = CLLocationCoordinate2D(latitude: 33.2099, longitude: -97.1515)
-        print("📍 LocationService: Using fallback location: \(fallbackLocation.latitude), \(fallbackLocation.longitude)")
+        let fallbackLocation = CLLocationCoordinate2D(latitude: 33.2087, longitude: -97.1524)
+        print("📍 LocationService: Using fallback location at Bruce Hall: \(fallbackLocation.latitude), \(fallbackLocation.longitude)")
         lastKnown = fallbackLocation
         return fallbackLocation
         #else
@@ -142,8 +142,8 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
             stopUpdatingLocation()
             // Use fallback location when denied
             #if DEBUG
-            lastKnown = CLLocationCoordinate2D(latitude: 33.2099, longitude: -97.1515)
-            print("📍 Using fallback location due to denied access")
+            lastKnown = CLLocationCoordinate2D(latitude: 33.2087, longitude: -97.1524)
+            print("📍 Using fallback location at Bruce Hall due to denied access")
             #endif
         case .notDetermined:
             print("📍 Location authorization not determined, requesting...")
