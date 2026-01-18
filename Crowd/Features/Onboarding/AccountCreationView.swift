@@ -219,8 +219,9 @@ struct AccountCreationView: View {
                 }
             }
             
-            // "See more" button (only show if not showing all interests)
+            // "See more" / "Show less" toggle button
             if !showAllInterests && uniqueInterests.count > displayedInterests.count {
+                // "See more" button (only show if not showing all interests)
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         showAllInterests = true
@@ -230,6 +231,32 @@ struct AccountCreationView: View {
                         Text("See more")
                             .font(.system(size: 16, weight: .semibold))
                         Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(Color(hex: 0x02853E))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(hex: 0x02853E).opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(hex: 0x02853E), lineWidth: 1)
+                            )
+                    )
+                }
+                .padding(.top, 8)
+            } else if showAllInterests {
+                // "Show less" button (only show when all interests are displayed)
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showAllInterests = false
+                    }
+                }) {
+                    HStack {
+                        Text("Show less")
+                            .font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "chevron.up")
                             .font(.system(size: 14, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: 0x02853E))
