@@ -151,14 +151,6 @@ struct CampusSelectionView: View {
                             )
                             .foregroundColor(.white)
                     }
-                    
-                    // Skip option (defaults to UNT)
-                    Button(action: skipSelection) {
-                        Text("Skip for now")
-                            .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.6))
-                    }
-                    .padding(.top, 4)
                 }
                 .padding(24)
                 .background(
@@ -245,17 +237,6 @@ struct CampusSelectionView: View {
         AnalyticsService.shared.track("campus_selection_completed", props: [
             "campus_id": selectedCampusId
         ])
-        
-        onComplete()
-    }
-    
-    private func skipSelection() {
-        // Default to UNT when skipping
-        selectedCampusId = "UNT"
-        hasCompletedCampusSelection = true
-        
-        // Track analytics
-        AnalyticsService.shared.track("campus_selection_skipped", props: [:])
         
         onComplete()
     }
