@@ -18,7 +18,9 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     var longitude: Double
     var radiusMeters: Double
 
-    var time: Date?
+    var time: Date?             // Deprecated: use startTime instead (kept for backward compatibility)
+    var startTime: Date?        // Event start time
+    var endTime: Date?          // Event end time
     var createdAt: Date
 
     var signalStrength: Int
@@ -44,7 +46,8 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
     
     /// Formatted date string for display (e.g., "Today at 3:00 PM", "Tomorrow at 2:30 PM")
     var dateFormatted: String? {
-        guard let date = time else { return nil }
+        // Use startTime if available, fallback to legacy time field
+        guard let date = startTime ?? time else { return nil }
         
         let calendar = Calendar.current
         let now = Date()
@@ -76,7 +79,9 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
         hostName: String = "Guest",
         category: String? = nil,
         description: String? = nil,
-        time: Date? = nil,
+        time: Date? = nil,          // Deprecated: use startTime/endTime
+        startTime: Date? = nil,
+        endTime: Date? = nil,
         tags: [String] = [],
         sourceURL: String? = nil,
         rawLocationName: String? = nil,
@@ -105,7 +110,9 @@ struct CrowdEvent: Identifiable, Hashable, Codable {
             latitude: coord.latitude,
             longitude: coord.longitude,
             radiusMeters: 0,
-            time: time,
+            time: time ?? startTime,  // For backward compatibility, set time to startTime
+            startTime: startTime ?? time,  // Use startTime if provided, fallback to time
+            endTime: endTime,
             createdAt: Date(),
             signalStrength: 0,
             attendeeCount: 0,

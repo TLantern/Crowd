@@ -231,18 +231,22 @@ struct HostEventSheet: View {
     // MARK: - Create Event
     
     private func createEvent() {
-        let finalTime: Date?
+        let finalStartTime: Date?
+        let finalEndTime: Date?
         
         if timeMode == .now {
-            finalTime = Date()
+            finalStartTime = Date()
+            finalEndTime = nil  // No end time for "now" events
         } else {
-            finalTime = startDate
+            finalStartTime = startDate
+            finalEndTime = endDate
         }
         
         // Debug: Print coordinate BEFORE creating event
         print("🔍 BEFORE createEvent - coord: lat=\(coord.latitude), lon=\(coord.longitude)")
         print("🔍 BEFORE createEvent - locationName: '\(locationName)'")
         print("🔍 BEFORE createEvent - sessionUser: \(appState.sessionUser?.displayName ?? "nil"), id: \(appState.sessionUser?.id ?? "nil")")
+        print("🔍 BEFORE createEvent - startTime: \(finalStartTime?.description ?? "nil"), endTime: \(finalEndTime?.description ?? "nil")")
         
         // Generate tags from category (ensures emoji is preserved)
         let tags = [category.defaultTag]
@@ -254,7 +258,8 @@ struct HostEventSheet: View {
             hostName: appState.sessionUser?.displayName ?? "Guest",
             category: category.rawValue,
             description: eventDescription.isEmpty ? nil : eventDescription,
-            time: finalTime,
+            startTime: finalStartTime,
+            endTime: finalEndTime,
             tags: tags
         )
         

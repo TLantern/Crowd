@@ -223,27 +223,44 @@ final class FirebaseEventRepository: EventRepository {
         let address = rawAddress.map { cleanAddressFromDateTime($0) }
         
         // Parse time from dateTime field - check both root level and eventDetails
-        var time: Date?
+        var startTime: Date?
+        var endTime: Date?
         var dateTimeString: String? = nil  // Preserve the original dateTime string
         
         // Check dateTime field in various formats - try eventDetails first, then root level
         if let dateTimeStr = eventDetails?["dateTime"] as? String ?? data["dateTime"] as? String {
             dateTimeString = dateTimeStr  // Store the original string
-            time = parseDateTimeString(dateTimeStr)
+            startTime = parseDateTimeString(dateTimeStr)
         } else if let dateTimeTimestamp = eventDetails?["dateTime"] as? Timestamp ?? data["dateTime"] as? Timestamp {
-            time = dateTimeTimestamp.dateValue()
+            startTime = dateTimeTimestamp.dateValue()
         } else if let dateTimeSeconds = eventDetails?["dateTime"] as? TimeInterval ?? data["dateTime"] as? TimeInterval {
-            time = Date(timeIntervalSince1970: dateTimeSeconds)
+            startTime = Date(timeIntervalSince1970: dateTimeSeconds)
         } else if let dateTimeMillis = eventDetails?["dateTime"] as? Double ?? data["dateTime"] as? Double {
             // Try as milliseconds if value is very large
             if dateTimeMillis > 10000000000 {
-                time = Date(timeIntervalSince1970: dateTimeMillis / 1000)
+                startTime = Date(timeIntervalSince1970: dateTimeMillis / 1000)
             } else {
-                time = Date(timeIntervalSince1970: dateTimeMillis)
+                startTime = Date(timeIntervalSince1970: dateTimeMillis)
             }
         }
         
-        // Use time for both startsAt and endsAt
+        // Check for endDateTime field (if parties have separate end times)
+        if let endDateTimeStr = eventDetails?["endDateTime"] as? String ?? data["endDateTime"] as? String {
+            endTime = parseDateTimeString(endDateTimeStr)
+        } else if let endDateTimeTimestamp = eventDetails?["endDateTime"] as? Timestamp ?? data["endDateTime"] as? Timestamp {
+            endTime = endDateTimeTimestamp.dateValue()
+        } else if let endDateTimeSeconds = eventDetails?["endDateTime"] as? TimeInterval ?? data["endDateTime"] as? TimeInterval {
+            endTime = Date(timeIntervalSince1970: endDateTimeSeconds)
+        } else if let endDateTimeMillis = eventDetails?["endDateTime"] as? Double ?? data["endDateTime"] as? Double {
+            if endDateTimeMillis > 10000000000 {
+                endTime = Date(timeIntervalSince1970: endDateTimeMillis / 1000)
+            } else {
+                endTime = Date(timeIntervalSince1970: endDateTimeMillis)
+            }
+        }
+        
+        // For backward compatibility
+        let time = startTime
         
         // Default coordinates (can be geocoded later if needed)
         // Using UNT main campus coordinates as default
@@ -262,6 +279,8 @@ final class FirebaseEventRepository: EventRepository {
             longitude: longitude,
             radiusMeters: 0,
             time: time,
+            startTime: startTime,
+            endTime: endTime,
             createdAt: Date(),
             signalStrength: 0,
             attendeeCount: goingCount ?? 0,
@@ -777,14 +796,17 @@ final class FirebaseEventRepository: EventRepository {
             }
         }
         
-        let data: [String: Any] = [
+        // Use startTime if available, fallback to time for backward compatibility
+        let eventStartTime = event.startTime ?? event.time ?? Date()
+        let eventEndTime = event.endTime
+        
+        var data: [String: Any] = [
             "id": event.id,
             "title": event.title,
             "latitude": event.latitude,
             "longitude": event.longitude,
             "radiusMeters": event.radiusMeters,
-            "startsAt": event.time?.timeIntervalSince1970 ?? Date().timeIntervalSince1970,
-            "endsAt": event.time?.timeIntervalSince1970,
+            "startsAt": eventStartTime.timeIntervalSince1970,
             "tags": finalTags,
             "category": finalCategory,
             "geohash": geohash,
@@ -795,6 +817,11 @@ final class FirebaseEventRepository: EventRepository {
             "attendeeCount": 0,
             "signalStrength": 1
         ]
+        
+        // Only add endsAt if we have a separate end time
+        if let endTime = eventEndTime {
+            data["endsAt"] = endTime.timeIntervalSince1970
+        }
         
         print("📝 Creating user event in userEvents collection with geohash: \(geohash)")
         print("📝 Data being sent: \(data)")
@@ -1327,22 +1354,29 @@ final class FirebaseEventRepository: EventRepository {
         let hostId = data["hostId"] as? String ?? ""
         let hostName = data["hostName"] as? String ?? "Guest"
         
-        // Parse time from startsAt or endsAt field (for backward compatibility)
-        var time: Date?
-        
+        // Parse startTime from startsAt field
+        var startTime: Date?
         if let timestamp = data["startsAt"] as? Timestamp {
-            time = timestamp.dateValue()
+            startTime = timestamp.dateValue()
         } else if let seconds = data["startsAt"] as? TimeInterval {
-            time = Date(timeIntervalSince1970: seconds)
-        } else if let timestamp = data["endsAt"] as? Timestamp {
-            time = timestamp.dateValue()
-        } else if let seconds = data["endsAt"] as? TimeInterval {
-            time = Date(timeIntervalSince1970: seconds)
+            startTime = Date(timeIntervalSince1970: seconds)
         } else if let timestamp = data["time"] as? Timestamp {
-            time = timestamp.dateValue()
+            // Fallback to legacy time field
+            startTime = timestamp.dateValue()
         } else if let seconds = data["time"] as? TimeInterval {
-            time = Date(timeIntervalSince1970: seconds)
+            startTime = Date(timeIntervalSince1970: seconds)
         }
+        
+        // Parse endTime from endsAt field
+        var endTime: Date?
+        if let timestamp = data["endsAt"] as? Timestamp {
+            endTime = timestamp.dateValue()
+        } else if let seconds = data["endsAt"] as? TimeInterval {
+            endTime = Date(timeIntervalSince1970: seconds)
+        }
+        
+        // For backward compatibility, set time to startTime
+        let time = startTime
         
         // Parse tags - ensure never empty
         var tags = data["tags"] as? [String] ?? []
@@ -1386,6 +1420,8 @@ final class FirebaseEventRepository: EventRepository {
             longitude: lon,
             radiusMeters: radiusMeters,
             time: time,
+            startTime: startTime,
+            endTime: endTime,
             createdAt: createdAt,
             signalStrength: signalStrength,
             attendeeCount: attendeeCount,
