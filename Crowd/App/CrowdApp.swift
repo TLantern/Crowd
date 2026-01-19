@@ -113,6 +113,7 @@ struct CrowdApp: App {
                     }
                 }
             }
+            .preferredColorScheme(.light)
             .onChange(of: accountDeleted) { _, deleted in
                 if deleted {
                     // Reset all onboarding flags on account deletion

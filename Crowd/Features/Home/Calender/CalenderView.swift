@@ -40,7 +40,6 @@ struct CalenderView: View {
     @ObservedObject private var campusEventsVM = CampusEventsViewModel.shared
     @EnvironmentObject private var appState: AppState
     @StateObject private var deepLinks = DeepLinkManager.shared
-    @State private var selectedCategories: Set<EventCategory> = []
     @State private var displayedEventCount = 10
     @State private var selectedTab: TabSelection = .parties
     @State private var selectedPartyEvent: CrowdEvent?
@@ -51,41 +50,45 @@ struct CalenderView: View {
         case parties
         case schoolEvents
     }
-    
-    @State private var blockedUserIds: Set<String> = []
-    @State private var hiddenEventIds: Set<String> = []
-    @State private var bannedUserIds: Set<String> = []
     @State private var showEventCreationFlow = false
     @State private var currentPartyImageURL: String?
     @State private var currentSchoolEventImageURL: String?
+    @State private var selectedInterest: String? = nil
     
-    // Filtered events based on selected categories
-    var filteredEvents: [CrowdEvent] {
-        var events = campusEventsVM.crowdEvents
-        
-        // Apply category filter
-        if !selectedCategories.isEmpty {
-            events = events.filter { event in
-                selectedCategories.contains { category in
-                    category.matchesTags(event.tags)
+    var schoolEvents: [CrowdEvent] { campusEventsVM.crowdEvents }
+    
+    var filteredSchoolEvents: [CrowdEvent] {
+        guard let interest = selectedInterest else { return schoolEvents }
+        guard let interestTags = interestTagMap[interest] else { return schoolEvents }
+        return schoolEvents.filter { event in
+            event.tags.contains { tag in
+                let lowerTag = tag.lowercased()
+                return interestTags.contains { interestTag in
+                    lowerTag.contains(interestTag.lowercased()) || interestTag.lowercased().contains(lowerTag)
                 }
             }
         }
-        
-        // Apply moderation filters
-        return events.filter { event in
-            !ContentModerationService.shared.shouldFilterEvent(
-                event,
-                blockedUserIds: blockedUserIds,
-                hiddenEventIds: hiddenEventIds,
-                bannedUserIds: bannedUserIds
-            )
-        }
     }
+    
+    private let interests: [(name: String, key: String, emoji: String)] = [
+        ("Academic", "academic", "📚"),
+        ("Sports", "sports", "⚽"),
+        ("Arts", "arts", "🎨"),
+        ("Social", "social", "👥"),
+        ("Career", "career", "💼")
+    ]
+    
+    private let interestTagMap: [String: [String]] = [
+        "academic": ["academic", "study", "education", "learning", "lecture", "workshop", "seminar"],
+        "sports": ["sport", "sports", "athletic", "fitness", "gym", "exercise", "game", "tournament"],
+        "arts": ["art", "arts", "creative", "music", "theater", "dance", "performance", "exhibition"],
+        "social": ["social", "networking", "meetup", "community", "gathering", "party", "event"],
+        "career": ["career", "professional", "job", "internship", "resume", "interview", "networking"]
+    ]
     
     // Upcoming events sorted by soonest start time
     var upcomingEvents: [CrowdEvent] {
-        filteredEvents.sorted { (a, b) in
+        schoolEvents.sorted { (a, b) in
             let aStart = a.time ?? .distantFuture
             let bStart = b.time ?? .distantFuture
             return aStart < bStart
@@ -98,7 +101,7 @@ struct CalenderView: View {
     }
     
     var hasMoreEvents: Bool {
-        displayedEventCount < filteredEvents.count
+        displayedEventCount < schoolEvents.count
     }
 
     private var headerView: some View {
@@ -161,9 +164,49 @@ struct CalenderView: View {
                         }
                         
                         if selectedTab == .schoolEvents {
-                            Text("\(filteredEvents.count) events")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.secondary)
+                            VStack(spacing: 8) {
+                                Text("\(filteredSchoolEvents.count) events")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                
+                                Picker(selection: $selectedInterest) {
+                                    Text("All Events")
+                                        .tag(nil as String?)
+                                        .foregroundColor(.black)
+                                    ForEach(interests, id: \.key) { interest in
+                                        Text("\(interest.emoji)  \(interest.name)")
+                                            .tag(interest.key as String?)
+                                            .foregroundColor(.black)
+                                    }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        if let selected = selectedInterest,
+                                           let interest = interests.first(where: { $0.key == selected }) {
+                                            Text(interest.emoji)
+                                            Text(interest.name)
+                                                .font(.system(size: 13, weight: .medium))
+                                                .foregroundColor(.black)
+                                        } else {
+                                            Text("All Interests")
+                                                .font(.system(size: 13, weight: .medium))
+                                                .foregroundColor(.black)
+                                        }
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(.black)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color.white)
+                                    )
+                                }
+                                .pickerStyle(.menu)
+                                .accentColor(.black)
+                                .tint(.black)
+                                .preferredColorScheme(.light)
+                            }
                         }
                     }
                 }
@@ -183,15 +226,9 @@ struct CalenderView: View {
                 )
             } else {
                 VStack(spacing: 0) {
-                    if selectedTab == .schoolEvents {
-                        CategoryFilterDropdown(selectedCategories: $selectedCategories)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 12)
-                            .padding(.bottom, 8)
-                    }
                 SchoolEventsView(
-                    filteredEvents: filteredEvents,
-                    selectedCategories: selectedCategories,
+                    events: filteredSchoolEvents,
+                    selectedCategories: [],
                     currentSchoolEventImageURL: $currentSchoolEventImageURL
                 )
                 }
@@ -307,35 +344,25 @@ struct CalenderView: View {
                         }
                     }
             )
-            .task {
-                await loadModerationData()
-            }
             .onAppear {
+                print("📅 DEBUG: CalenderView.onAppear - starting listener")
+                print("   Current schoolEvents count: \(schoolEvents.count)")
                 Task {
-                    // Fetch all future events (limit: 200) for calendar view
-                    print("📅 CalenderView: Fetching school events...")
-                    await campusEventsVM.fetchOnce(limit: 200)
-                    print("📅 CalenderView: Loaded \(campusEventsVM.crowdEvents.count) school events")
                     campusEventsVM.start()
+                    print("   ✅ Listener started")
                     await geocodeTodaysEventsIfNeeded()
                 }
                 AttendedEventsService.shared.refreshAttendedEvents()
             }
             .onDisappear {
+                print("📅 DEBUG: CalenderView.onDisappear - stopping listener")
                 campusEventsVM.stop()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .userBlocked)) { _ in
-                Task {
-                    await loadModerationData()
+            .onChange(of: schoolEvents.count) { oldCount, newCount in
+                print("📅 DEBUG: schoolEvents count changed: \(oldCount) → \(newCount)")
+                if newCount > 0 {
+                    print("   First event: '\(schoolEvents[0].title)' at \(schoolEvents[0].time ?? Date.distantPast)")
                 }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .eventHidden)) { _ in
-                Task {
-                    await loadModerationData()
-                }
-            }
-            .onChange(of: selectedCategories) { _, _ in
-                displayedEventCount = eventsPerPage
             }
             .onChange(of: deepLinks.pendingEventId) { _, newId in
                 if let id = newId {
@@ -463,27 +490,6 @@ struct CalenderView: View {
         return nil
     }
     
-    // MARK: - Moderation Data Loading
-    
-    private func loadModerationData() async {
-        guard let userId = FirebaseManager.shared.getCurrentUserId() else { return }
-        
-        do {
-            async let blocked = ContentModerationService.shared.getBlockedUsers(userId: userId)
-            async let hidden = ContentModerationService.shared.getHiddenEvents(userId: userId)
-            async let banned = ContentModerationService.shared.getBannedUsers()
-            
-            let (blockedResult, hiddenResult, bannedResult) = try await (blocked, hidden, banned)
-            
-            await MainActor.run {
-                blockedUserIds = blockedResult
-                hiddenEventIds = hiddenResult
-                bannedUserIds = bannedResult
-            }
-        } catch {
-            print("⚠️ Failed to load moderation data: \(error.localizedDescription)")
-        }
-    }
 }
 
 // MARK: - Calendar Tab Button
@@ -823,16 +829,36 @@ struct EventCardView: View {
 
 // MARK: - School Events View
 struct SchoolEventsView: View {
-    let filteredEvents: [CrowdEvent]
+    let events: [CrowdEvent]
     let selectedCategories: Set<EventCategory>
     @Binding var currentSchoolEventImageURL: String?
     
-    @State private var currentEventIndex: Int = 0
-    @State private var visibleIndices: Set<Int> = []
+    @State private var scrolledID: Int? = 0
     @StateObject private var imageLoader = OptimizedImageLoader.shared
     
     // Only show first 8 images initially, then load more as needed
     private let initialLoadCount = 10
+    
+    var filteredEvents: [CrowdEvent] {
+        let now = Date()
+        let timeFiltered = events.filter { event in
+            guard let t = event.time else { return false }
+            return t >= now
+        }
+        guard !selectedCategories.isEmpty else { return timeFiltered }
+        return timeFiltered.filter { event in
+            // Check if event category matches
+            if let categoryString = event.category,
+               let eventCategory = EventCategory(rawValue: categoryString),
+               selectedCategories.contains(eventCategory) {
+                return true
+            }
+            // Check if event tags match any selected category
+            return selectedCategories.contains { category in
+                category.matchesTags(event.tags)
+            }
+        }
+    }
     
     var body: some View {
         Group {
@@ -857,36 +883,31 @@ struct SchoolEventsView: View {
                 GeometryReader { geometry in
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(Array(filteredEvents.enumerated()), id: \.element.id) { index, event in
+                            ForEach(Array(filteredEvents.enumerated()), id: \.offset) { index, event in
                                 SchoolEventCardView(
                                     event: event,
                                     index: index,
-                                    isVisible: visibleIndices.contains(index),
+                                    isVisible: scrolledID == index,
                                     priority: index < initialLoadCount
                                 )
                                 .frame(width: geometry.size.width - 30, height: geometry.size.height)
                                 .containerRelativeFrame(.vertical)
                                 .contentShape(Rectangle())
                                 .id(index)
-                                .onAppear {
-                                    handleViewportAppear(index: index, geometry: geometry)
-                                }
-                                .onDisappear {
-                                    handleViewportDisappear(index: index)
-                                }
                             }
                         }
                         .scrollTargetLayout()
                         .padding(.horizontal, 15)
                     }
                     .scrollTargetBehavior(.paging)
+                    .scrollPosition(id: $scrolledID)
                     .scrollIndicators(.hidden)
                 }
             }
         }
         .onAppear {
             print("🎉 School events view appeared - \(filteredEvents.count) events")
-            // Preload first 8 images immediately
+            // Preload first images sequentially
             Task {
                 await preloadInitialImages()
             }
@@ -894,65 +915,27 @@ struct SchoolEventsView: View {
                 currentSchoolEventImageURL = filteredEvents[0].imageURL
             }
         }
-        .onChange(of: currentEventIndex) { oldValue, newValue in
-            if newValue >= 0 && newValue < filteredEvents.count {
-                currentSchoolEventImageURL = filteredEvents[newValue].imageURL
-            }
+        .onChange(of: scrolledID) { oldValue, newValue in
+            guard let index = newValue, index >= 0 && index < filteredEvents.count else { return }
+            currentSchoolEventImageURL = filteredEvents[index].imageURL
         }
         .onChange(of: filteredEvents) { oldValue, newValue in
             print("🔄 Filtered school events changed: \(oldValue.count) -> \(newValue.count)")
-            // Update image URL when filtered events change
-            if !newValue.isEmpty && (currentEventIndex >= newValue.count || currentSchoolEventImageURL == nil) {
+            // Reset scroll position and update image URL when filtered events change
+            if !newValue.isEmpty {
+                scrolledID = 0
                 currentSchoolEventImageURL = newValue[0].imageURL
             }
         }
     }
     
-    private func handleViewportAppear(index: Int, geometry: GeometryProxy) {
-        currentEventIndex = index
-        if index < filteredEvents.count {
-            let event = filteredEvents[index]
-            currentSchoolEventImageURL = event.imageURL
-        }
-        
-        // Add to visible indices
-        visibleIndices.insert(index)
-        
-        // Update viewport tracking
-        updateViewportIndices()
-    }
-    
-    private func handleViewportDisappear(index: Int) {
-        visibleIndices.remove(index)
-        // Don't update immediately on disappear to avoid thrashing
-        // The next appear will update the viewport
-    }
-    
-    private func updateViewportIndices() {
-        // Calculate viewport range (current index ± 2 screens)
-        let viewportSize = 2
-        guard let currentIndex = visibleIndices.min() else { return }
-        
-        let expandedIndices = visibleIndices.flatMap { index in
-            (max(0, index - viewportSize)...min(filteredEvents.count - 1, index + viewportSize)).map { $0 }
-        }
-        let viewportSet = Set(expandedIndices)
-        
-        // Update image loader viewport
-        imageLoader.updateViewport(
-            visibleIndices: viewportSet,
-            allEvents: filteredEvents,
-            viewportSize: viewportSize
-        )
-    }
-    
     private func preloadInitialImages() async {
-        // Preload first 8 images with priority
+        // Preload first images sequentially (in order) with priority
         let preloadRange = min(initialLoadCount, filteredEvents.count)
         print("🎉 Starting school event image preload for \(preloadRange) images")
         for index in 0..<preloadRange {
             guard let imageURL = filteredEvents[index].imageURL else { continue }
-            _ = await imageLoader.loadPlaceholder(for: imageURL, width: 350, height: 450)
+            // Load sequentially so they appear in order
             _ = await imageLoader.loadImage(for: imageURL, width: 350, height: 450, priority: true)
         }
         print("✅ Completed school event image preload for \(preloadRange) images")

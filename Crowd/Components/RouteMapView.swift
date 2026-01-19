@@ -17,6 +17,7 @@ struct RouteMapView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView(frame: .zero)
+        map.overrideUserInterfaceStyle = .dark
         map.showsUserLocation = true
         map.userTrackingMode = .follow
         map.delegate = context.coordinator
@@ -36,6 +37,9 @@ struct RouteMapView: UIViewRepresentable {
     }
 
     func updateUIView(_ map: MKMapView, context: Context) {
+        if map.overrideUserInterfaceStyle != .dark {
+            map.overrideUserInterfaceStyle = .dark
+        }
         // Keep a single annotation for destination (update if changed)
         if let annotation = map.annotations.first(where: { !($0 is MKUserLocation) }) as? MKPointAnnotation {
             if annotation.coordinate.latitude != destination.latitude || annotation.coordinate.longitude != destination.longitude {

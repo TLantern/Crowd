@@ -13,6 +13,7 @@ import MapKit
 
 final class CampusEventsViewModel: ObservableObject {
     @Published var crowdEvents: [CrowdEvent] = []
+    @Published var todaysEvents: [CrowdEvent] = []  // Fast-loaded today's events for map
 
     private var listener: ListenerRegistration?
     private var geocodedIds: Set<String> = []
@@ -25,13 +26,30 @@ final class CampusEventsViewModel: ObservableObject {
     // Load all events immediately from Firebase on initialization
     @MainActor
     static let shared: CampusEventsViewModel = {
+        print("🚀 DEBUG: CampusEventsViewModel.shared singleton initializing")
         let vm = CampusEventsViewModel()
-        // Fetch all events immediately from Firebase
-        Task {
-            await vm.fetchOnce(limit: 200)
+        Task { @MainActor in
+            vm.loadFromCache()
+            vm.filterTodaysEventsFromCache()  // Immediately filter today's events from cache
+            vm.start()
         }
         return vm
     }()
+    
+    /// Filter today's events from cache for fast map display
+    @MainActor
+    private func filterTodaysEventsFromCache() {
+        let calendar = Calendar.current
+        let now = Date()
+        let fourHoursAgo = calendar.date(byAdding: .hour, value: -4, to: now) ?? now
+        
+        todaysEvents = crowdEvents.filter { event in
+            guard let time = event.time else { return false }
+            if time < fourHoursAgo { return false }
+            return calendar.isDateInToday(time)
+        }
+        print("📅 Fast-loaded \(todaysEvents.count) today's events from cache for map")
+    }
 
     /// Fetch fresh data from Firebase and replace cache
     /// This loads all events immediately from the server
@@ -57,35 +75,65 @@ final class CampusEventsViewModel: ObservableObject {
             let calendar = Calendar.current
             let startOfToday = calendar.startOfDay(for: Date())
             
+            print("🔍 DEBUG: Fetched \(docs.count) documents from events_from_official_raw")
+            print("🗓️ DEBUG: startOfToday = \(startOfToday)")
+            
             // Parse events from events_from_official_raw collection
             let mapped: [CrowdEvent] = try await Task.detached(priority: .utility) { () async -> [CrowdEvent] in
                 var tmp: [CrowdEvent] = []
                 var geocodingCount = 0
+                var filteredOutCount = 0
+                var nilTimeCount = 0
+                
                 for d in docs {
                     let data = d.data()
                     do {
                         var event = try await self.parseOfficialEvent(from: data, documentId: d.documentID)
                         
-                        // Only include future events (today or later)
-                        if let startDate = event.time, startDate >= startOfToday {
-                            // Try to geocode if coordinates are missing
-                            if event.latitude == 33.2100 && event.longitude == -97.1500 { // Default fallback coordinates
-                                if let locationName = event.rawLocationName, !locationName.isEmpty {
-                                    geocodingCount += 1
-                                    if let predefined = matchUNTLocationCoordinate(for: locationName) {
-                                        event.coordinates = predefined
-                                    } else {
-                                        if let geocoded = await searchLocationOnAppleMapsCampus(locationName) {
-                                            event.coordinates = geocoded
-                                        }
+                        // Debug: Check event time
+                        if event.time == nil {
+                            nilTimeCount += 1
+                            print("⚠️ DEBUG: Event '\(event.title)' has nil time")
+                        }
+                        
+                        // Include all events; views decide what to show (calendar filters by interests).
+                        if let startDate = event.time {
+                            print("✅ DEBUG: Including event '\(event.title)' - Date: \(startDate)")
+                            print("   Coords: (\(event.latitude), \(event.longitude))")
+                        }
+                        
+                        // Try to geocode if coordinates are missing
+                        if event.latitude == 33.2100 && event.longitude == -97.1500 { // Default fallback coordinates
+                            if let locationName = event.rawLocationName, !locationName.isEmpty {
+                                geocodingCount += 1
+                                if let predefined = matchUNTLocationCoordinate(for: locationName) {
+                                    event.coordinates = predefined
+                                    print("   🗺️ Geocoded to predefined: (\(predefined.latitude), \(predefined.longitude))")
+                                } else {
+                                    if let geocoded = await searchLocationOnAppleMapsCampus(locationName) {
+                                        event.coordinates = geocoded
+                                        print("   🗺️ Geocoded via Apple Maps: (\(geocoded.latitude), \(geocoded.longitude))")
                                     }
                                 }
                             }
-                            tmp.append(event)
                         }
+                        tmp.append(event)
                     } catch {
                         print("❌ Failed to parse official event: \(error)")
                     }
+                }
+                
+                print("📊 DEBUG: Parsing complete")
+                print("   Total documents: \(docs.count)")
+                print("   Included (future): \(tmp.count)")
+                print("   Filtered out (past): \(filteredOutCount)")
+                print("   Events with nil time: \(nilTimeCount)")
+                print("   Geocoding attempts: \(geocodingCount)")
+                
+                tmp.sort { a, b in
+                    let aStart = a.time ?? .distantFuture
+                    let bStart = b.time ?? .distantFuture
+                    return aStart < bStart
                 }
                 tmp.sort { a, b in
                     let aStart = a.time ?? .distantFuture
@@ -101,10 +149,12 @@ final class CampusEventsViewModel: ObservableObject {
                 self.saveToCache(mapped)
             }
             print("🎯 CampusEventsViewModel: Final mapped events count: \(mapped.count) (one-time)")
+            print(String(repeating: "=", count: 60))
             await resolveMissingCoordinates(docs: docs)
         } catch {
             print("❌ CampusEventsViewModel: One-time fetch failed: \(error)")
-            // On error, keep existing cache data if available
+            // On error, load cached data immediately if available
+            await MainActor.run { self.loadFromCache() }
         }
     }
 
@@ -129,58 +179,64 @@ final class CampusEventsViewModel: ObservableObject {
                 }
                 
                 print("📊 CampusEventsViewModel: Received \(docs.count) documents from events_from_official_raw")
-                print("📊 CampusEventsViewModel: Previous events count: \(self.crowdEvents.count)")
 
                 // Wrap async parsing in Task since listener closure must be synchronous
                 Task {
-                    var mapped: [CrowdEvent] = []
-                    let calendar = Calendar.current
-                    let startOfToday = calendar.startOfDay(for: Date())
-
+                    // STEP 1: Parse all events quickly WITHOUT geocoding
+                    var allParsed: [CrowdEvent] = []
                     for d in docs {
                         let data = d.data()
                         do {
                             let event = try await self.parseOfficialEvent(from: data, documentId: d.documentID)
-                            
-                            // Filter for future events only (today or later)
-                            if let startDate = event.time, startDate >= startOfToday {
-                                mapped.append(event)
-                            }
+                            allParsed.append(event)
                         } catch {
                             print("❌ CampusEventsViewModel: Failed to parse official event: \(error)")
                         }
                     }
-
-                    // sort by soonest start time
-                    mapped.sort { a, b in
-                        let aStart = a.time ?? .distantFuture
-                        let bStart = b.time ?? .distantFuture
-                        return aStart < bStart
-                    }
-
-                    print("🎯 CampusEventsViewModel: Final mapped events count: \(mapped.count)")
-                    let df = DateFormatter()
-                    df.dateStyle = .medium
-                    df.timeStyle = .short
-                    df.locale = Locale(identifier: "en_US_POSIX")
-                    df.timeZone = .current
-                    for event in mapped {
-                        let startText = event.time.map { df.string(from: $0) } ?? "nil"
-                        print("   - \(event.title) (starts: \(startText))")
+                    
+                    // Sort by soonest start time
+                    allParsed.sort { ($0.time ?? .distantFuture) < ($1.time ?? .distantFuture) }
+                    
+                    // STEP 2: Immediately filter and publish today's events (no geocoding yet)
+                    let calendar = Calendar.current
+                    let now = Date()
+                    let fourHoursAgo = calendar.date(byAdding: .hour, value: -4, to: now) ?? now
+                    
+                    let todaysParsed = allParsed.filter { event in
+                        guard let time = event.time else { return false }
+                        if time < fourHoursAgo { return false }
+                        return calendar.isDateInToday(time)
                     }
                     
                     await MainActor.run {
-                        let previousCount = self.crowdEvents.count
-                        self.crowdEvents = mapped
-                        
-                        // Save to cache after successful fetch
-                        self.saveToCache(mapped)
-                        
-                        if previousCount != mapped.count {
-                            print("🔄 CampusEventsViewModel: Event count changed from \(previousCount) to \(mapped.count)")
+                        self.crowdEvents = allParsed
+                        self.todaysEvents = todaysParsed
+                        self.saveToCache(allParsed)
+                    }
+                    print("📅 Fast-loaded \(todaysParsed.count) today's events, \(allParsed.count) total")
+                    
+                    // STEP 3: Geocode TODAY's events first (priority)
+                    var geocodedToday: [CrowdEvent] = []
+                    for var event in todaysParsed {
+                        if event.latitude == 33.2100 && event.longitude == -97.1500 {
+                            if let locationName = event.rawLocationName, !locationName.isEmpty {
+                                if let predefined = matchUNTLocationCoordinate(for: locationName) {
+                                    event.coordinates = predefined
+                                } else if let geocoded = await searchLocationOnAppleMapsCampus(locationName) {
+                                    event.coordinates = geocoded
+                                }
+                            }
                         }
+                        geocodedToday.append(event)
                     }
                     
+                    // Update today's events with geocoded coordinates
+                    await MainActor.run {
+                        self.todaysEvents = geocodedToday
+                    }
+                    print("🗺️ Geocoded \(geocodedToday.count) today's events for map")
+                    
+                    // STEP 4: Geocode remaining events in background
                     await self.resolveMissingCoordinates(docs: docs)
                 }
             }

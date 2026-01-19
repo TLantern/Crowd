@@ -95,9 +95,9 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if true;
       allow create, delete: if false; // Only Cloud Functions can create/delete
-      // Allow anyone (including unauthenticated) to update attendeeCount and signalStrength (for joining)
+      // Allow anyone (including unauthenticated) to update attendeeCount, signalStrength, and endsAt (for joining)
       // Prevent hosts from joining their own events
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength'])
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength', 'endsAt'])
                     && (!isAuthenticated() || request.auth.uid != resource.data.hostId);
     }
     
@@ -127,9 +127,9 @@ service cloud.firestore {
         (resource.data.hostId == request.auth.uid && isValidEventData())
       );
       
-      // Allow anyone (including unauthenticated) to join by updating attendeeCount/signalStrength
+      // Allow anyone (including unauthenticated) to join by updating attendeeCount/signalStrength/endsAt
       // Prevent hosts from joining their own events
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength'])
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendeeCount', 'signalStrength', 'endsAt'])
                     && (!isAuthenticated() || request.auth.uid != resource.data.hostId);
     }
     

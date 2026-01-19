@@ -17,6 +17,7 @@ struct CrowdHomeView: View {
     @EnvironmentObject private var onboardingCoordinator: OnboardingCoordinator
     @ObservedObject private var locationService = AppEnvironment.current.location
     @ObservedObject private var chatNotificationService = ChatNotificationService.shared
+    @ObservedObject private var campusEventsVM = CampusEventsViewModel.shared
     
     // MARK: - Onboarding & Campus Selection
     @AppStorage("selectedCampusId") private var selectedCampusId: String = "UNT"
@@ -32,6 +33,7 @@ struct CrowdHomeView: View {
 
     // MARK: - UI state
     @State private var showHostSheet = false
+    @State private var showSparkCard = false
     @State private var hostedEvents: [CrowdEvent] = []
     @State private var officialEvents: [CrowdEvent] = []
     @State private var userEventsFromFirebase: [CrowdEvent] = []
@@ -291,6 +293,10 @@ struct CrowdHomeView: View {
         }
     }
     
+    var currentEventsClusters: [EventCluster] {
+        EventClusteringService.clusterEvents(allEvents)
+    }
+    
     /// Merge local and firebase user events, removing duplicates (prefer local version)
     private func mergeUserEvents(local: [CrowdEvent], firebase: [CrowdEvent]) -> [CrowdEvent] {
         let localIds = Set(local.map { $0.id })
@@ -322,7 +328,7 @@ struct CrowdHomeView: View {
         let calendar = Calendar.current
         let now = Date()
         
-        return events.filter { event in
+        let filtered = events.filter { event in
             // Check if event time is today
             if let time = event.time {
                 // Check if time was more than 4 hours ago
@@ -337,23 +343,7 @@ struct CrowdHomeView: View {
             // If no time info, include events created today (for user-created events)
             return calendar.isDateInToday(event.createdAt)
         }
-    }
-    
-    // MARK: - Clustered current events
-    var currentEventsClusters: [EventCluster] {
-        let calendar = Calendar.current
-        let filteredUpcoming = upcomingEvents.filter { ev in
-            guard let s = ev.time else { return false }
-            return calendar.isDateInToday(s)
-        }
-        
-        // Combine all events (deduplicated user events + official + upcoming) - today only
-            let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
-            let filteredOfficial = filterEventsForToday(officialEvents)
-            let filteredUser = filterEventsForToday(allUserEvents)
-        let inputEvents = filteredOfficial + filteredUser + filteredUpcoming
-        
-        return EventClusteringService.clusterEvents(inputEvents)
+        return filtered
     }
     
     // MARK: - Expansion Radius Helper
@@ -498,14 +488,52 @@ struct CrowdHomeView: View {
         .annotationTitles(.hidden)
     }
     
+    private var untEvent: CrowdEvent {
+        let farFutureDate = Calendar.current.date(byAdding: .year, value: 100, to: Date()) ?? Date()
+        return CrowdEvent(
+            id: "UNT",
+            title: "University of North Texas",
+            hostId: "UNT",
+            hostName: "UNT",
+            latitude: 33.21264835416883,
+            longitude: -97.14748405043815,
+            radiusMeters: 1000,
+            time: nil,
+            startTime: Date(),
+            endTime: farFutureDate,
+            createdAt: Date(),
+            signalStrength: 100,
+            attendeeCount: 0,
+            tags: ["campus", "unt"],
+            category: "campus",
+            description: "UNT Campus",
+            sourceURL: nil,
+            rawLocationName: "1155 Union Circle, Denton, TX",
+            imageURL: nil,
+            ticketURL: nil,
+            dateTime: nil,
+            rawDateTime: nil
+        )
+    }
+    
+    private func handleUntTap() {
+        appState.currentJoinedEvent = untEvent
+        showNavigationModal = true
+    }
+    
     private func untLocationAnnotation() -> some MapContent {
         let untCoordinate = CLLocationCoordinate2D(
             latitude: 33.21264835416883,
             longitude: -97.14748405043815
         )
         return Annotation("", coordinate: untCoordinate) {
-            UNTLogoPinView(size: 60)
-                .zIndex(200)
+            Button(action: {
+                handleUntTap()
+            }) {
+                UNTLogoPinView(size: 60)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .zIndex(200)
         }
         .annotationTitles(.hidden)
     }
@@ -749,8 +777,17 @@ struct CrowdHomeView: View {
     
     // Compute clusters that don't overlap with anchors
     private var standaloneClusters: [EventCluster] {
-        // Commented out anchor filtering - return all clusters
-        return currentEventsClusters
+        // Use pre-geocoded today's events from CampusEventsViewModel for fast map display
+        // Also include today's user-created events
+        let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
+        let todayUserEvents = filterEventsForToday(allUserEvents)
+        let todayEvents = campusEventsVM.todaysEvents + todayUserEvents
+        let clusters = EventClusteringService.clusterEvents(todayEvents)
+        print("📍 DEBUG: standaloneClusters computed - \(clusters.count) clusters (\(campusEventsVM.todaysEvents.count) official + \(todayUserEvents.count) user)")
+        for (index, cluster) in clusters.enumerated().prefix(5) {
+            print("   Cluster \(index): \(cluster.eventCount) events at (\(cluster.centerCoordinate.latitude), \(cluster.centerCoordinate.longitude))")
+        }
+        return clusters
         /*
         let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
         let clusters = currentEventsClusters
@@ -773,7 +810,11 @@ struct CrowdHomeView: View {
     
     // MARK: - Map View
     private var mapView: some View {
-        Map(position: $cameraPosition) {
+        let _ = print("🗺️ DEBUG: Map View rendering with \(standaloneClusters.count) clusters")
+        let _ = print("   Camera center: (\(currentCamera.centerCoordinate.latitude), \(currentCamera.centerCoordinate.longitude))")
+        let _ = print("   Camera distance: \(currentCamera.distance)m")
+        
+        return Map(position: $cameraPosition) {
             // Event clusters (rendered first, but skip ones that overlap with anchors)
             ForEach(standaloneClusters) { cluster in
                 if expandedClusterId == cluster.id && cluster.eventCount > 1 {
@@ -833,6 +874,7 @@ struct CrowdHomeView: View {
                 userLocationAnnotation(coordinate: userLocation)
             }
         }
+        .environment(\.colorScheme, .dark)
         .contentShape(Rectangle())
         .simultaneousGesture(
             TapGesture()
@@ -934,6 +976,45 @@ struct CrowdHomeView: View {
             mainContent
                 .fullScreenCover(isPresented: $showHostSheet) {
                     hostEventSheet
+                }
+                .overlay {
+                    if showSparkCard {
+                        ZStack {
+                            Color.black.opacity(0.5)
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        showSparkCard = false
+                                    }
+                                }
+                                .transition(.opacity.animation(.easeOut(duration: 0.2)))
+                            
+                            SparkCrowdCard(
+                                defaultRegion: selectedRegion,
+                                onIgnite: { title, coord, locationName in
+                                    createEventFromSparkCard(title: title, coord: coord, locationName: locationName)
+                                },
+                                onClose: {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        showSparkCard = false
+                                    }
+                                }
+                            )
+                            .environmentObject(appState)
+                            .frame(maxWidth: 420)
+                            .background(
+                                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                    .fill(Color(hex: 0xF5F7FA))
+                                    .shadow(color: Color.black.opacity(0.07), radius: 15, x: 0, y: 3)
+                                    .shadow(color: Color.black.opacity(0.14), radius: 7, x: 0, y: 1.5)
+                            )
+                            .padding(.horizontal, 24)
+                            .scaleEffect(showSparkCard ? 1 : 0.85)
+                            .opacity(showSparkCard ? 1 : 0)
+                            .animation(.spring(response: 0.45, dampingFraction: 0.75), value: showSparkCard)
+                        }
+                        .zIndex(999)
+                    }
                 }
                 .overlay(confettiOverlay)
                 .sheet(item: $selectedEvent) { event in
@@ -1606,7 +1687,7 @@ struct CrowdHomeView: View {
                                     highlightColor: Color(hex: 0xff8a00),
                                     containerColor: Color(hex: 0xFFFFFF)
                                 ) {
-                                    showHostSheet = true
+                                    showSparkCard = true
                                     Haptics.light()
                                 }
                                 .offset(y: centerYOffset)
@@ -1668,12 +1749,10 @@ struct CrowdHomeView: View {
                 .padding(.trailing, 24)
                 .padding(.bottom, panelHeight + 28)
                 
-                // === JOINED EVENT INDICATOR (right side, aligned with region selector) ===
+                // === JOINED EVENT INDICATOR (left side) ===
                 if let joinedEvent = appState.currentJoinedEvent {
-                    VStack(alignment: .trailing, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
                         HStack(spacing: 0) {
-                            Spacer()
-                            
                             // White circle with drop shadow
                             Circle()
                                 .fill(Color.white)
@@ -1702,12 +1781,14 @@ struct CrowdHomeView: View {
                             .onTapGesture {
                                 showNavigationModal = true
                             }
-                            .padding(.trailing, 16)
+                            .padding(.leading, 16)
+                            
+                            Spacer()
                         }
                         .padding(.top, 0)
                         .offset(y: -18)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .zIndex(6)
                 }
             }
@@ -1736,6 +1817,77 @@ struct CrowdHomeView: View {
             .onChange(of: route) { _, r in
                 if r == .profile || r == .leaderboard {
                     overlaySnapIndex = 1
+                }
+            }
+        }
+    }
+    
+    private func createEventFromSparkCard(title: String, coord: CLLocationCoordinate2D, locationName: String?) {
+        Task {
+            let isFirstEvent = hostedEvents.isEmpty
+            let startTime = Date()
+            let endTime = startTime.addingTimeInterval(3 * 60 * 60) // 3 hours after start
+            
+            let event = CrowdEvent.newDraft(
+                at: coord,
+                title: title.isEmpty ? "Crowd" : title,
+                hostId: appState.sessionUser?.id ?? "anon",
+                hostName: appState.sessionUser?.displayName ?? "Guest",
+                category: EventCategory.chillHangout.rawValue,
+                description: nil,
+                startTime: startTime,
+                endTime: endTime,
+                tags: [EventCategory.chillHangout.defaultTag],
+                rawLocationName: locationName
+            )
+            
+            do {
+                try await env.eventRepo.create(event: event)
+                
+                let zone = coord.geohash(precision: 4)
+                AnalyticsService.shared.trackEventCreated(
+                    eventId: event.id,
+                    title: event.title,
+                    category: event.category,
+                    zone: zone
+                )
+                
+                if let userId = FirebaseManager.shared.getCurrentUserId() {
+                    do {
+                        try await env.eventRepo.join(eventId: event.id, userId: userId)
+                        
+                        let db = FirebaseManager.shared.db
+                        let attendanceData: [String: Any] = [
+                            "userId": userId,
+                            "eventId": event.id,
+                            "joinedAt": FieldValue.serverTimestamp()
+                        ]
+                        try await db.collection("userAttendances").addDocument(data: attendanceData)
+                        
+                        AttendedEventsService.shared.addAttendedEvent(event)
+                        AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title, zone: zone)
+                    } catch {
+                    }
+                }
+                
+                await MainActor.run {
+                    hostedEvents.append(event)
+                    showConfetti = true
+                    Haptics.light()
+                    appState.currentJoinedEvent = event
+                    showNavigationModal = true
+                    
+                    if isFirstEvent {
+                        AppRatingService.shared.requestRatingIfNeeded(isFirstEvent: true)
+                    }
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        showConfetti = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    hostedEvents.append(event)
                 }
             }
         }
@@ -2017,14 +2169,32 @@ struct CrowdHomeView: View {
     // MARK: - Upcoming Events Loading
     
     private func loadUpcomingEvents() async {
+        print("🔄 DEBUG: loadUpcomingEvents() called")
+        
         // Load upcoming events from CampusEventsViewModel (existing 14-day feed)
-        let campusEventsVM = CampusEventsViewModel()
-        campusEventsVM.start()
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        let sharedVM = await CampusEventsViewModel.shared
+        await sharedVM.fetchOnce(limit: 200)
         await MainActor.run {
-            upcomingEvents = campusEventsVM.crowdEvents
+            upcomingEvents = sharedVM.crowdEvents
+            print("✅ DEBUG: upcomingEvents loaded: \(upcomingEvents.count) events")
+            
+            // Check if any events are today
+            let calendar = Calendar.current
+            let todayCount = upcomingEvents.filter { ev in
+                guard let time = ev.time else { return false }
+                return calendar.isDateInToday(time)
+            }.count
+            
+            print("   Today's events: \(todayCount)")
+            
+            if !upcomingEvents.isEmpty {
+                print("   First 3 events:")
+                for event in upcomingEvents.prefix(3) {
+                    print("   - '\(event.title)' at \(event.time ?? Date.distantPast)")
+                    print("     Coords: (\(event.latitude), \(event.longitude))")
+                }
+            }
         }
-        campusEventsVM.stop()
     }
     
     // MARK: - Calendar Events Preloading

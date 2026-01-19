@@ -754,6 +754,114 @@ exports.cleanupExpiredEventChats = functions.pubsub
     return null;
   });
 
+// === Official Raw Events Cleanup (events_from_official_raw) ===
+// Deletes "old" school events instead of client-side filtering.
+// Strategy: parse rawDateTime -> start time, compare against start of today in America/Chicago.
+function toChicagoDate(d) {
+  if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+  return new Date(d.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+}
+
+function startOfTodayChicago() {
+  const nowChicago = toChicagoDate(new Date());
+  if (!nowChicago) return null;
+  nowChicago.setHours(0, 0, 0, 0);
+  return nowChicago;
+}
+
+function parseOfficialRawStart(doc) {
+  const raw = doc && typeof doc.rawDateTime === 'string' ? doc.rawDateTime : null;
+  if (!raw) return null;
+  // Match iOS cleanup: remove everything after " to "
+  const cleaned = raw.replace(/ to .*$/, '');
+  // Replace " at " with ", " to increase Date() parse success.
+  const candidate = cleaned.replace(' at ', ', ');
+  const dt = new Date(candidate);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+async function deleteOldOfficialRawEvents({ dryRun = true, limit = 1000 } = {}) {
+  const cutoff = startOfTodayChicago();
+  if (!cutoff) throw new Error('Failed to compute startOfTodayChicago');
+
+  const snap = await db.collection('events_from_official_raw').limit(limit).get();
+  if (snap.empty) {
+    console.log('🧹 Official raw cleanup: no docs found');
+    return { scanned: 0, candidates: 0, deleted: 0, dryRun: !!dryRun };
+  }
+
+  const candidates = [];
+  snap.forEach(docSnap => {
+    const data = docSnap.data() || {};
+    const start = parseOfficialRawStart(data);
+    if (!start) return;
+    const startChicago = toChicagoDate(start);
+    if (!startChicago) return;
+    if (startChicago < cutoff) {
+      candidates.push(docSnap.ref);
+    }
+  });
+
+  console.log(`🧹 Official raw cleanup: scanned=${snap.size} candidates=${candidates.length} dryRun=${!!dryRun}`);
+
+  if (dryRun || candidates.length === 0) {
+    return { scanned: snap.size, candidates: candidates.length, deleted: 0, dryRun: !!dryRun };
+  }
+
+  let deleted = 0;
+  for (let i = 0; i < candidates.length; i += 500) {
+    const batch = db.batch();
+    candidates.slice(i, i + 500).forEach(ref => batch.delete(ref));
+    await batch.commit();
+    deleted += Math.min(500, candidates.length - i);
+  }
+
+  console.log(`✅ Official raw cleanup: deleted=${deleted}`);
+  return { scanned: snap.size, candidates: candidates.length, deleted, dryRun: !!dryRun };
+}
+
+// Scheduled: run nightly in America/Chicago
+exports.cleanupExpiredOfficialRawEvents = functions.pubsub
+  .schedule('0 4 * * *') // 4am America/Chicago
+  .timeZone('America/Chicago')
+  .onRun(async () => {
+    try {
+      await deleteOldOfficialRawEvents({ dryRun: false, limit: 5000 });
+      return null;
+    } catch (e) {
+      console.error('❌ cleanupExpiredOfficialRawEvents failed:', e);
+      return null;
+    }
+  });
+
+// Callable: manual trigger (useful for testing). Defaults to dryRun=true.
+exports.runOfficialRawCleanup = functions.https.onCall(async (data) => {
+  const dryRun = data && typeof data.dryRun === 'boolean' ? data.dryRun : true;
+  const limit = data && typeof data.limit === 'number' ? data.limit : 1000;
+  try {
+    return await deleteOldOfficialRawEvents({ dryRun, limit });
+  } catch (error) {
+    console.error('❌ runOfficialRawCleanup failed:', error);
+    throw new functions.https.HttpsError('internal', error.message);
+  }
+});
+
+// HTTP trigger (for emulator/dev tooling): avoids callable protocol issues.
+exports.runOfficialRawCleanupHttp = functions.https.onRequest(async (req, res) => {
+  try {
+    const dryRun = (req.query.dryRun != null)
+      ? String(req.query.dryRun).toLowerCase() !== 'false'
+      : !!(req.body && req.body.dryRun);
+    const limitRaw = (req.query.limit != null) ? req.query.limit : (req.body && req.body.limit);
+    const limit = (typeof limitRaw === 'string' || typeof limitRaw === 'number') ? Number(limitRaw) : 1000;
+    const result = await deleteOldOfficialRawEvents({ dryRun, limit: Number.isFinite(limit) ? limit : 1000 });
+    res.status(200).json(result);
+  } catch (e) {
+    console.error('❌ runOfficialRawCleanupHttp failed:', e);
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
 // Delete an event
 exports.deleteEvent = functions.https.onCall(async (data, context) => {
   try {
@@ -1089,33 +1197,32 @@ exports.getTodaysEvents = functions.https.onCall(async (data, context) => {
   }
 });
 
-// === Callable: Geocode a single campus_events_live event if it lacks coords ===
-exports.geocodeEventIfNeeded = functions.https.onCall(async (data, context) => {
+// === Callable: Geocode a single official raw event (events_from_official_raw) if it lacks coords ===
+exports.geocodeEventIfNeeded = onCall({ enforceAppCheck: false }, async (request) => {
   try {
-    const { id } = data || {};
-    if (!id) {
-      throw new functions.https.HttpsError('invalid-argument', 'id is required');
-    }
-    const ref = db.collection('campus_events_live').doc(id);
+    const { id } = request.data || {};
+    if (!id) throw new HttpsError('invalid-argument', 'id is required');
+
+    const ref = db.collection('events_from_official_raw').doc(id);
     const snap = await ref.get();
-    if (!snap.exists) {
-      throw new functions.https.HttpsError('not-found', 'event not found');
-    }
+    if (!snap.exists) throw new HttpsError('not-found', 'event not found');
+
     const ev = snap.data() || {};
     let { latitude, longitude, geohash } = ev;
     if (typeof latitude === 'number' && typeof longitude === 'number') {
       return { success: true, latitude, longitude, geohash: geohash || geohashEncode(latitude, longitude, 6) };
     }
+
     const locStr = deriveLocationString(ev);
-    if (!locStr) {
-      return { success: false, reason: 'no_location_string' };
-    }
+    if (!locStr) return { success: false, reason: 'no_location_string' };
+
     const cacheKey = normalizeLocationKey(locStr);
     let cached = null;
     if (cacheKey) {
       const cachedDoc = await db.collection('geocoding_cache').doc(cacheKey).get();
       if (cachedDoc.exists) cached = cachedDoc.data();
     }
+
     let geo = cached;
     if (!geo) {
       geo = await geocodeLocation(locStr);
@@ -1130,12 +1237,15 @@ exports.geocodeEventIfNeeded = functions.https.onCall(async (data, context) => {
         }, { merge: true });
       }
     }
-    latitude = geo.latitude; longitude = geo.longitude; geohash = geohashEncode(latitude, longitude, 6);
+
+    latitude = geo.latitude;
+    longitude = geo.longitude;
+    geohash = geohashEncode(latitude, longitude, 6);
     await ref.set({ latitude, longitude, geohash }, { merge: true });
     return { success: true, latitude, longitude, geohash };
   } catch (error) {
     console.error('❌ geocodeEventIfNeeded failed:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new HttpsError('internal', error.message);
   }
 });
 

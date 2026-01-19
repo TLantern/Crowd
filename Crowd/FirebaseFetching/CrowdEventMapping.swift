@@ -106,7 +106,7 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     // choose category + emoji
     let cat = EventCategory.guess(
         from: rawTitle,
-        sourceType: live.sourceType,
+        sourceType: live.sourceType ?? "official",
         locationName: live.locationName
     )
     let emoji = cat.emoji
@@ -117,7 +117,8 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     var descPieces: [String] = []
     if let loc = live.locationName, !loc.isEmpty { descPieces.append(loc) }
     if live.sourceType == "instagram" {
-        descPieces.append("Posted by @\(live.sourceOrg)")
+        let org = live.sourceOrg ?? live.organization ?? "unknown"
+        descPieces.append("Posted by @\(org)")
     }
     var description = descPieces.joined(separator: " • ")
 
@@ -136,7 +137,7 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     // Use tags from Firebase, fallback to generated tags if none provided
     var tags: [String] = live.tags ?? []
     if tags.isEmpty {
-        if live.sourceType == "official" {
+        if (live.sourceType ?? "official") == "official" {
             tags.append("official")
         } else {
             tags.append("student")
@@ -147,7 +148,7 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     let displayTitle = rawTitle
 
     // Only keep a valid http(s) source URL
-    let cleanedSource = live.sourceUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+    let cleanedSource = (live.sourceUrl ?? live.url ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let validSource: String? = {
         guard !cleanedSource.isEmpty else { return nil }
         if cleanedSource.lowercased().hasPrefix("http://") || cleanedSource.lowercased().hasPrefix("https://") {
@@ -178,8 +179,8 @@ func mapCampusEventLiveToCrowdEvent(_ live: CampusEventLive) -> CrowdEvent? {
     var ev = CrowdEvent.newDraft(
         at: coord,
         title: displayTitle,
-        hostId: live.sourceOrg,
-        hostName: live.sourceOrg,
+        hostId: live.sourceOrg ?? live.organization ?? "UNT Official",
+        hostName: live.sourceOrg ?? live.organization ?? "UNT Official",
         category: cat.rawValue,
         description: description.isEmpty ? nil : description,
         startTime: startsAtDate,

@@ -863,6 +863,19 @@ final class FirebaseEventRepository: EventRepository {
             throw CrowdError.custom("Event not found")
         }
         
+        // Get event data to check host and current endTime
+        let eventData = eventDoc.exists ? eventDoc.data() : userEventDoc.data()
+        let hostId = eventData?["hostId"] as? String
+        let isHostJoining = hostId == userId
+        
+        // Get current endTime to extend it
+        var currentEndTime: Date?
+        if let endsAtSeconds = eventData?["endsAt"] as? TimeInterval {
+            currentEndTime = Date(timeIntervalSince1970: endsAtSeconds)
+        } else if let endsAtTimestamp = eventData?["endsAt"] as? Timestamp {
+            currentEndTime = endsAtTimestamp.dateValue()
+        }
+        
         // Create signal document directly in Firestore (latitude/longitude optional)
         var signalData: [String: Any] = [
             "eventId": eventId,
@@ -883,12 +896,21 @@ final class FirebaseEventRepository: EventRepository {
             let signalRef = db.collection("signals").document()
             try await signalRef.setData(signalData)
             
-            // Update event attendee count
+            // Update event attendee count and extend endTime by 1 hour if not host
             let eventRef = eventDoc.exists ? db.collection("events").document(eventId) : db.collection("userEvents").document(eventId)
-            try await eventRef.updateData([
+            var updateData: [String: Any] = [
                 "attendeeCount": FieldValue.increment(Int64(1)),
                 "signalStrength": FieldValue.increment(Int64(3))
-            ])
+            ]
+            
+            // Extend endTime by 1 hour when someone joins (not the host)
+            if !isHostJoining, let endTime = currentEndTime {
+                let extendedEndTime = endTime.addingTimeInterval(60 * 60) // Add 1 hour
+                updateData["endsAt"] = extendedEndTime.timeIntervalSince1970
+                print("⏰ Extending event endTime by 1 hour: \(extendedEndTime)")
+            }
+            
+            try await eventRef.updateData(updateData)
             
             if let loc = location {
                 print("✅ FirebaseEventRepository: Successfully joined event \(eventId) at location (\(loc.latitude), \(loc.longitude))")

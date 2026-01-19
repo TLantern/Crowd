@@ -16,11 +16,16 @@ struct CampusEventLive: Codable, Identifiable {
     let rawDateTime: String?  // Firebase dateTime field for school events
     let endTimeLocal: String?
 
-    let sourceType: String        // "instagram" or "official"
-    let sourceOrg: String         // "bsu_unt" or "UNT Official"
-    let sourceUrl: String
-    let tags: [String]?           // Tags from Firebase
-    let imageUrl: String?         // Image URL from Firestore (note: lowercase 'u' in Url)
+    // Made optional to support both campus_events_live and events_from_official_raw schemas
+    let sourceType: String?
+    let sourceOrg: String?
+    let sourceUrl: String?
+    // events_from_official_raw uses different field names
+    let organization: String?  // alias for sourceOrg
+    let url: String?           // alias for sourceUrl
+    
+    let tags: [String]?
+    let imageUrl: String?
 
     let confidence: Double?
     let createdAt: Timestamp?

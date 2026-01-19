@@ -58,7 +58,7 @@ struct LottieFire: View {
     var size: CGFloat = 28
     
     var body: some View {
-        LottieView(name: "Fire animation", loopMode: .loop)
+        LottieView(name: "o", loopMode: .loop)
             .frame(width: size, height: size)
     }
 }

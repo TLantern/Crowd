@@ -59,6 +59,7 @@ struct CrowdMapView: View {
                     }
                     // Optional: CrowdHeatmapOverlay(dots: ...)
                 }
+                .environment(\.colorScheme, .dark)
             .onMapCameraChange { context in
                 cameraPosition = .camera(context.camera)
                 currentCameraDistance = context.camera.distance

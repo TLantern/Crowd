@@ -19,12 +19,23 @@ final class VisibilityService {
     // MARK: - Mock Users for Testing
     private var mockUsersEnabled = true // Set to false to disable mock users
     
+    // Fixed reference point: UNT campus center
+    private let untCampusCenter = CLLocationCoordinate2D(
+        latitude: 33.210081,
+        longitude: -97.147700
+    )
+    
+    // Cached mock users with fixed coordinates
+    private lazy var cachedMockUsers: [UserProfile] = {
+        generateMockUsers()
+    }()
+    
     private init() {
         self.db = FirebaseManager.shared.db
     }
     
-    // Generate mock users around UNT campus
-    private func generateMockUsers(center: CLLocationCoordinate2D) -> [UserProfile] {
+    // Generate mock users with fixed coordinates around UNT campus
+    private func generateMockUsers() -> [UserProfile] {
         let mockUsers: [(name: String, offset: (lat: Double, lng: Double), color: String)] = [
             ("Alex Martinez", (0.002, 0.001), "#FF6B6B"),
             ("Jordan Lee", (-0.001, 0.002), "#4ECDC4"),
@@ -38,8 +49,8 @@ final class VisibilityService {
         
         return mockUsers.enumerated().map { index, user in
             let coordinate = CLLocationCoordinate2D(
-                latitude: center.latitude + user.offset.lat,
-                longitude: center.longitude + user.offset.lng
+                latitude: untCampusCenter.latitude + user.offset.lat,
+                longitude: untCampusCenter.longitude + user.offset.lng
             )
             
             let interests = [
@@ -213,11 +224,10 @@ final class VisibilityService {
         
         print("👁️ Fetching visible users in region, found \(profiles.count) users")
         
-        // Add mock users if enabled
+        // Add mock users if enabled (using fixed coordinates)
         if mockUsersEnabled {
-            let mockProfiles = generateMockUsers(center: center)
-            profiles.append(contentsOf: mockProfiles)
-            print("👁️ Added \(mockProfiles.count) mock users for testing")
+            profiles.append(contentsOf: cachedMockUsers)
+            print("👁️ Added \(cachedMockUsers.count) mock users for testing")
         }
         
         return profiles
@@ -315,10 +325,9 @@ final class VisibilityService {
                     }
                 }
                 
-                // Add mock users if enabled
+                // Add mock users if enabled (using fixed coordinates)
                 if self.mockUsersEnabled {
-                    let mockProfiles = self.generateMockUsers(center: center)
-                    profiles.append(contentsOf: mockProfiles)
+                    profiles.append(contentsOf: self.cachedMockUsers)
                 }
                 
                 onChange(profiles)

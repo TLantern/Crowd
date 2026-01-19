@@ -97,15 +97,7 @@ struct EventNavigationModal: View {
                 VStack(spacing: 0) {
                     // Top bar - compressed
                     VStack(spacing: 0) {
-                        // Title row
-                        ZStack {
-                            MarqueeTitle(text: "\(eventEmoji) \(event.title)")
-                                .padding(.horizontal, 5)
-                        }
-                        .frame(height: 32)
-                        .padding(.bottom, 4)
-                        
-                        // Tab switcher row
+                        // Title row with back button
                         HStack(spacing: 8) {
                             // Back button (left)
                             Button(action: { dismiss() }) {
@@ -115,37 +107,57 @@ struct EventNavigationModal: View {
                             }
                             .padding(.leading, 4)
                             
-                            Spacer()
-                            
-                            // Tabs (center)
-                            HStack(spacing: 0) {
-                                TabButton(
-                                    title: "Chat 💬",
-                                    isSelected: selectedTab == .chat,
-                                    action: { selectedTab = .chat }
-                                )
-                                
-                                TabButton(
-                                    title: "Map 📍",
-                                    isSelected: selectedTab == .map,
-                                    action: { selectedTab = .map }
-                                )
+                            // Title (center)
+                            if event.id == "UNT" {
+                                MarqueeTitle(text: "UNT 🦅")
+                                    .padding(.horizontal, 5)
+                            } else {
+                                MarqueeTitle(text: "\(eventEmoji) \(event.title)")
+                                    .padding(.horizontal, 5)
                             }
-                            .frame(height: 36)
-                            .frame(width: 220)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            
                             Spacer()
+                            
+                            // Tabs (right, hidden for UNT)
+                            if event.id != "UNT" {
+                                HStack(spacing: 0) {
+                                    TabButton(
+                                        title: "Chat 💬",
+                                        isSelected: selectedTab == .chat,
+                                        action: { selectedTab = .chat }
+                                    )
+                                    
+                                    TabButton(
+                                        title: "Map 📍",
+                                        isSelected: selectedTab == .map,
+                                        action: { selectedTab = .map }
+                                    )
+                                }
+                                .frame(height: 36)
+                                .frame(width: 220)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
                         }
+                        .frame(height: 32)
                         .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
+                        .padding(.bottom, event.id == "UNT" ? 6 : 8)
                     }
                     .padding(.top, 8)
                     .background(Color(hex: 0x02853E))
                     
-                    // Full screen tab content
+                    // Full screen tab content (always chat for UNT)
                     Group {
-                        if selectedTab == .map {
+                        if event.id == "UNT" {
+                            ChatTabView(
+                                eventId: event.id,
+                                attendeeCount: liveAttendeeCount,
+                                chatService: chatService,
+                                messageText: $messageText,
+                                selectedImage: $selectedImage,
+                                selectedImageData: $selectedImageData,
+                                sendMessage: sendMessage,
+                                isSendingMessage: $isSendingMessage
+                            )
+                        } else if selectedTab == .map {
                             MapTabView(
                                 event: event,
                                 userLocation: userLocation
@@ -639,17 +651,19 @@ struct ChatTabView: View {
         GeometryReader { geometry in
             ZStack {
                 VStack(spacing: 0) {
-                    // People Here Now
-                    PeopleHereNowView(
-                        attendees: attendees,
-                        totalCount: attendeeCount,
-                        onTap: { showParticipantList = true }
-                    )
-                    .padding(.top, 4)
-                    .padding(.horizontal, 16)
-                    
-                    Divider()
-                        .padding(.top, 6)
+                    // People Here Now (hidden for UNT)
+                    if eventId != "UNT" {
+                        PeopleHereNowView(
+                            attendees: attendees,
+                            totalCount: attendeeCount,
+                            onTap: { showParticipantList = true }
+                        )
+                        .padding(.top, 4)
+                        .padding(.horizontal, 16)
+                        
+                        Divider()
+                            .padding(.top, 6)
+                    }
                     
                     // Live Activity Banner (hide after user sends first message)
                     if !activityMessages.isEmpty && !chatService.messages.contains(where: { $0.isCurrentUser }) {
@@ -707,8 +721,8 @@ struct ChatTabView: View {
                     VStack(spacing: 8) {
                         Divider()
                         
-                        // Seed prompts row + Reaction bar (hide after user sends first message)
-                        if !chatService.messages.contains(where: { $0.isCurrentUser }) {
+                        // Seed prompts row + Reaction bar (hide after user sends first message, hidden for UNT)
+                        if eventId != "UNT" && !chatService.messages.contains(where: { $0.isCurrentUser }) {
                             SeedPromptsRow(
                                 prompts: seedPrompts,
                                 hasMessages: !chatService.messages.isEmpty,
@@ -848,7 +862,9 @@ struct ChatTabView: View {
         if attendeeCount > 0 {
             messages.append("\(attendeeCount) people here now")
         }
-        messages.append("Ask what the vibe is rn 💬")
+        if eventId != "UNT" {
+            messages.append("Ask what the vibe is rn 💬")
+        }
         activityMessages = messages
     }
     
