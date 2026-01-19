@@ -22,17 +22,19 @@ final class CampusEventsViewModel: ObservableObject {
     private let cacheTimestampKey = "campus_events_cache_timestamp"
     
     // Shared singleton instance for preloading events
-    // Step 1: Load minimal local cache immediately on initialization
+    // Load all events immediately from Firebase on initialization
     @MainActor
     static let shared: CampusEventsViewModel = {
         let vm = CampusEventsViewModel()
-        // Load from cache synchronously on MainActor - this is fast and shows data immediately
-        vm.loadFromCache()
+        // Fetch all events immediately from Firebase
+        Task {
+            await vm.fetchOnce(limit: 200)
+        }
         return vm
     }()
 
-    /// Step 2 & 3: Fetch fresh data from Firebase and replace cache
-    /// This is called in parallel after cache load to refresh with latest server data
+    /// Fetch fresh data from Firebase and replace cache
+    /// This loads all events immediately from the server
     func fetchOnce(limit: Int = 25) async {
         // Don't clear existing events - they might be from cache (Step 1)
         // Step 3: Server data will replace cache when it arrives
@@ -385,9 +387,8 @@ final class CampusEventsViewModel: ObservableObject {
     
     // MARK: - Cache Management
     
-    /// Step 1: Load events from local cache
-    /// This loads cached events immediately on app start to show data instantly
-    /// The cache is then replaced with fresh server data when it arrives (Step 3)
+    /// Load events from local cache
+    /// This loads cached events as a fallback if available
     @MainActor
     func loadFromCache() {
         guard let data = UserDefaults.standard.data(forKey: cacheKey),
@@ -405,7 +406,7 @@ final class CampusEventsViewModel: ObservableObject {
         
         if !validCached.isEmpty {
             self.crowdEvents = validCached
-            print("📦 Loaded \(validCached.count) events from cache (Step 1)")
+            print("📦 Loaded \(validCached.count) events from cache")
         } else {
             print("📦 Cache contained only expired events")
         }

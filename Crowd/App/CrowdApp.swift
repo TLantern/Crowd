@@ -20,6 +20,7 @@ struct CrowdApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
     @StateObject private var onboardingCoordinator = OnboardingCoordinator.shared
+    @StateObject private var deepLinks = DeepLinkManager.shared
     
     // NEW: Campus selection gate (replaces mandatory onboarding)
     @AppStorage("hasCompletedCampusSelection") private var hasCompletedCampusSelection = false
@@ -131,6 +132,9 @@ struct CrowdApp: App {
             }
             .onReceive(NotificationCenter.default.publisher(for: .accountDeleted)) { _ in
                 accountDeleted = true
+            }
+            .onOpenURL { url in
+                DeepLinkManager.shared.handle(url: url)
             }
         }
     }

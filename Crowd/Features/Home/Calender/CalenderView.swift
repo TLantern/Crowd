@@ -39,9 +39,12 @@ struct CalenderView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var campusEventsVM = CampusEventsViewModel.shared
     @EnvironmentObject private var appState: AppState
+    @StateObject private var deepLinks = DeepLinkManager.shared
     @State private var selectedCategories: Set<EventCategory> = []
     @State private var displayedEventCount = 10
     @State private var selectedTab: TabSelection = .parties
+    @State private var selectedPartyEvent: CrowdEvent?
+    @State private var selectedSchoolEvent: CrowdEvent?
     private let eventsPerPage = 10
     
     enum TabSelection {
@@ -334,6 +337,24 @@ struct CalenderView: View {
             .onChange(of: selectedCategories) { _, _ in
                 displayedEventCount = eventsPerPage
             }
+            .onChange(of: deepLinks.pendingEventId) { _, newId in
+                if let id = newId {
+                    Task {
+                        await resolveDeepLinkedEvent(id)
+                    }
+                    deepLinks.pendingEventId = nil
+                }
+            }
+            .navigationDestination(item: $selectedPartyEvent) { event in
+                PartyCardView(party: event)
+            }
+            .navigationDestination(item: $selectedSchoolEvent) { event in
+                ScrollView {
+                    SchoolEventCardView(event: event, index: 0, isVisible: true, priority: true)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+            }
             .fullScreenCover(isPresented: $showEventCreationFlow) {
                 EventCreationFlowView()
                     .transition(.opacity)
@@ -356,6 +377,90 @@ struct CalenderView: View {
                 print("❌ geocodeEventIfNeeded failed for \(ev.id): \(error)")
             }
         }
+    }
+    
+    // MARK: - Deep Link Resolution
+    
+    func resolveDeepLinkedEvent(_ eventId: String) async {
+        // Try school events first (official)
+        if let schoolEvent = await fetchSchoolEvent(id: eventId) {
+            await MainActor.run {
+                selectedSchoolEvent = schoolEvent
+                selectedTab = .schoolEvents
+            }
+            return
+        }
+        
+        // If not found, try party events
+        if let partyEvent = await fetchPartyEvent(id: eventId) {
+            await MainActor.run {
+                selectedPartyEvent = partyEvent
+                selectedTab = .parties
+            }
+            return
+        }
+        
+        print("Deep link event not found:", eventId)
+    }
+    
+    private func fetchSchoolEvent(id: String) async -> CrowdEvent? {
+        // Check in loaded school events first
+        if let event = campusEventsVM.crowdEvents.first(where: { $0.id == id }) {
+            return event
+        }
+        
+        // Try fetching from Firebase
+        let db = FirebaseManager.shared.db
+        let firebaseRepo = FirebaseEventRepository()
+        
+        // Try events collection
+        do {
+            let doc = try await db.collection("events").document(id).getDocument()
+            if let data = doc.data() {
+                var eventData = data
+                eventData["id"] = id
+                if let event = try? firebaseRepo.parseEvent(from: eventData) {
+                    return event
+                }
+            }
+        } catch {
+            print("⚠️ Failed to fetch school event from events collection: \(error)")
+        }
+        
+        // Try userEvents collection
+        do {
+            let doc = try await db.collection("userEvents").document(id).getDocument()
+            if let data = doc.data() {
+                var eventData = data
+                eventData["id"] = id
+                if let event = try? firebaseRepo.parseEvent(from: eventData) {
+                    return event
+                }
+            }
+        } catch {
+            print("⚠️ Failed to fetch school event from userEvents collection: \(error)")
+        }
+        
+        return nil
+    }
+    
+    private func fetchPartyEvent(id: String) async -> CrowdEvent? {
+        let env = AppEnvironment.current
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
+            return nil
+        }
+        
+        // Try fetching from parties collection
+        do {
+            let parties = try await firebaseRepo.fetchParties()
+            if let event = parties.first(where: { $0.id == id }) {
+                return event
+            }
+        } catch {
+            print("⚠️ Failed to fetch party event: \(error)")
+        }
+        
+        return nil
     }
     
     // MARK: - Moderation Data Loading
@@ -1145,7 +1250,8 @@ struct SchoolEventCardView: View {
             shareText += "Where: \(location)\n"
         }
         
-        shareText += "\nView on Crowd: crowd://event/\(event.id)"
+        shareText += "\nView on Crowd: \(makeShareLink(event.id))"
+
         
         let activityViewController = UIActivityViewController(
             activityItems: [shareText],
@@ -1172,6 +1278,14 @@ struct SchoolEventCardView: View {
             topController.present(activityViewController, animated: true)
         }
     }
+}
+
+private func makeShareLink(_ id: String, source: String? = "share") -> String {
+    var link = "https://the-crowd-app.com/event/\(id)"
+    if let source, !source.isEmpty {
+        link += "?src=\(source)"
+    }
+    return link
 }
 
 // MARK: - Parties View
@@ -1610,7 +1724,7 @@ struct PartyCardView: View {
             shareText += "\n👥 \(goingCount) going\n"
         }
         
-        shareText += "\nView on Crowd: crowd://party/\(party.id)"
+        shareText += "\nView on Crowd: \(makeShareLink(party.id))"
         
         let activityViewController = UIActivityViewController(
             activityItems: [shareText],

@@ -368,11 +368,11 @@ struct EventOnboardingCard: View {
                     .lineLimit(2)
                 
                 // Date and time
-                if let startsAt = event.startsAt {
+                if let dateTime = event.dateTime, !dateTime.isEmpty {
                     HStack(spacing: 6) {
                         Image(systemName: "calendar")
                             .font(.system(size: 14))
-                        Text(formatDate(startsAt))
+                        Text(dateTime)
                             .font(.system(size: 14))
                     }
                     .foregroundColor(.gray)
@@ -478,7 +478,7 @@ class PartiesOnboardingViewModel: ObservableObject {
                 
                 // Combine parties and official events, sort by date
                 var combined = allParties + officialEvents
-                combined.sort { ($0.startsAt ?? .distantFuture) < ($1.startsAt ?? .distantFuture) }
+                combined.sort { ($0.startTime ?? $0.time ?? .distantFuture) < ($1.startTime ?? $1.time ?? .distantFuture) }
                 
                 // Show at least 3, up to 10 events
                 let maxEvents = min(10, combined.count)

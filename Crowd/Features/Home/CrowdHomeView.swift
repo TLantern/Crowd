@@ -2029,13 +2029,11 @@ struct CrowdHomeView: View {
     
     // MARK: - Calendar Events Preloading
     
-    /// Preloads calendar events (parties/school events) using cache-and-refresh pattern:
-    /// Step 1: Cache loads immediately on app start (in singleton init)
-    /// Step 2: Fire fresh Firebase fetch in parallel
-    /// Step 3: Replace cache with server data when it arrives
+    /// Preloads calendar events (parties/school events):
+    /// Events are loaded immediately from Firebase on singleton initialization
     /// This ensures low latency when navigating to CalendarView
     private func preloadCalendarEvents() async {
-        // Step 2: Fire fresh fetch in parallel (cache already loaded in Step 1)
+        // Events already loading in singleton init, but ensure completion
         let sharedVM = await CampusEventsViewModel.shared
         await sharedVM.fetchOnce(limit: 200) // Preload with high limit to get all future events
     }
