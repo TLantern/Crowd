@@ -319,9 +319,9 @@ struct EventOnboardingCard: View {
     let isTopCard: Bool
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Event image
-            ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .bottom) {
+            // Full-bleed event image
+            GeometryReader { geometry in
                 if let imageUrl = event.imageURL, let url = URL(string: imageUrl) {
                     AsyncImage(url: url) { phase in
                         switch phase {
@@ -329,80 +329,89 @@ struct EventOnboardingCard: View {
                             image
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .clipped()
                         case .failure:
                             placeholderImage
                         case .empty:
-                            ProgressView()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(Color.gray.opacity(0.2))
+                            ZStack {
+                                Color.gray.opacity(0.2)
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            }
                         @unknown default:
                             placeholderImage
                         }
                     }
-                    .frame(height: 200)
-                    .clipped()
                 } else {
                     placeholderImage
-                        .frame(height: 200)
-                }
-                
-                // Category badge
-                if let categoryStr = event.category, 
-                   let category = EventCategory(rawValue: categoryStr) {
-                    Text(category.emoji)
-                        .font(.system(size: 24))
-                        .padding(8)
-                        .background(
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                        )
-                        .padding(12)
                 }
             }
             
-            // Event info
-            VStack(alignment: .leading, spacing: 8) {
+            // Category badge (top right)
+            VStack {
+                HStack {
+                    Spacer()
+                    if let categoryStr = event.category, 
+                       let category = EventCategory(rawValue: categoryStr) {
+                        Text(category.emoji)
+                            .font(.system(size: 24))
+                            .padding(10)
+                            .background(
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                            )
+                            .padding(16)
+                    }
+                }
+                Spacer()
+            }
+            
+            // Gradient overlay for text readability
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    .clear,
+                    .black.opacity(0.3),
+                    .black.opacity(0.7),
+                    .black.opacity(0.9)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 200)
+            
+            // Event info overlay at bottom
+            VStack(alignment: .leading, spacing: 10) {
+                // Title
                 Text(event.title)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.black)
+                    .foregroundColor(.white)
                     .lineLimit(2)
+                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                 
-                // Date and time
-                if let dateTime = event.dateTime, !dateTime.isEmpty {
-                    HStack(spacing: 6) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 14))
-                        Text(dateTime)
-                            .font(.system(size: 14))
-                    }
-                    .foregroundColor(.gray)
-                }
-                
-                // Location
+                // Location with pin icon
                 if let location = event.rawLocationName {
                     HStack(spacing: 6) {
                         Image(systemName: "mappin")
-                            .font(.system(size: 14))
+                            .font(.system(size: 13, weight: .medium))
                         Text(location)
                             .font(.system(size: 14))
                             .lineLimit(1)
                     }
-                    .foregroundColor(.gray)
+                    .foregroundColor(.white.opacity(0.9))
                 }
                 
-                Spacer()
-                
                 // Social proof row
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     // Interest count (attendee count)
                     if event.attendeeCount > 0 {
                         HStack(spacing: 4) {
                             Image(systemName: "person.2.fill")
                                 .font(.system(size: 12))
                             Text("\(event.attendeeCount) interested")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 13, weight: .semibold))
                         }
-                        .foregroundColor(Color(hex: 0x02853E))
+                        .foregroundColor(Color(hex: 0x4ADE80)) // Bright green for visibility
                     }
                     
                     // Signal strength as engagement indicator
@@ -411,7 +420,7 @@ struct EventOnboardingCard: View {
                             Image(systemName: "flame.fill")
                                 .font(.system(size: 12))
                             Text("Hot")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 13, weight: .semibold))
                         }
                         .foregroundColor(.orange)
                     }
@@ -419,19 +428,35 @@ struct EventOnboardingCard: View {
                     Spacer()
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
+            .padding(.top, 16)
         }
-        .background(Color.white)
+        .frame(maxWidth: .infinity)
+        .background(Color.black)
         .cornerRadius(24)
-        .shadow(color: .black.opacity(0.15), radius: 15, y: 8)
+        .shadow(color: .black.opacity(0.25), radius: 20, y: 10)
     }
     
     private var placeholderImage: some View {
         ZStack {
-            Color.gray.opacity(0.2)
-            Image(systemName: "party.popper.fill")
-                .font(.system(size: 40))
-                .foregroundColor(.gray.opacity(0.4))
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(hex: 0x1a1a2e),
+                    Color(hex: 0x16213e)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            
+            VStack(spacing: 12) {
+                Image(systemName: "party.popper.fill")
+                    .font(.system(size: 50))
+                    .foregroundColor(.white.opacity(0.3))
+                Text("No Image")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.3))
+            }
         }
     }
     
