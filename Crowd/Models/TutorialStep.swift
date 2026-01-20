@@ -42,12 +42,19 @@ extension TutorialStep {
         TutorialStep(
             id: 2,
             title: "Create Your Own Event",
-            description: "Have plans already? Tap the green plus, enter your crowd info, and let people know where you're gathering.",
+            description: "Have plans already? Tap the glowing fire, enter your crowd info, and let people know where you're gathering.",
             cardPosition: .bottomCenter,
             arrowDirection: .top
         ),
         TutorialStep(
             id: 3,
+            title: "Visibility Mode 👻",
+            description: "Tap the ghost icon to see other users on the map and share your location. It auto-expires after 6 hours for privacy.",
+            cardPosition: .topCenter,
+            arrowDirection: .bottom
+        ),
+        TutorialStep(
+            id: 4,
             title: "You're All Set! 🚀",
             description: "Start exploring events around you and connect with your campus community.",
             cardPosition: .center,

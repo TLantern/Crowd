@@ -57,7 +57,6 @@ struct CrowdHomeView: View {
     
     // MARK: - Tutorial
     @State private var showTutorialOverlay = false
-    @State private var showCalendarReminderAfterTutorial = false
     
     // MARK: - Clustering
     @State private var expandedClusterId: String?
@@ -1024,7 +1023,6 @@ struct CrowdHomeView: View {
                         .presentationDragIndicator(.visible)
                 }
                 .overlay(tutorialOverlay)
-                .overlay(calendarReminderOverlay)
                 .onChange(of: appState.showTutorial) { _, shouldShow in
                     if shouldShow {
                         showTutorialOverlay = true
@@ -1986,113 +1984,10 @@ struct CrowdHomeView: View {
                     showTutorialOverlay = false
                     appState.showTutorial = false
                 },
-                onStepComplete: { stepId in
-                    // When step 2 (Create Your Own Event) completes, show calendar reminder
-                    if stepId == 2 {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                showCalendarReminderAfterTutorial = true
-                            }
-                        }
-                    }
-                }
+                onStepComplete: nil
             )
             .transition(.opacity)
             .zIndex(1000)
-        }
-    }
-    
-    // MARK: - Calendar Reminder Overlay (shown after tutorial step 2)
-    
-    @ViewBuilder
-    private var calendarReminderOverlay: some View {
-        if showCalendarReminderAfterTutorial {
-            ZStack {
-                // Semi-transparent overlay
-                Color.black.opacity(0.85)
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    Spacer()
-                    
-                    // Reminder content
-                    VStack(spacing: 20) {
-                        // Calendar icon with pulsing effect
-                        ZStack {
-                            Circle()
-                                .fill(Color(hex: 0x02853E).opacity(0.15))
-                                .frame(width: 120, height: 120)
-                            
-                            Circle()
-                                .fill(Color(hex: 0x02853E).opacity(0.25))
-                                .frame(width: 90, height: 90)
-                            
-                            Image(systemName: "calendar")
-                                .font(.system(size: 40, weight: .medium))
-                                .foregroundColor(Color(hex: 0x02853E))
-                        }
-                        
-                        // Message
-                        VStack(spacing: 8) {
-                            Text("Good to know 📅")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.white)
-                            
-                            Text("You can always find parties/school\nevents in the calendar!")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white.opacity(0.8))
-                                .multilineTextAlignment(.center)
-                                .lineSpacing(4)
-                        }
-                        
-                        // Arrow pointing to calendar
-                        Image(systemName: "arrow.down")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundColor(Color(hex: 0x02853E))
-                            .padding(.top, 8)
-                        
-                        // Calendar tab highlight (icon only, no text)
-                        Image(systemName: "calendar")
-                            .font(.system(size: 32))
-                            .foregroundColor(Color(hex: 0x02853E))
-                            .padding(16)
-                            .background(
-                                Circle()
-                                    .fill(Color(hex: 0x02853E).opacity(0.2))
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color(hex: 0x02853E), lineWidth: 2)
-                                    )
-                            )
-                        
-                        // Got it button - dismisses the reminder
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                showCalendarReminderAfterTutorial = false
-                            }
-                            
-                            AnalyticsService.shared.track("calendar_reminder_dismissed", props: [:])
-                        }) {
-                            Text("Got it!")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(Color(hex: 0x02853E))
-                                )
-                        }
-                        .padding(.horizontal, 40)
-                        .padding(.top, 20)
-                    }
-                    .padding(.horizontal, 24)
-                    
-                    Spacer()
-                }
-            }
-            .transition(.opacity)
-            .zIndex(1001)
         }
     }
     
