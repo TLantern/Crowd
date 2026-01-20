@@ -15,6 +15,8 @@ struct PartiesOnboardingView: View {
     @StateObject private var viewModel = PartiesOnboardingViewModel()
     @State private var currentIndex: Int = 0
     @State private var eventsViewedCount: Int = 0 // Count of events user has seen
+    @State private var selectedEvent: CrowdEvent? = nil // For showing party details
+    @State private var showEventDetail: Bool = false
     
     let onComplete: () -> Void
     let onIntentAction: (IntentAction) -> Void
@@ -158,7 +160,12 @@ struct PartiesOnboardingView: View {
                     if index >= currentIndex && index < currentIndex + 3 {
                         EventOnboardingCard(
                             event: viewModel.events[index],
-                            isTopCard: index == currentIndex
+                            isTopCard: index == currentIndex,
+                            onTap: {
+                                // Show detail sheet when card is tapped
+                                selectedEvent = viewModel.events[index]
+                                showEventDetail = true
+                            }
                         )
                         .offset(y: CGFloat(index - currentIndex) * 8)
                         .scaleEffect(1.0 - CGFloat(index - currentIndex) * 0.05)
@@ -172,6 +179,13 @@ struct PartiesOnboardingView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(height: 420)
+        .sheet(isPresented: $showEventDetail) {
+            if let event = selectedEvent {
+                PartyDetailSheet(event: event)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+        }
     }
     
     // MARK: - Swipe Gesture
@@ -317,6 +331,7 @@ struct PartiesOnboardingView: View {
 struct EventOnboardingCard: View {
     let event: CrowdEvent
     let isTopCard: Bool
+    let onTap: () -> Void
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -389,44 +404,27 @@ struct EventOnboardingCard: View {
                     .lineLimit(2)
                     .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                 
-                // Location with pin icon
+                // Address/Location with pin icon
                 if let location = event.rawLocationName {
                     HStack(spacing: 6) {
                         Image(systemName: "mappin")
                             .font(.system(size: 13, weight: .medium))
                         Text(location)
                             .font(.system(size: 14))
-                            .lineLimit(1)
+                            .lineLimit(2)
                     }
                     .foregroundColor(.white.opacity(0.9))
                 }
                 
-                // Social proof row
-                HStack(spacing: 12) {
-                    // Interest count (attendee count)
-                    if event.attendeeCount > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "person.2.fill")
-                                .font(.system(size: 12))
-                            Text("\(event.attendeeCount) interested")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundColor(Color(hex: 0x4ADE80)) // Bright green for visibility
-                    }
-                    
-                    // Signal strength as engagement indicator
-                    if event.signalStrength > 0 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "flame.fill")
-                                .font(.system(size: 12))
-                            Text("Hot")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundColor(.orange)
-                    }
-                    
-                    Spacer()
+                // Start and End Time
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 13, weight: .medium))
+                    Text(formatTimeRange())
+                        .font(.system(size: 14))
+                        .lineLimit(1)
                 }
+                .foregroundColor(.white.opacity(0.9))
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
@@ -436,6 +434,9 @@ struct EventOnboardingCard: View {
         .background(Color.black)
         .cornerRadius(24)
         .shadow(color: .black.opacity(0.25), radius: 20, y: 10)
+        .onTapGesture {
+            onTap()
+        }
     }
     
     private var placeholderImage: some View {
@@ -460,19 +461,182 @@ struct EventOnboardingCard: View {
         }
     }
     
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
+    private func formatTimeRange() -> String {
+        let startTime = event.startTime ?? event.time
+        let endTime = event.endTime
         
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) {
-            formatter.dateFormat = "'Today at' h:mm a"
-        } else if calendar.isDateInTomorrow(date) {
-            formatter.dateFormat = "'Tomorrow at' h:mm a"
-        } else {
-            formatter.dateFormat = "EEEE, MMM d 'at' h:mm a"
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, h:mm a"
+        
+        if let start = startTime {
+            var result = formatter.string(from: start)
+            if let end = endTime {
+                let timeFormatter = DateFormatter()
+                timeFormatter.dateFormat = "h:mm a"
+                result += " - " + timeFormatter.string(from: end)
+            }
+            return result
         }
         
-        return formatter.string(from: date)
+        // Fallback to dateTime string if no parsed dates
+        if let dateTime = event.dateTime, !dateTime.isEmpty {
+            return dateTime
+        }
+        
+        return "Time TBD"
+    }
+}
+
+// MARK: - Party Detail Sheet
+
+struct PartyDetailSheet: View {
+    let event: CrowdEvent
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Event Image
+                if let imageUrl = event.imageURL, let url = URL(string: imageUrl) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 200)
+                                .clipped()
+                                .cornerRadius(16)
+                        case .failure, .empty:
+                            placeholderImage
+                        @unknown default:
+                            placeholderImage
+                        }
+                    }
+                } else {
+                    placeholderImage
+                }
+                
+                // Title
+                Text(event.title)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.primary)
+                
+                // Details Section
+                VStack(alignment: .leading, spacing: 16) {
+                    // Location
+                    if let location = event.rawLocationName {
+                        DetailRow(icon: "mappin.circle.fill", iconColor: .red, title: "Location", value: location)
+                    }
+                    
+                    // Date & Time
+                    DetailRow(icon: "calendar.circle.fill", iconColor: .blue, title: "Date & Time", value: formatTimeRange())
+                    
+                    // Ticket URL
+                    if let ticketURL = event.ticketURL, let url = URL(string: ticketURL) {
+                        Link(destination: url) {
+                            HStack {
+                                Image(systemName: "ticket.fill")
+                                    .foregroundColor(.green)
+                                Text("Get Tickets")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.green.opacity(0.1))
+                            )
+                        }
+                    }
+                    
+                    // Source URL
+                    if let sourceURL = event.sourceURL, let url = URL(string: sourceURL) {
+                        Link(destination: url) {
+                            HStack {
+                                Image(systemName: "link.circle.fill")
+                                    .foregroundColor(.blue)
+                                Text("View Source")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.blue.opacity(0.1))
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(20)
+        }
+        .background(Color(.systemBackground))
+    }
+    
+    private var placeholderImage: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.gray.opacity(0.2))
+                .frame(height: 200)
+            
+            Image(systemName: "party.popper.fill")
+                .font(.system(size: 40))
+                .foregroundColor(.gray.opacity(0.4))
+        }
+    }
+    
+    private func formatTimeRange() -> String {
+        let startTime = event.startTime ?? event.time
+        let endTime = event.endTime
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d, yyyy 'at' h:mm a"
+        
+        if let start = startTime {
+            var result = formatter.string(from: start)
+            if let end = endTime {
+                let timeFormatter = DateFormatter()
+                timeFormatter.dateFormat = "h:mm a"
+                result += " - " + timeFormatter.string(from: end)
+            }
+            return result
+        }
+        
+        if let dateTime = event.dateTime, !dateTime.isEmpty {
+            return dateTime
+        }
+        
+        return "Time TBD"
+    }
+}
+
+// MARK: - Detail Row Component
+
+private struct DetailRow: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let value: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(iconColor)
+                .frame(width: 30)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                Text(value)
+                    .font(.system(size: 16))
+                    .foregroundColor(.primary)
+            }
+        }
     }
 }
 
