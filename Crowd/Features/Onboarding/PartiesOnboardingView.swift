@@ -526,11 +526,11 @@ struct PartyDetailSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     // Location
                     if let location = event.rawLocationName {
-                        DetailRow(icon: "mappin.circle.fill", iconColor: .red, title: "Location", value: location)
+                        PartyDetailRow(icon: "mappin.circle.fill", iconColor: .red, title: "Location", value: location)
                     }
                     
                     // Date & Time
-                    DetailRow(icon: "calendar.circle.fill", iconColor: .blue, title: "Date & Time", value: formatTimeRange())
+                    PartyDetailRow(icon: "calendar.circle.fill", iconColor: .blue, title: "Date & Time", value: formatTimeRange())
                     
                     // Ticket URL
                     if let ticketURL = event.ticketURL, let url = URL(string: ticketURL) {
@@ -613,9 +613,9 @@ struct PartyDetailSheet: View {
     }
 }
 
-// MARK: - Detail Row Component
+// MARK: - Party Detail Row Component
 
-private struct DetailRow: View {
+private struct PartyDetailRow: View {
     let icon: String
     let iconColor: Color
     let title: String
