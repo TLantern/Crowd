@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		3517C53E2EC6AD670038156F /* (null) in Frameworks */ = {isa = PBXBuildFile; };
+		3557FDB32F1F6EB40072E889 /* TenorAPIKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3557FDB22F1F6EB40072E889 /* TenorAPIKit */; };
+		3557FDB92F1F70020072E889 /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 3557FDB82F1F70010072E889 /* Secrets.xcconfig */; };
 		3569530D2F1DAF70009F8E2F /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = 3569530C2F1DAF70009F8E2F /* FirebaseAI */; };
 		3569530F2F1DAF70009F8E2F /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 3569530E2F1DAF70009F8E2F /* FirebaseAnalytics */; };
 		356953112F1DAF70009F8E2F /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 356953102F1DAF70009F8E2F /* FirebaseAnalyticsCore */; };
@@ -78,6 +80,7 @@
 		3549F83E2EA49FED00AADFB0 /* Crowd.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Crowd.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3549F84B2EA49FF000AADFB0 /* CrowdTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CrowdTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3549F8552EA49FF000AADFB0 /* CrowdUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CrowdUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3557FDB82F1F70010072E889 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Secrets.xcconfig; path = Crowd/Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -143,6 +146,7 @@
 				356953212F1DAF70009F8E2F /* FirebaseFunctions in Frameworks */,
 				3569530D2F1DAF70009F8E2F /* FirebaseAI in Frameworks */,
 				357849612EAC84C6005A3934 /* (null) in Frameworks */,
+				3557FDB32F1F6EB40072E889 /* TenorAPIKit in Frameworks */,
 				357849812EAC89AB005A3934 /* (null) in Frameworks */,
 				357849892EAC89AB005A3934 /* (null) in Frameworks */,
 				356953302F1DAFEC009F8E2F /* Lottie in Frameworks */,
@@ -176,6 +180,7 @@
 		3549F8352EA49FED00AADFB0 = {
 			isa = PBXGroup;
 			children = (
+				3557FDB82F1F70010072E889 /* Secrets.xcconfig */,
 				3549F8402EA49FED00AADFB0 /* Crowd */,
 				3549F83F2EA49FED00AADFB0 /* Products */,
 			);
@@ -249,6 +254,7 @@
 				35A7C53E2F1DB000009F8E2F /* SuperwallKit */,
 				35B7C53E2F1DB100009F8E2F /* ComponentsKit */,
 				35C7C53E2F1DB200009F8E2F /* SDWebImageSwiftUI */,
+				3557FDB22F1F6EB40072E889 /* TenorAPIKit */,
 			);
 			productName = Crowd;
 			productReference = 3549F83E2EA49FED00AADFB0 /* Crowd.app */;
@@ -335,6 +341,7 @@
 				35A7C53D2F1DB000009F8E2F /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
 				35B7C53D2F1DB100009F8E2F /* XCRemoteSwiftPackageReference "ComponentsKit" */,
 				35C7C53D2F1DB200009F8E2F /* XCRemoteSwiftPackageReference "SDWebImageSwiftUI" */,
+				3557FDB12F1F6EB40072E889 /* XCRemoteSwiftPackageReference "TenorAPIKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3549F83F2EA49FED00AADFB0 /* Products */;
@@ -354,6 +361,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3557FDB92F1F70020072E889 /* Secrets.xcconfig in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -770,6 +778,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		3557FDB12F1F6EB40072E889 /* XCRemoteSwiftPackageReference "TenorAPIKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sagarthecoder/TenorAPIKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
 		3569530B2F1DAF70009F8E2F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -813,6 +829,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		3557FDB22F1F6EB40072E889 /* TenorAPIKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3557FDB12F1F6EB40072E889 /* XCRemoteSwiftPackageReference "TenorAPIKit" */;
+			productName = TenorAPIKit;
+		};
 		3569530C2F1DAF70009F8E2F /* FirebaseAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 3569530B2F1DAF70009F8E2F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

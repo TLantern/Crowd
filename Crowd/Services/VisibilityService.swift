@@ -17,7 +17,7 @@ final class VisibilityService {
     private let db: Firestore
     
     // MARK: - Mock Users for Testing
-    private var mockUsersEnabled = true // Set to false to disable mock users
+    private var mockUsersEnabled = true // Enabled - constant mock user for onboarding
     
     // Fixed reference point: UNT campus center
     private let untCampusCenter = CLLocationCoordinate2D(
@@ -34,66 +34,69 @@ final class VisibilityService {
         self.db = FirebaseManager.shared.db
     }
     
-    // Generate mock users with fixed coordinates around UNT campus
+    // Generate constant mock user for onboarding
     private func generateMockUsers() -> [UserProfile] {
-        let mockUsers: [(name: String, offset: (lat: Double, lng: Double), color: String)] = [
-            ("Alex Martinez", (0.002, 0.001), "#FF6B6B"),
-            ("Jordan Lee", (-0.001, 0.002), "#4ECDC4"),
-            ("Taylor Kim", (0.003, -0.001), "#45B7D1"),
-            ("Morgan Chen", (-0.002, -0.002), "#FFA07A"),
-            ("Casey Johnson", (0.001, 0.003), "#98D8C8"),
-            ("Riley Patel", (-0.003, 0.001), "#F7DC6F"),
-            ("Sam Williams", (0.002, -0.003), "#BB8FCE"),
-            ("Dakota Brown", (0.004, 0.002), "#85C1E2"),
-        ]
+        // Constant mock user "Ten" at fixed location
+        let coordinate = CLLocationCoordinate2D(
+            latitude: 33.20777619734919,
+            longitude: -97.15164035187688
+        )
         
-        return mockUsers.enumerated().map { index, user in
-            let coordinate = CLLocationCoordinate2D(
-                latitude: untCampusCenter.latitude + user.offset.lat,
-                longitude: untCampusCenter.longitude + user.offset.lng
-            )
-            
-            let interests = [
-                ["🎮 Gaming", "🎵 Music", "🏀 Basketball"],
-                ["📚 Reading", "☕ Coffee", "🎨 Art"],
-                ["🏋️ Fitness", "🎬 Movies", "🍕 Food"],
-                ["💻 Coding", "🎧 EDM", "🏃 Running"],
-                ["🎸 Guitar", "📷 Photography", "🌮 Tacos"],
-                ["🎭 Theater", "🏊 Swimming", "🍜 Ramen"],
-                ["🎯 Darts", "🎲 Board Games", "☕ Tea"],
-                ["🎨 Design", "🚴 Cycling", "🍣 Sushi"]
-            ]
-            
-            return UserProfile(
-                id: "mock_\(index)",
-                displayName: user.name,
-                handle: "@\(user.name.lowercased().replacingOccurrences(of: " ", with: ""))",
-                bio: nil,
+        // Parse the date from the provided data (January 19, 2026 at 10:13:51 PM UTC-6)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        dateFormatter.timeZone = TimeZone(identifier: "America/Chicago")
+        let createdAtDate = dateFormatter.date(from: "2026-01-19 22:13:51") ?? Date()
+        let lastActiveDate = createdAtDate
+        let lastLocationUpdateDate = dateFormatter.date(from: "2026-01-19 22:14:19") ?? Date()
+        let lastTokenUpdateDate = dateFormatter.date(from: "2026-01-14 18:53:08") ?? Date()
+        
+        return [
+            UserProfile(
+                id: "mock_ten",
+                displayName: "Ten",
+                handle: "@ten",
+                bio: "",
                 campus: "UNT",
-                interests: interests[index % interests.count],
-                auraPoints: Int.random(in: 50...500),
-                avatarColorHex: user.color,
-                profileImageURL: nil,
-                hostedCount: Int.random(in: 0...10),
-                joinedCount: Int.random(in: 5...25),
-                friendsCount: Int.random(in: 10...100),
-                lastActive: Date(),
-                createdAt: Date(),
-                fcmToken: nil,
-                lastTokenUpdate: nil,
+                interests: [
+                    "Music",
+                    "Basketball",
+                    "Gym Life",
+                    "Adventure",
+                    "Foodie",
+                    "Coding",
+                    "AI & Tech",
+                    "Startups",
+                    "Entrepreneurship",
+                    "Esports",
+                    "Campus Events",
+                    "Travel",
+                    "Beach Days",
+                    "Chill Spots"
+                ],
+                auraPoints: 0,
+                avatarColorHex: "#85C1E2",
+                profileImageURL: nil, // Using nil since it's a local file path
+                hostedCount: 0,
+                joinedCount: 0,
+                friendsCount: 0,
+                lastActive: lastActiveDate,
+                createdAt: createdAtDate,
+                fcmToken: nil, // Not needed for mock
+                lastTokenUpdate: lastTokenUpdateDate,
                 latitude: coordinate.latitude,
                 longitude: coordinate.longitude,
-                geohash: coordinate.geohash(precision: 6),
-                lastLocationUpdate: Date(),
+                geohash: "9vfuvm",
+                lastLocationUpdate: lastLocationUpdateDate,
                 notificationCooldowns: nil,
                 lastNotificationSent: nil,
-                eventStatus: nil,
+                eventStatus: ["wunna-them-nights-feat-gunna-live"],
                 termsAccepted: true,
                 blockedUsers: nil,
                 isVisible: true,
                 visibilityExpiresAt: Date().addingTimeInterval(6 * 60 * 60)
             )
-        }
+        ]
     }
     
     // MARK: - Toggle Visibility
@@ -104,8 +107,17 @@ final class VisibilityService {
         
         let newVisibility = !currentProfile.isVisible
         
-        // If turning on, set expiration to 6 hours from now
+        // If turning on, set expiration to 6 hours from now and save current location
         let expiresAt = newVisibility ? Date().addingTimeInterval(6 * 60 * 60) : nil
+        
+        // When enabling visibility, ensure current location is saved immediately
+        if newVisibility {
+            let locationService = AppEnvironment.current.location
+            if let coordinate = await locationService.ensureLocationAvailable() {
+                await locationService.saveLocationToProfile(userId: userId, coordinate: coordinate)
+                print("👁️ Saved location when enabling visibility: \(coordinate.latitude), \(coordinate.longitude)")
+            }
+        }
         
         try await updateVisibilityInFirestore(userId: userId, isVisible: newVisibility, expiresAt: expiresAt)
     }
@@ -222,12 +234,12 @@ final class VisibilityService {
             }
         }
         
-        print("👁️ Fetching visible users in region, found \(profiles.count) users")
+        print("👁️ Fetching visible users in region, found \(profiles.count) real users")
         
-        // Add mock users if enabled (using fixed coordinates)
+        // Add constant mock user for onboarding
         if mockUsersEnabled {
             profiles.append(contentsOf: cachedMockUsers)
-            print("👁️ Added \(cachedMockUsers.count) mock users for testing")
+            print("👁️ Added \(cachedMockUsers.count) constant mock user for onboarding")
         }
         
         return profiles
@@ -325,7 +337,7 @@ final class VisibilityService {
                     }
                 }
                 
-                // Add mock users if enabled (using fixed coordinates)
+                // Add constant mock user for onboarding
                 if self.mockUsersEnabled {
                     profiles.append(contentsOf: self.cachedMockUsers)
                 }

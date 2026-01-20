@@ -76,6 +76,7 @@ struct EventNavigationModal: View {
     @State private var showOnboarding = false
     @State private var onboardingStep: OnboardingStep = .chat
     
+    
     enum TabSelection {
         case map
         case chat
@@ -97,28 +98,48 @@ struct EventNavigationModal: View {
                 VStack(spacing: 0) {
                     // Top bar - compressed
                     VStack(spacing: 0) {
-                        // Title row with back button
-                        HStack(spacing: 8) {
-                            // Back button (left)
-                            Button(action: { dismiss() }) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 24, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                            .padding(.leading, 4)
-                            
-                            // Title (center)
-                            if event.id == "UNT" {
+                        if event.id == "UNT" {
+                            // Title row with back button
+                            HStack(spacing: 8) {
+                                // Back button (left)
+                                Button(action: { dismiss() }) {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 24, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.leading, 4)
+                                
+                                // Title (center)
                                 MarqueeTitle(text: "UNT 🦅")
                                     .padding(.horizontal, 5)
-                            } else {
+                                
+                                Spacer()
+                            }
+                            .frame(height: 32)
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 6)
+                        } else {
+                            // Title row (above Chat/Map tabs)
+                            ZStack {
                                 MarqueeTitle(text: "\(eventEmoji) \(event.title)")
                                     .padding(.horizontal, 5)
                             }
-                            Spacer()
+                            .frame(height: 32)
+                            .padding(.bottom, 4)
                             
-                            // Tabs (right, hidden for UNT)
-                            if event.id != "UNT" {
+                            // Tab switcher row
+                            HStack(spacing: 8) {
+                                // Back button (left)
+                                Button(action: { dismiss() }) {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 24, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.leading, 4)
+                                
+                                Spacer()
+                                
+                                // Tabs (center)
                                 HStack(spacing: 0) {
                                     TabButton(
                                         title: "Chat 💬",
@@ -135,11 +156,12 @@ struct EventNavigationModal: View {
                                 .frame(height: 36)
                                 .frame(width: 220)
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                                
+                                Spacer()
                             }
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 8)
                         }
-                        .frame(height: 32)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, event.id == "UNT" ? 6 : 8)
                     }
                     .padding(.top, 8)
                     .background(Color(hex: 0x02853E))
@@ -518,21 +540,17 @@ struct EventNavigationModal: View {
         }
         
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imageToSend = selectedImage
-        let imageDataToSend = selectedImageData
         
-        guard !text.isEmpty || imageToSend != nil else {
-            print("⚠️ EventNavigationModal: Cannot send empty message (no text or image)")
+        guard !text.isEmpty else {
+            print("⚠️ EventNavigationModal: Cannot send empty message (no text)")
             return
         }
         
-        print("📤 EventNavigationModal: Sending message - text: '\(text)', hasImage: \(imageToSend != nil)")
+        print("📤 EventNavigationModal: Sending message - text: '\(text)'")
         
-        // Clear text and image immediately for better UX
+        // Clear text immediately for better UX
         let messageToSend = text
         messageText = ""
-        selectedImage = nil
-        selectedImageData = nil
         
         isSendingMessage = true
         
@@ -547,9 +565,7 @@ struct EventNavigationModal: View {
                     eventId: event.id,
                     text: messageToSend,
                     userId: userId,
-                    userName: userName,
-                    image: imageToSend,
-                    imageData: imageDataToSend
+                    userName: userName
                 )
                 
                 print("✅ EventNavigationModal: Message sent successfully")
@@ -566,8 +582,6 @@ struct EventNavigationModal: View {
                     print("❌ EventNavigationModal: Error details: \(error.localizedDescription)")
                     // Restore message text and image on error
                     messageText = messageToSend
-                    selectedImage = imageToSend
-                    selectedImageData = imageDataToSend
                     isSendingMessage = false
                 }
             }
@@ -683,6 +697,7 @@ struct ChatTabView: View {
                                     ChatMessageBubble(
                                         message: message.text,
                                         imageURL: message.imageURL,
+                                        gif: message.gif,
                                         author: message.userName,
                                         isCurrentUser: message.isCurrentUser,
                                         timestamp: message.timestamp
@@ -739,26 +754,6 @@ struct ChatTabView: View {
                             })
                         }
                         
-                        // Image preview
-                        if let image = selectedImage {
-                            HStack {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(maxHeight: 100)
-                                    .cornerRadius(8)
-                                Button(action: {
-                                    selectedImage = nil
-                                    selectedImageData = nil
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                        }
-                        
                         // Message input
                         HStack(spacing: 12) {
                             TextField("Type a message...", text: $messageText)
@@ -783,10 +778,10 @@ struct ChatTabView: View {
                                 } else {
                                     Image(systemName: "arrow.up.circle.fill")
                                         .font(.system(size: 28))
-                                        .foregroundColor((messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImage == nil) ? .gray : Color(hex: 0x02853E))
+                                        .foregroundColor(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : Color(hex: 0x02853E))
                                 }
                             }
-                            .disabled((messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedImage == nil) || isSendingMessage)
+                            .disabled(messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSendingMessage)
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 24)
@@ -1312,14 +1307,16 @@ struct MarqueeTitle: View {
 struct ChatMessageBubble: View {
     let message: String
     let imageURL: String?
+    let gif: ChatGif?
     let author: String
     let isCurrentUser: Bool
     let profileImageURL: String?
     let timestamp: Date?
     
-    init(message: String, imageURL: String?, author: String, isCurrentUser: Bool, profileImageURL: String? = nil, timestamp: Date? = nil) {
+    init(message: String, imageURL: String?, gif: ChatGif? = nil, author: String, isCurrentUser: Bool, profileImageURL: String? = nil, timestamp: Date? = nil) {
         self.message = message
         self.imageURL = imageURL
+        self.gif = gif
         self.author = author
         self.isCurrentUser = isCurrentUser
         self.profileImageURL = profileImageURL
@@ -1391,7 +1388,27 @@ struct ChatMessageBubble: View {
                         }
                     }
                     
-                    if let imageURL = imageURL, let url = URL(string: imageURL) {
+                    if let gif = gif, let url = URL(string: gif.thumbnailUrl) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .empty:
+                                ProgressView()
+                                    .frame(width: 200, height: 200)
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: 250, maxHeight: 300)
+                                    .cornerRadius(12)
+                            case .failure:
+                                Image(systemName: "photo")
+                                    .foregroundColor(.gray)
+                                    .frame(width: 200, height: 200)
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
+                    } else if let imageURL = imageURL, let url = URL(string: imageURL) {
                         AsyncImage(url: url) { phase in
                             switch phase {
                             case .empty:
@@ -1444,7 +1461,27 @@ struct ChatMessageBubble: View {
                         }
                     }
                     
-                    if let imageURL = imageURL, let url = URL(string: imageURL) {
+                    if let gif = gif, let url = URL(string: gif.thumbnailUrl) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .empty:
+                                ProgressView()
+                                    .frame(width: 200, height: 200)
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: 250, maxHeight: 300)
+                                    .cornerRadius(12)
+                            case .failure:
+                                Image(systemName: "photo")
+                                    .foregroundColor(.gray)
+                                    .frame(width: 200, height: 200)
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
+                    } else if let imageURL = imageURL, let url = URL(string: imageURL) {
                         AsyncImage(url: url) { phase in
                             switch phase {
                             case .empty:

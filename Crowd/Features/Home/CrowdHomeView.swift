@@ -101,6 +101,9 @@ struct CrowdHomeView: View {
     @State private var selectedUserProfile: UserProfile? // For showing user profile sheet
     @State private var showVisibilityInfo = false // Show info sheet on first visibility toggle
     @AppStorage("hasSeenVisibilityInfo") private var hasSeenVisibilityInfo = false
+    @AppStorage("hasSeenVisibilityUserAnnotationOnboarding") private var hasSeenVisibilityUserAnnotationOnboarding = false
+    @State private var showVisibilityUserAnnotationOnboarding = false
+    @State private var isFadingOutAnnotations = false
     
     // Commented out temporarily
     // private var anchorsToDisplay: [Anchor] {
@@ -403,6 +406,7 @@ struct CrowdHomeView: View {
                     .delay(staggerDelay),
                     value: expandedClusterId
                 )
+                .zIndex(selectedEvent?.id == event.id ? 200 : 10)
                 .onTapGesture {
                     handleEventTap(event)
                 }
@@ -412,7 +416,8 @@ struct CrowdHomeView: View {
     }
     
     private func collapsedClusterAnnotation(cluster: EventCluster) -> some MapContent {
-        Annotation("", coordinate: cluster.centerCoordinate) {
+        let hasSelectedEvent = cluster.events.contains { $0.id == selectedEvent?.id }
+        return Annotation("", coordinate: cluster.centerCoordinate) {
             ClusterAnnotationView(
                 cluster: cluster,
                 isExpanded: false,
@@ -425,6 +430,7 @@ struct CrowdHomeView: View {
                 },
                 currentUserId: FirebaseManager.shared.getCurrentUserId()
             )
+            .zIndex(hasSelectedEvent ? 200 : 10)
         }
         .annotationTitles(.hidden)
     }
@@ -722,6 +728,7 @@ struct CrowdHomeView: View {
                         handleAnchorTap(anchor)
                     }
                 )
+                .zIndex(selectedAnchor?.id == anchor.id ? 200 : 10)
             }
             .annotationTitles(.hidden)
         }
@@ -742,6 +749,7 @@ struct CrowdHomeView: View {
                     isInExpandedCluster: true,
                     currentUserId: FirebaseManager.shared.getCurrentUserId()
                 )
+                .zIndex(selectedEvent?.id == event.id ? 200 : 10)
                 .onTapGesture {
                     handleEventTap(event)
                 }
@@ -830,8 +838,8 @@ struct CrowdHomeView: View {
             // UNT location annotation
             untLocationAnnotation()
             
-            // Other visible users annotations (only when visibility is enabled)
-            if appState.isVisible {
+            // Other visible users annotations (only when visibility is enabled or fading out)
+            if appState.isVisible || isFadingOutAnnotations {
                 ForEach(visibleUsers) { user in
                     if let latitude = user.latitude, let longitude = user.longitude {
                         let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -857,11 +865,16 @@ struct CrowdHomeView: View {
                                         .frame(width: 50, height: 50)
                                         .offset(x: -30, y: -2)
                                 }
-                                .opacity(appState.isVisible ? 1.0 : 0.0)
-                                .scaleEffect(appState.isVisible ? 1.0 : 0.3)
-                                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: appState.isVisible)
+                                .opacity(appState.isVisible && !isFadingOutAnnotations ? 1.0 : 0.0)
+                                .scaleEffect(appState.isVisible && !isFadingOutAnnotations ? 1.0 : 0.3)
+                                .animation(.easeOut(duration: 0.3), value: appState.isVisible)
+                                .animation(.easeOut(duration: 0.3), value: isFadingOutAnnotations)
+                                .frame(width: 70, height: 70)
+                                .contentShape(Rectangle())
+                                .zIndex(selectedEvent == nil && selectedAnchor == nil ? 100 : 50)
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .disabled(isFadingOutAnnotations)
                         }
                         .annotationTitles(.hidden)
                     }
@@ -1068,10 +1081,40 @@ struct CrowdHomeView: View {
                 }
                 .onChange(of: appState.isVisible) { _, isVisible in
                     if isVisible {
+                        isFadingOutAnnotations = false
                         startVisibleUsersListener()
+                        // Show onboarding card if user hasn't seen it and there are visible users
+                        if !hasSeenVisibilityUserAnnotationOnboarding && !visibleUsers.isEmpty {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                showVisibilityUserAnnotationOnboarding = true
+                            }
+                        }
                     } else {
+                        // Fade out annotations before clearing
+                        isFadingOutAnnotations = true
+                        showVisibilityUserAnnotationOnboarding = false
                         stopVisibleUsersListener()
-                        visibleUsers = []
+                        
+                        // Clear users after fade animation completes
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            visibleUsers = []
+                            isFadingOutAnnotations = false
+                        }
+                    }
+                }
+                .onChange(of: visibleUsers) { _, users in
+                    // Show onboarding when users first appear
+                    if appState.isVisible && !hasSeenVisibilityUserAnnotationOnboarding && !users.isEmpty {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            showVisibilityUserAnnotationOnboarding = true
+                        }
+                    }
+                }
+                .onChange(of: selectedUserProfile) { _, profile in
+                    // Dismiss onboarding when user taps on a user annotation
+                    if profile != nil && showVisibilityUserAnnotationOnboarding {
+                        hasSeenVisibilityUserAnnotationOnboarding = true
+                        showVisibilityUserAnnotationOnboarding = false
                     }
                 }
                 .sheet(item: $selectedUserProfile) { user in
@@ -1656,6 +1699,28 @@ struct CrowdHomeView: View {
                         }
                         .padding(.top, 8)
                         .zIndex(4)
+                    }
+                    
+                    // Visibility User Annotation Onboarding Card - positioned above "Ten" mock user
+                    if showVisibilityUserAnnotationOnboarding && appState.isVisible {
+                        // Find the mock user "Ten" in visible users
+                        let mockUserTen = visibleUsers.first { $0.id == "mock_ten" }
+                        
+                        if mockUserTen != nil {
+                            GeometryReader { geometry in
+                                VStack {
+                                    Spacer()
+                                    
+                                    VisibilityUserAnnotationOnboardingCard()
+                                        .padding(.horizontal, 20)
+                                        .padding(.bottom, geometry.size.height * 0.4) // Position above mock user annotation area
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                            }
+                            .zIndex(1000)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: showVisibilityUserAnnotationOnboarding)
+                        }
                     }
 
                     Spacer(minLength: 0)
@@ -2587,6 +2652,35 @@ struct HeatmapLayers: MapContent {
                     endRadius: radius * 0.6
                 )
             )
+    }
+}
+
+// MARK: - Visibility User Annotation Onboarding Card
+struct VisibilityUserAnnotationOnboardingCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Title
+            Text("Tap a user pin")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+            
+            // Description
+            Text("Tap on any user annotation on the map to see their profile and connect with them.")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(.primary.opacity(0.8))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                )
+        )
+        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+        .frame(maxWidth: 340)
     }
 }
 

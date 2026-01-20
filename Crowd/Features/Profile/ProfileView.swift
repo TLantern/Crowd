@@ -46,6 +46,7 @@ struct ProfileView: View {
     @ObservedObject var viewModel: ProfileViewModel
     @StateObject private var statsService = UserStatsService.shared
     @ObservedObject private var locationService = AppEnvironment.current.location
+    @ObservedObject private var attendedEventsService = AttendedEventsService.shared
     @State private var showInterestPicker = false
     @State private var showImagePicker = false
     @State private var isLoading = true
@@ -56,6 +57,7 @@ struct ProfileView: View {
     @State private var showDeleteAccountAlert = false
     @State private var showDeleteConfirmation = false
     @State private var isDeletingAccount = false
+    @State private var isShowingAllAttendedEvents = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -203,7 +205,7 @@ struct ProfileView: View {
 
     // MARK: - Stats Card
     private var statsCard: some View {
-        let attendedEvents = AttendedEventsService.shared.getAttendedEvents()
+        let attendedEvents = attendedEventsService.attendedEvents
         
         return SUCard(model: cardModel) {
             VStack(alignment: .leading, spacing: 12) {
@@ -240,15 +242,22 @@ struct ProfileView: View {
                         .padding(.vertical, 20)
                     } else {
                         LazyVStack(spacing: 8) {
-                            ForEach(attendedEvents.prefix(5)) { event in
+                            ForEach(attendedEvents.prefix(3)) { event in
                                 AttendedEventRow(event: event)
                             }
                             
-                            if attendedEvents.count > 5 {
-                                Text("+ \(attendedEvents.count - 5) more events")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.top, 4)
+                            if attendedEvents.count > 3 {
+                                DisclosureGroup("View more", isExpanded: $isShowingAllAttendedEvents) {
+                                    LazyVStack(spacing: 8) {
+                                        ForEach(attendedEvents.dropFirst(3)) { event in
+                                            AttendedEventRow(event: event)
+                                        }
+                                    }
+                                    .padding(.top, 8)
+                                }
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 4)
                             }
                         }
                     }

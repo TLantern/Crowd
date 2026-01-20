@@ -51,7 +51,8 @@ struct UserProfileSheetView: View {
                     }
                 }
                 .task {
-                    // Load full profile data from Firebase
+                    // Load full profile data from Firebase (skip mock users)
+                    guard !user.id.hasPrefix("mock_") else { return }
                     await viewModel.loadProfile(userId: user.id)
                 }
         }

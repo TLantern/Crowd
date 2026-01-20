@@ -222,7 +222,12 @@ struct CalenderView: View {
         Group {
             if selectedTab == .parties {
                 PartiesView(
-                    currentPartyImageURL: $currentPartyImageURL
+                    currentPartyImageURL: $currentPartyImageURL,
+                    onContinueToSchoolEvents: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedTab = .schoolEvents
+                        }
+                    }
                 )
             } else {
                 VStack(spacing: 0) {
@@ -1279,6 +1284,7 @@ struct PartiesView: View {
     @State private var currentPartyIndex: Int = 0
     @State private var scrollPosition: Int? = 0
     @Binding var currentPartyImageURL: String?
+    let onContinueToSchoolEvents: () -> Void
     
     var body: some View {
         Group {
@@ -1312,13 +1318,32 @@ struct PartiesView: View {
                 GeometryReader { geometry in
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(Array(parties.enumerated()), id: \.element.id) { index, party in
-                                PartyCardView(party: party)
-                                .frame(width: geometry.size.width - 30)
-                                .frame(height: geometry.size.height)
-                                .containerRelativeFrame(.vertical)
-                                .contentShape(Rectangle())
-                                .id(index)
+                            ForEach(0...parties.count, id: \.self) { index in
+                                if index < parties.count {
+                                    let party = parties[index]
+                                    PartyCardView(party: party)
+                                        .frame(width: geometry.size.width - 30)
+                                        .frame(height: geometry.size.height)
+                                        .containerRelativeFrame(.vertical)
+                                        .contentShape(Rectangle())
+                                        .id(index)
+                                } else {
+                                    VStack(spacing: 14) {
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 28, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+                                        Text("School Events")
+                                            .font(.system(size: 22, weight: .bold))
+                                            .foregroundStyle(.primary)
+                                        Text("Keep scrolling")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(width: geometry.size.width - 30, height: geometry.size.height)
+                                    .containerRelativeFrame(.vertical)
+                                    .contentShape(Rectangle())
+                                    .id(index)
+                                }
                             }
                         }
                         .scrollTargetLayout()
@@ -1341,6 +1366,9 @@ struct PartiesView: View {
                 currentPartyIndex = index
                 let party = parties[index]
                 currentPartyImageURL = party.imageURL
+            } else if newValue == parties.count {
+                currentPartyImageURL = nil
+                onContinueToSchoolEvents()
             }
         }
     }

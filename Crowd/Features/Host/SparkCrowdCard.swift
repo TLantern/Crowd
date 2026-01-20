@@ -9,7 +9,6 @@ import SwiftUI
 import CoreLocation
 import MapKit
 import ComponentsKit
-import Lottie
 
 struct SparkCrowdCard: View {
     @Environment(\.appEnvironment) private var appEnv
@@ -20,9 +19,9 @@ struct SparkCrowdCard: View {
     @State private var selectedLocationId: String?
     @State private var coord: CLLocationCoordinate2D
     @State private var showIgniteAnimation = false
-    @State private var animationProgress: CGFloat = 0
     @State private var popScale: CGFloat = 1.0
     @State private var vibrationTimer: Timer?
+    @State private var igniteShakeProgress: CGFloat = 0
     
     let defaultRegion: CampusRegion
     var onIgnite: (String, CLLocationCoordinate2D, String?) -> Void
@@ -162,7 +161,9 @@ struct SparkCrowdCard: View {
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                                     .fill(
                                         LinearGradient(
-                                            colors: [Color(hex: 0xff8a00), Color(hex: 0xff6b00)],
+                                            colors: showIgniteAnimation
+                                            ? [Color(hex: 0xff8a00), Color(hex: 0xff2d00)]
+                                            : [Color(hex: 0xff8a00), Color(hex: 0xff6b00)],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -172,29 +173,12 @@ struct SparkCrowdCard: View {
                         }
                     )
                 }
-                .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .scaleEffect(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.98 : 1.0)
+                .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || showIgniteAnimation)
+                .modifier(HorizontalShakeEffect(amount: 10, shakesPerUnit: 8, animatableData: igniteShakeProgress))
+                .scaleEffect((title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.98 : 1.0) * popScale)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: title.isEmpty)
             }
             .padding(28)
-            .opacity(showIgniteAnimation ? 0 : 1)
-            .animation(.easeOut(duration: 0.3), value: showIgniteAnimation)
-            
-            // Ignite animation overlay
-            if showIgniteAnimation {
-                ZStack {
-                    Color(hex: 0xF5F7FA)
-                        .ignoresSafeArea()
-                    
-                    LottieIgnite(size: 300, onCompletion: {
-                        handleAnimationCompletion()
-                    })
-                    .allowsHitTesting(false)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.opacity.animation(.easeIn(duration: 0.3)))
-                .scaleEffect(popScale)
-            }
         }
         .onAppear {
             initializeLocation()
@@ -208,11 +192,19 @@ struct SparkCrowdCard: View {
     private func startIgniteSequence() {
         Haptics.light()
         showIgniteAnimation = true
-        animationProgress = 0
         popScale = 1.0
+        igniteShakeProgress = 0
         
         // Start vibration timer
         startVibrationTimer()
+        
+        withAnimation(.linear(duration: 2.0)) {
+            igniteShakeProgress = 1
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            handleAnimationCompletion()
+        }
     }
     
     private func startVibrationTimer() {
@@ -223,7 +215,7 @@ struct SparkCrowdCard: View {
         
         var elapsedTime: TimeInterval = 0
         let interval: TimeInterval = 0.1 // Vibrate every 100ms for smoother progression
-        let maxDuration: TimeInterval = 2.5 // Assume animation is ~2.5 seconds
+        let maxDuration: TimeInterval = 2.0
         
         vibrationTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
             elapsedTime += interval
@@ -239,12 +231,6 @@ struct SparkCrowdCard: View {
                 timer.invalidate()
             }
         }
-    }
-    
-    private func updateVibration(progress: CGFloat) {
-        // This is called by the animation progress callback
-        // Use it to sync vibration with actual animation progress
-        // The timer handles the main vibration, this ensures sync
     }
     
     private func handleAnimationCompletion() {
@@ -345,5 +331,16 @@ struct SparkCrowdCard: View {
         } catch {
             return nil
         }
+    }
+}
+
+private struct HorizontalShakeEffect: GeometryEffect {
+    var amount: CGFloat = 10
+    var shakesPerUnit: CGFloat = 8
+    var animatableData: CGFloat
+    
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let translationX = amount * sin(animatableData * .pi * 2 * shakesPerUnit)
+        return ProjectionTransform(CGAffineTransform(translationX: translationX, y: 0))
     }
 }

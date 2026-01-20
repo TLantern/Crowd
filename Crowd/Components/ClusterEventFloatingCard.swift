@@ -34,69 +34,53 @@ struct ClusterEventFloatingCard: View {
             
             Divider()
             
-            // Scrollable event list - one event at a time
-            GeometryReader { geometry in
-                let scrollViewHeight = min(CGFloat(cluster.eventCount) * 90, 320)
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(spacing: 0) {
-                        ForEach(cluster.events) { event in
-                            Button(action: { 
-                                onSelect(event)
-                            }) {
-                                HStack(alignment: .top, spacing: 12) {
-                                    // Event emoji
-                                    Text(event.categoryEmoji)
-                                        .font(.system(size: 32))
-                                        .frame(width: 44, height: 44)
-                                    
-                                    // Event details
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(event.title)
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundColor(.primary)
-                                            .multilineTextAlignment(.leading)
-                                            .lineLimit(2)
-                                        
-                                        if let timeText = event.dateFormatted {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "clock")
-                                                    .font(.caption)
-                                                Text(timeText)
-                                                    .font(.subheadline)
-                                            }
-                                            .foregroundColor(.secondary)
-                                        }
-                                        
-                                        // Attendee count
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "person.2.fill")
-                                                .font(.caption)
-                                            Text("\(event.attendeeCount) attending")
-                                                .font(.caption)
-                                        }
-                                        .foregroundColor(.blue)
+            // Event list (no scrolling) - card sizes to content
+            VStack(spacing: 0) {
+                ForEach(cluster.events) { event in
+                    Button(action: {
+                        onSelect(event)
+                    }) {
+                        HStack(alignment: .top, spacing: 12) {
+                            // Event emoji
+                            Text(event.categoryEmoji)
+                                .font(.system(size: 32))
+                                .frame(width: 44, height: 44)
+                            
+                            // Event details
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(event.title)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .multilineTextAlignment(.leading)
+                                    .lineLimit(2)
+                                
+                                if let timeText = event.dateFormatted {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "clock")
+                                            .font(.caption)
+                                        Text(timeText)
+                                            .font(.subheadline)
                                     }
-                                    
-                                    Spacer()
-                                    
-                                    // Chevron
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(.tertiary)
+                                    .foregroundColor(.secondary)
                                 }
-                                .padding(.vertical, 14)
-                                .padding(.horizontal, 16)
-                                .background(Color(uiColor: .systemBackground))
                             }
-                            .buttonStyle(.plain)
-                            .frame(width: geometry.size.width, height: scrollViewHeight)
-                            .id(event.id)
+                            
+                            Spacer()
+                            
+                            // Chevron
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.tertiary)
                         }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                        .background(Color(uiColor: .systemBackground))
                     }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .id(event.id)
                 }
-                .scrollTargetBehavior(.paging)
             }
-            .frame(height: min(CGFloat(cluster.eventCount) * 90, 320))
         }
         .background(
             RoundedRectangle(cornerRadius: 20)

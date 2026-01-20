@@ -144,13 +144,9 @@ struct EventDetailView: View {
                             }
                         }
                         
-                        // Vibe Chips - "Perfect for" section
-                        let chips = generateVibeChips(
-                            tags: event.tags,
-                            title: event.title,
-                            description: event.description
-                        )
-                        if !chips.isEmpty {
+                        // "Perfect for" chips (school events only)
+                        let chips = event.sourceURL != nil ? Array(event.tags.prefix(3)) : []
+                        if event.sourceURL != nil, !chips.isEmpty {
                             VStack(alignment: .center, spacing: 6) {
                                 Text("Perfect for")
                                     .font(.system(size: 13, weight: .semibold))

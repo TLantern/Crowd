@@ -201,10 +201,19 @@ final class AppState: ObservableObject {
     }
     
     private func handleLocationUpdate(userId: String, coordinate: CLLocationCoordinate2D) {
-        // Only save every 5 minutes to reduce Firestore writes
         let now = Date()
+        
+        // If visibility is enabled, save location more frequently (every 1 minute)
+        // Otherwise, save every 5 minutes to reduce Firestore writes
+        let saveInterval: TimeInterval = isVisible ? 60 : 300
+        
         if let lastSave = lastLocationSaveTime,
-           now.timeIntervalSince(lastSave) < 300 { // 5 minutes
+           now.timeIntervalSince(lastSave) < saveInterval {
+            return
+        }
+        
+        // Only save location if visibility is enabled
+        guard isVisible else {
             return
         }
         

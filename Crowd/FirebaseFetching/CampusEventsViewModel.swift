@@ -298,8 +298,12 @@ final class CampusEventsViewModel: ObservableObject {
         let tags = data["tags"] as? [String] ?? ["official", "school"]
         
         // Default coordinates (UNT main campus) - will be geocoded if location name exists
-        let latitude = 33.2100
-        let longitude = -97.1500
+        var latitude = (data["latitude"] as? Double) ?? 33.2100
+        var longitude = (data["longitude"] as? Double) ?? -97.1500
+        if latitude == 33.2100, longitude == -97.1500, let rawLocationName, let matched = matchUNTLocationCoordinate(for: rawLocationName) {
+            latitude = matched.latitude
+            longitude = matched.longitude
+        }
         
         // Fetch going count for this school event
         let goingCount = try? await getSchoolEventGoingCount(eventId: id)

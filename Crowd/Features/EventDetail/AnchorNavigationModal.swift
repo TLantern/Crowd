@@ -243,16 +243,12 @@ struct AnchorNavigationModal: View {
         guard !isSendingMessage else { return }
         
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let imageToSend = selectedImage
-        let imageDataToSend = selectedImageData
         
-        guard !text.isEmpty || imageToSend != nil else { return }
+        guard !text.isEmpty else { return }
         
-        // Clear text and image immediately for better UX
+        // Clear text immediately for better UX
         let messageToSend = text
         messageText = ""
-        selectedImage = nil
-        selectedImageData = nil
         
         isSendingMessage = true
         
@@ -262,9 +258,7 @@ struct AnchorNavigationModal: View {
                     eventId: anchor.id,
                     text: messageToSend,
                     userId: await currentUserId,
-                    userName: await currentUserName,
-                    image: imageToSend,
-                    imageData: imageDataToSend
+                    userName: await currentUserName
                 )
                 
                 // Track analytics on main thread
@@ -278,8 +272,6 @@ struct AnchorNavigationModal: View {
                     print("❌ AnchorNavigationModal: Failed to send message: \(error)")
                     // Restore message text and image on error
                     messageText = messageToSend
-                    selectedImage = imageToSend
-                    selectedImageData = imageDataToSend
                     isSendingMessage = false
                 }
             }
