@@ -36,10 +36,9 @@ final class VisibilityService {
     
     // Generate constant mock user for onboarding
     private func generateMockUsers() -> [UserProfile] {
-        // Constant mock user "Ten" at fixed location
-        let coordinate = CLLocationCoordinate2D(
-            latitude: 33.20777619734919,
-            longitude: -97.15164035187688
+        let bruceHallCoordinate = CLLocationCoordinate2D(
+            latitude: 33.2087,
+            longitude: -97.1524
         )
         
         // Parse the date from the provided data (January 19, 2026 at 10:13:51 PM UTC-6)
@@ -53,9 +52,9 @@ final class VisibilityService {
         
         return [
             UserProfile(
-                id: "mock_ten",
-                displayName: "Ten",
-                handle: "@ten",
+                id: "mock_teni",
+                displayName: "teni",
+                handle: "@teni",
                 bio: "",
                 campus: "UNT",
                 interests: [
@@ -76,7 +75,7 @@ final class VisibilityService {
                 ],
                 auraPoints: 0,
                 avatarColorHex: "#85C1E2",
-                profileImageURL: nil, // Using nil since it's a local file path
+                profileImageURL: "https://i.pinimg.com/236x/a6/65/6f/a6656f5d7f2d0074993dca19278d6774.jpg",
                 hostedCount: 0,
                 joinedCount: 0,
                 friendsCount: 0,
@@ -84,8 +83,8 @@ final class VisibilityService {
                 createdAt: createdAtDate,
                 fcmToken: nil, // Not needed for mock
                 lastTokenUpdate: lastTokenUpdateDate,
-                latitude: coordinate.latitude,
-                longitude: coordinate.longitude,
+                latitude: bruceHallCoordinate.latitude,
+                longitude: bruceHallCoordinate.longitude,
                 geohash: "9vfuvm",
                 lastLocationUpdate: lastLocationUpdateDate,
                 notificationCooldowns: nil,

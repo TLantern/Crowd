@@ -1701,12 +1701,12 @@ struct CrowdHomeView: View {
                         .zIndex(4)
                     }
                     
-                    // Visibility User Annotation Onboarding Card - positioned above "Ten" mock user
+                    // Visibility User Annotation Onboarding Card - positioned above "teni" mock user
                     if showVisibilityUserAnnotationOnboarding && appState.isVisible {
-                        // Find the mock user "Ten" in visible users
-                        let mockUserTen = visibleUsers.first { $0.id == "mock_ten" }
+                        // Find the mock user "teni" in visible users
+                        let mockUserTeni = visibleUsers.first { $0.id == "mock_teni" }
                         
-                        if mockUserTen != nil {
+                        if mockUserTeni != nil {
                             GeometryReader { geometry in
                                 VStack {
                                     Spacer()
