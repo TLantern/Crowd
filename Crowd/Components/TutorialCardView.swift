@@ -22,12 +22,14 @@ struct TutorialCardView: View {
             }
             
             // Card content
-            VStack(alignment: .leading, spacing: 16) {
+            ZStack(alignment: .topTrailing) {
+                VStack(alignment: .leading, spacing: 16) {
                 // Title
                 Text(step.title)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
-                    .multilineTextAlignment(.leading)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
                 
                 // Description
                 Text(step.description)
@@ -72,15 +74,18 @@ struct TutorialCardView: View {
                     }
                 }
                 .padding(.top, 4)
+                }
+                .padding(20)
+                
+                // Arrow pointer at top right (if direction is right)
+                if step.arrowDirection == .right {
+                    TutorialArrowPointer(direction: .right)
+                        .offset(x: -10, y: -8)
+                }
             }
-            .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(.white.opacity(0.12), lineWidth: 1)
-                    )
+                    .fill(.white)
             )
             .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
             
@@ -99,11 +104,7 @@ struct TutorialArrowPointer: View {
     
     var body: some View {
         TutorialTriangle()
-            .fill(.ultraThinMaterial)
-            .overlay(
-                TutorialTriangle()
-                    .stroke(.white.opacity(0.12), lineWidth: 1)
-            )
+            .fill(.white)
             .frame(width: 20, height: 16)
             .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
             .rotationEffect(.degrees(rotationDegrees))

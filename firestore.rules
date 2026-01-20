@@ -345,5 +345,22 @@ service cloud.firestore {
       // Points are typically not deleted, but allow system deletion
       allow delete: if false; // Prevent manual deletion of points
     }
+    
+    // Hidden events collection (user-specific hidden posts)
+    match /hiddenEvents/{hiddenId} {
+      // Users can read their own hidden events
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Users can create their own hidden events
+      allow create: if isAuthenticated()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.eventId != null;
+      
+      // Users can delete their own hidden events
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // No updates allowed (create/delete only)
+      allow update: if false;
+    }
   }
 }

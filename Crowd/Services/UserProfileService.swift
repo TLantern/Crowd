@@ -9,6 +9,7 @@ import Foundation
 import FirebaseFirestore
 import FirebaseStorage
 import UIKit
+import CoreLocation
 
 final class UserProfileService {
     static let shared = UserProfileService()
@@ -362,6 +363,117 @@ final class UserProfileService {
             "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B195", "#C06C84"
         ]
         return colors.randomElement() ?? "#808080"
+    }
+    
+    // MARK: - Permanent Mock User
+    
+    func ensurePermanentMockUser() async {
+        let userId = "mock_teni"
+        
+        do {
+            // Check if user already exists
+            let document = try? await db.collection("users").document(userId).getDocument()
+            
+            if document?.exists == true {
+                print("✅ Permanent mock user 'mock_teni' already exists")
+                return
+            }
+            
+            // Load and crop profile image from asset
+            var profileImageURL: String? = nil
+            if let assetImage = UIImage(named: "mockimage") {
+                print("📸 Loading profile image from asset 'mockimage'")
+                let croppedImage = cropToCircle(image: assetImage)
+                profileImageURL = try await uploadProfileImage(croppedImage, userId: userId)
+                print("✅ Profile image uploaded: \(profileImageURL ?? "nil")")
+            } else {
+                print("⚠️ Could not load image from asset 'mockimage'")
+            }
+            
+            // Create permanent mock user with full profile
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            dateFormatter.timeZone = TimeZone(identifier: "America/Chicago")
+            let createdAtDate = dateFormatter.date(from: "2026-01-19 22:13:51") ?? Date()
+            let lastActiveDate = createdAtDate
+            let lastLocationUpdateDate = dateFormatter.date(from: "2026-01-19 22:14:19") ?? Date()
+            let lastTokenUpdateDate = dateFormatter.date(from: "2026-01-14 18:53:08") ?? Date()
+            
+            let bruceHallCoordinate = CLLocationCoordinate2D(
+                latitude: 33.2087,
+                longitude: -97.1524
+            )
+            
+            var data: [String: Any] = [
+                "displayName": "teni",
+                "handle": "@teni",
+                "bio": "Building the future of social connections 🚀",
+                "campus": "UNT",
+                "interests": [
+                    "Music",
+                    "Basketball",
+                    "Gym Life",
+                    "Adventure",
+                    "Foodie",
+                    "Coding",
+                    "AI & Tech",
+                    "Startups",
+                    "Entrepreneurship",
+                    "Esports",
+                    "Campus Events",
+                    "Travel",
+                    "Beach Days",
+                    "Chill Spots"
+                ],
+                "auraPoints": 150,
+                "avatarColorHex": "#85C1E2",
+                "profileImageURL": profileImageURL ?? "",
+                "hostedCount": 5,
+                "joinedCount": 12,
+                "friendsCount": 89,
+                "lastActive": Timestamp(date: lastActiveDate),
+                "createdAt": Timestamp(date: createdAtDate),
+                "lastTokenUpdate": Timestamp(date: lastTokenUpdateDate),
+                "location": GeoPoint(latitude: bruceHallCoordinate.latitude, longitude: bruceHallCoordinate.longitude),
+                "latitude": bruceHallCoordinate.latitude,
+                "longitude": bruceHallCoordinate.longitude,
+                "geohash": "9vfuvm",
+                "lastLocationUpdate": Timestamp(date: lastLocationUpdateDate),
+                "termsAccepted": true,
+                "isVisible": true,
+                "visibilityExpiresAt": Timestamp(date: Date().addingTimeInterval(6 * 60 * 60)),
+                "eventStatus": ["wunna-them-nights-feat-gunna-live"]
+            ]
+            
+            try await db.collection("users").document(userId).setData(data, merge: false)
+            print("✅ Permanent mock user 'mock_teni' created with full profile")
+            
+        } catch {
+            print("❌ Failed to create permanent mock user: \(error.localizedDescription)")
+        }
+    }
+    
+    private func cropToCircle(image: UIImage) -> UIImage {
+        let size = min(image.size.width, image.size.height)
+        let x = (image.size.width - size) / 2
+        let y = (image.size.height - size) / 2
+        
+        let cropRect = CGRect(x: x, y: y, width: size, height: size)
+        
+        guard let cgImage = image.cgImage?.cropping(to: cropRect) else {
+            return image
+        }
+        
+        let croppedImage = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+        
+        // Create circular mask
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+        return renderer.image { context in
+            let rect = CGRect(origin: .zero, size: CGSize(width: size, height: size))
+            context.cgContext.addEllipse(in: rect)
+            context.cgContext.clip()
+            croppedImage.draw(in: rect)
+        }
     }
 }
 

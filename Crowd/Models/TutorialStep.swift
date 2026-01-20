@@ -37,12 +37,12 @@ extension TutorialStep {
             title: "Welcome to Crowd! 🎉",
             description: "No more guessing what's going on. Crowd helps you see real-time campus activity so you can decide where to go next.",
             cardPosition: .topCenter,
-            arrowDirection: .bottom
+            arrowDirection: .none
         ),
         TutorialStep(
             id: 2,
             title: "Create Your Own Event",
-            description: "Have plans already? Tap the glowing fire, name your crowd! and boom you have a crowd!",
+            description: "Tap the glowing fire, name your crowd! and watch people join your crowd!",
             cardPosition: .bottomCenter,
             arrowDirection: .top
         ),
@@ -50,8 +50,8 @@ extension TutorialStep {
             id: 3,
             title: "Visibility Mode 👁️",
             description: "Tap the eye icon to see other users on the map and share your location.",
-            cardPosition: .custom(x: 0, y: 0), // Will be positioned near eye icon at top right
-            arrowDirection: .top
+            cardPosition: .custom(x: 0, y: 0), // Will be positioned right under nav bar
+            arrowDirection: .right
         ),
         TutorialStep(
             id: 4,

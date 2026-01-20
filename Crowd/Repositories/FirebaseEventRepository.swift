@@ -814,6 +814,7 @@ final class FirebaseEventRepository: EventRepository {
             "hostName": event.hostName,
             "description": event.description ?? "",
             "createdAt": FieldValue.serverTimestamp(),
+            "updatedAt": FieldValue.serverTimestamp(),
             "attendeeCount": 0,
             "signalStrength": 1
         ]

@@ -1217,6 +1217,7 @@ struct MarqueeTitle: View {
     @State private var offset: CGFloat = 0
     @State private var shouldAnimate: Bool = false
     @State private var calculatedFontSize: CGFloat = 22
+    @State private var animationTimer: Timer?
 
     var body: some View {
         GeometryReader { proxy in
@@ -1226,13 +1227,20 @@ struct MarqueeTitle: View {
                     HStack(spacing: spacing) {
                         title
                         title
+                        title
                     }
                     .offset(x: offset)
                     .onAppear { startAnimation(container: w) }
+                    .onChange(of: shouldAnimate) { _, newValue in
+                        if newValue {
+                            startAnimation(container: w)
+                        }
+                    }
                 } else {
                     HStack { Spacer(); title; Spacer() }
                 }
             }
+            .clipped()
             .onAppear { 
                 containerWidth = w
                 updateFontSize()
@@ -1240,6 +1248,10 @@ struct MarqueeTitle: View {
             .onChange(of: w) { _, newWidth in
                 containerWidth = newWidth
                 updateFontSize()
+            }
+            .onDisappear {
+                animationTimer?.invalidate()
+                animationTimer = nil
             }
         }
         .frame(height: 28)
@@ -1276,30 +1288,34 @@ struct MarqueeTitle: View {
         guard containerWidth > 0, baseContentWidth > 0 else { return }
         let availableWidth = containerWidth - padding
         
-        if baseContentWidth <= availableWidth {
-            calculatedFontSize = baseFontSize
-            shouldAnimate = false
-        } else {
-            // Scale down font size proportionally to fit
-            let scaleFactor = availableWidth / baseContentWidth
-            let minFontSize: CGFloat = 12
-            calculatedFontSize = max(minFontSize, baseFontSize * scaleFactor)
-            
-            // Calculate actual width at the scaled font size
-            let scaledWidth = baseContentWidth * (calculatedFontSize / baseFontSize)
-            // Only animate if it still doesn't fit even at minimum size
-            shouldAnimate = scaledWidth > availableWidth
-        }
+        calculatedFontSize = baseFontSize
+        shouldAnimate = baseContentWidth > availableWidth
     }
 
     private func startAnimation(container: CGFloat) {
         let availableWidth = container - padding
-        let scaledWidth = baseContentWidth * (calculatedFontSize / baseFontSize)
-        guard scaledWidth > availableWidth else { return }
-        let cycle = (scaledWidth + spacing) / speed
-        withAnimation(.linear(duration: cycle).repeatForever(autoreverses: false)) {
-            offset = -(scaledWidth + spacing)
+        guard baseContentWidth > availableWidth else { return }
+        
+        animationTimer?.invalidate()
+        offset = 0
+        
+        let cycle = (baseContentWidth + spacing) / speed
+        let step = (baseContentWidth + spacing) / (cycle * 60) // 60 FPS
+        
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { timer in
+            guard self.shouldAnimate else {
+                timer.invalidate()
+                return
+            }
+            
+            self.offset -= step
+            
+            if self.offset <= -(self.baseContentWidth + self.spacing) {
+                self.offset = 0
+            }
         }
+        
+        RunLoop.main.add(animationTimer!, forMode: .common)
     }
 }
 
@@ -1508,7 +1524,7 @@ struct ChatMessageBubble: View {
                             .font(.system(size: 15))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(Color(.systemGray5))
+                            .background(Color(hex: 0x02853E).opacity(0.3))
                             .foregroundColor(.primary)
                             .cornerRadius(16)
                     }

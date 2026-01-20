@@ -32,7 +32,21 @@ final class EventDetailViewModel: ObservableObject {
     }
     
     func joinEvent(event: CrowdEvent) async -> Bool {
-        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+        var userId = FirebaseManager.shared.getCurrentUserId()
+        
+        // If not authenticated, attempt anonymous sign-in
+        if userId == nil {
+            do {
+                userId = try await FirebaseManager.shared.signInAnonymously()
+                print("✅ EventDetailViewModel: Signed in anonymously: \(userId ?? "nil")")
+            } catch {
+                joinError = "Failed to authenticate"
+                print("❌ EventDetailViewModel: Failed to sign in anonymously: \(error)")
+                return false
+            }
+        }
+        
+        guard let userId = userId else {
             joinError = "Not logged in"
             return false
         }
@@ -120,7 +134,21 @@ final class EventDetailViewModel: ObservableObject {
     }
     
     func leaveEvent(event: CrowdEvent) async -> Bool {
-        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+        var userId = FirebaseManager.shared.getCurrentUserId()
+        
+        // If not authenticated, attempt anonymous sign-in
+        if userId == nil {
+            do {
+                userId = try await FirebaseManager.shared.signInAnonymously()
+                print("✅ EventDetailViewModel: Signed in anonymously for leave: \(userId ?? "nil")")
+            } catch {
+                leaveError = "Failed to authenticate"
+                print("❌ EventDetailViewModel: Failed to sign in anonymously: \(error)")
+                return false
+            }
+        }
+        
+        guard let userId = userId else {
             leaveError = "Not logged in"
             return false
         }

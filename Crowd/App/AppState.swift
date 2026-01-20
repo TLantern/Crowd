@@ -124,7 +124,8 @@ final class AppState: ObservableObject {
             await MainActor.run {
                 self.sessionUser = profile
                 
-                // Check if visibility has expired
+                // Always start with non-visible state (eye icon)
+                // Check if visibility has expired first
                 if let expiresAt = profile.visibilityExpiresAt, Date() > expiresAt {
                     self.isVisible = false
                     // Auto-disable expired visibility
@@ -136,7 +137,18 @@ final class AppState: ObservableObject {
                         )
                     }
                 } else {
-                self.isVisible = profile.isVisible
+                    // Always start with non-visible (eye icon showing)
+                    self.isVisible = false
+                    // If profile had visibility enabled, disable it in Firestore
+                    if profile.isVisible {
+                        Task {
+                            try? await VisibilityService.shared.updateVisibilityInFirestore(
+                                userId: userId,
+                                isVisible: false,
+                                expiresAt: nil
+                            )
+                        }
+                    }
                 }
                 
                 print("✅ Loaded user profile: \(profile.displayName)")

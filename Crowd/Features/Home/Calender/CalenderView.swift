@@ -54,6 +54,8 @@ struct CalenderView: View {
     @State private var currentPartyImageURL: String?
     @State private var currentSchoolEventImageURL: String?
     @State private var selectedInterest: String? = nil
+    @State private var preloadedParties: [CrowdEvent]? = nil
+    @Environment(\.appEnvironment) var env
     
     var schoolEvents: [CrowdEvent] { campusEventsVM.crowdEvents }
     
@@ -223,6 +225,7 @@ struct CalenderView: View {
             if selectedTab == .parties {
                 PartiesView(
                     currentPartyImageURL: $currentPartyImageURL,
+                    preloadedParties: preloadedParties,
                     onContinueToSchoolEvents: {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             selectedTab = .schoolEvents
@@ -356,6 +359,8 @@ struct CalenderView: View {
                     campusEventsVM.start()
                     print("   ✅ Listener started")
                     await geocodeTodaysEventsIfNeeded()
+                    // Preload parties in background
+                    await preloadParties()
                 }
                 AttendedEventsService.shared.refreshAttendedEvents()
             }
@@ -493,6 +498,34 @@ struct CalenderView: View {
         }
         
         return nil
+    }
+    
+    // MARK: - Parties Preloading
+    
+    private func preloadParties() async {
+        guard let firebaseRepo = env.eventRepo as? FirebaseEventRepository else {
+            print("⚠️ Event repository is not FirebaseEventRepository")
+            return
+        }
+        
+        do {
+            print("🎉 Preloading parties...")
+            let fetchedParties = try await firebaseRepo.fetchParties()
+            
+            // Sort parties by date (soonest first)
+            let sortedParties = fetchedParties.sorted { party1, party2 in
+                guard let date1 = party1.time else { return false }
+                guard let date2 = party2.time else { return true }
+                return date1 < date2
+            }
+            
+            await MainActor.run {
+                preloadedParties = sortedParties
+                print("✅ Preloaded \(sortedParties.count) parties")
+            }
+        } catch {
+            print("❌ Failed to preload parties: \(error.localizedDescription)")
+        }
     }
     
 }
@@ -1284,6 +1317,7 @@ struct PartiesView: View {
     @State private var currentPartyIndex: Int = 0
     @State private var scrollPosition: Int? = 0
     @Binding var currentPartyImageURL: String?
+    let preloadedParties: [CrowdEvent]?
     let onContinueToSchoolEvents: () -> Void
     
     var body: some View {
@@ -1356,8 +1390,17 @@ struct PartiesView: View {
             }
         }
         .onAppear {
-            Task {
-                await loadParties()
+            // Use preloaded parties if available, otherwise fetch
+            if let preloaded = preloadedParties, !preloaded.isEmpty {
+                parties = preloaded
+                currentPartyIndex = 0
+                currentPartyImageURL = preloaded[0].imageURL
+                isLoading = false
+                print("✅ Using preloaded parties: \(preloaded.count) parties")
+            } else {
+                Task {
+                    await loadParties()
+                }
             }
         }
         .onChange(of: scrollPosition) { oldValue, newValue in

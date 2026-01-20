@@ -316,6 +316,11 @@ struct CrowdHomeView: View {
         }
     }
     
+    private var locationCoordinateString: String {
+        guard let location = locationService.lastKnown else { return "" }
+        return "\(location.latitude),\(location.longitude)"
+    }
+    
     // MARK: - Filtered Events for Search
     var filteredEvents: [CrowdEvent] {
         guard !searchText.isEmpty else { return [] }
@@ -437,34 +442,55 @@ struct CrowdHomeView: View {
     
     private func userLocationAnnotation(coordinate: CLLocationCoordinate2D) -> some MapContent {
         Annotation("", coordinate: coordinate) {
-            ZStack(alignment: .center) {
-                // Blue pulse ring (only in visibility mode)
-                if appState.isVisible {
-                    LottiePulse(size: 60)
-                        .offset(x: -30, y: 20)
-                } else {
-                    // Dark shadow (when not visible)
-                    Circle()
-                        .fill(.primary.opacity(0.4))
-                        .frame(width: 16, height: 16)
-                        .blur(radius: 2)
-                        .offset(x: -30, y: 20)
-                    
-                    Circle()
-                        .fill(.primary.opacity(0.6))
-                        .frame(width: 10, height: 10)
-                        .offset(x: -30, y: 20)
+            Button(action: {
+                // Show user's own profile when tapped in visibility mode
+                if appState.isVisible, let userProfile = appState.sessionUser {
+                    selectedUserProfile = userProfile
                 }
-                
-                Image("UserLocationItem")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 50, height: 50)
-                    .offset(x: -30, y: -2)
+            }) {
+                ZStack(alignment: .center) {
+                    // Highlight circle for user's own annotation when onboarding is shown
+                    if appState.isVisible && showVisibilityUserAnnotationOnboarding {
+                        Circle()
+                            .stroke(Color(hex: 0xff8a00), lineWidth: 3)
+                            .frame(width: 80, height: 80)
+                            .offset(x: -30, y: -2)
+                            .zIndex(1)
+                    }
+                    
+                    // Blue pulse ring (only in visibility mode)
+                    if appState.isVisible {
+                        LottiePulse(size: 60)
+                            .offset(x: -30, y: 20)
+                    } else {
+                        // Dark shadow (when not visible)
+                        Circle()
+                            .fill(.primary.opacity(0.4))
+                            .frame(width: 16, height: 16)
+                            .blur(radius: 2)
+                            .offset(x: -30, y: 20)
+                        
+                        Circle()
+                            .fill(.primary.opacity(0.6))
+                            .frame(width: 10, height: 10)
+                            .offset(x: -30, y: 20)
+                    }
+                    
+                    Image("UserLocationItem")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 50, height: 50)
+                        .offset(x: -30, y: -2)
+                }
+                .animation(.easeInOut(duration: 0.3), value: showVisibilityUserAnnotationOnboarding)
+                .frame(width: 70, height: 70)
+                .contentShape(Rectangle())
+                .onAppear {
+                    print("🎯 DEBUG: User annotation rendered at (\(coordinate.latitude), \(coordinate.longitude)), visible mode: \(appState.isVisible)")
+                }
             }
-            .onAppear {
-                print("🎯 DEBUG: User annotation rendered at (\(coordinate.latitude), \(coordinate.longitude)), visible mode: \(appState.isVisible)")
-            }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(!appState.isVisible)
         }
         .annotationTitles(.hidden)
     }
@@ -789,8 +815,12 @@ struct CrowdHomeView: View {
         let allUserEvents = mergeUserEvents(local: hostedEvents, firebase: userEventsFromFirebase)
         let todayUserEvents = filterEventsForToday(allUserEvents)
         let todayEvents = campusEventsVM.todaysEvents + todayUserEvents
-        let clusters = EventClusteringService.clusterEvents(todayEvents)
-        print("📍 DEBUG: standaloneClusters computed - \(clusters.count) clusters (\(campusEventsVM.todaysEvents.count) official + \(todayUserEvents.count) user)")
+        // Filter out events at default coordinates until geocoding completes
+        let geocodedEvents = todayEvents.filter { event in
+            !(event.latitude == 33.2100 && event.longitude == -97.1500)
+        }
+        let clusters = EventClusteringService.clusterEvents(geocodedEvents)
+        print("📍 DEBUG: standaloneClusters computed - \(clusters.count) clusters (\(geocodedEvents.count) geocoded of \(todayEvents.count) total)")
         for (index, cluster) in clusters.enumerated().prefix(5) {
             print("   Cluster \(index): \(cluster.eventCount) events at (\(cluster.centerCoordinate.latitude), \(cluster.centerCoordinate.longitude))")
         }
@@ -985,264 +1015,210 @@ struct CrowdHomeView: View {
 
     var body: some View {
         NavigationStack {
-            mainContent
-                .fullScreenCover(isPresented: $showHostSheet) {
-                    hostEventSheet
-                }
-                .overlay {
-                    if showSparkCard {
-                        ZStack {
-                            Color.black.opacity(0.5)
-                                .ignoresSafeArea()
-                                .onTapGesture {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        showSparkCard = false
-                                    }
-                                }
-                                .transition(.opacity.animation(.easeOut(duration: 0.2)))
-                            
-                            SparkCrowdCard(
-                                defaultRegion: selectedRegion,
-                                onIgnite: { title, coord, locationName in
-                                    createEventFromSparkCard(title: title, coord: coord, locationName: locationName)
-                                },
-                                onClose: {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        showSparkCard = false
-                                    }
-                                }
-                            )
-                            .environmentObject(appState)
-                            .frame(maxWidth: 420)
-                            .background(
-                                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                    .fill(Color(hex: 0xF5F7FA))
-                                    .shadow(color: Color.black.opacity(0.07), radius: 15, x: 0, y: 3)
-                                    .shadow(color: Color.black.opacity(0.14), radius: 7, x: 0, y: 1.5)
-                            )
-                            .padding(.horizontal, 24)
-                            .scaleEffect(showSparkCard ? 1 : 0.85)
-                            .opacity(showSparkCard ? 1 : 0)
-                            .animation(.spring(response: 0.45, dampingFraction: 0.75), value: showSparkCard)
+            contentWithModifiers
+        }
+    }
+    
+    private var contentWithModifiers: some View {
+        contentWithNotificationHandlers
+    }
+    
+    private var contentWithBasicModifiers: some View {
+        mainContent
+            .fullScreenCover(isPresented: $showHostSheet) {
+                hostEventSheet
+            }
+            .overlay(sparkCardOverlay)
+            .overlay(confettiOverlay)
+            .sheet(item: $selectedEvent) { event in
+                EventDetailView(event: event)
+                    .environmentObject(appState)
+                    .presentationDetents([.fraction(0.75)])
+                    .presentationDragIndicator(.visible)
+            }
+            .overlay(tutorialOverlay)
+            .sheet(item: $selectedUserProfile) { user in
+                UserProfileSheetView(user: user)
+                    .presentationDetents([.height(600), .large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showVisibilityInfo) {
+                VisibilityInfoSheet {
+                    hasSeenVisibilityInfo = true
+                    Task {
+                        guard let userId = FirebaseManager.shared.getCurrentUserId() else {
+                            return
                         }
-                        .zIndex(999)
-                    }
-                }
-                .overlay(confettiOverlay)
-                .sheet(item: $selectedEvent) { event in
-                    EventDetailView(event: event)
-                        .environmentObject(appState)
-                        .presentationDetents([.fraction(0.75)])
-                        .presentationDragIndicator(.visible)
-                }
-                .overlay(tutorialOverlay)
-                .onChange(of: appState.showTutorial) { _, shouldShow in
-                    if shouldShow {
-                        showTutorialOverlay = true
-                    }
-                }
-                .task {
-                    await loadFirebaseEvents()
-                    await loadUpcomingEvents()
-                    
-                    // Preload calendar events in background while user is on map view
-                    // This ensures school events are fetched from Firebase even if user hasn't navigated to calendar yet
-                    await preloadCalendarEvents()
-                    
-                    // Load moderation data
-                    await loadModerationData()
-                    
-                    // Load anchors
-                    // Commented out temporarily
-                    // await anchorService.loadAnchors()
-                    // anchorService.startPeriodicUpdates()
-                    
-                    // Debug: Print anchor status
-                    // print("📍 CrowdHomeView: Loaded \(anchorService.anchors.count) total anchors")
-                    // print("📍 CrowdHomeView: \(anchorService.activeAnchors.count) active anchors")
-                    
-                    // Clean up expired events from database on app start
-                    if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
                         do {
-                            try await firebaseRepo.deleteExpiredEvents()
+                            try await VisibilityService.shared.toggleVisibility(userId: userId)
+                            let updatedProfile = try await UserProfileService.shared.fetchProfile(userId: userId)
+                            await MainActor.run {
+                                appState.sessionUser = updatedProfile
+                                appState.isVisible = updatedProfile.isVisible
+                            }
                         } catch {
                         }
                     }
-                    
-                    // Set up listeners for new events
-                    setupNewEventListeners()
                 }
-                .onDisappear {
-                    // Clean up listeners
-                    stopNewEventListeners()
-                    bannerDismissTimer?.invalidate()
-                    bannerDismissTimer = nil
-                    stopVisibleUsersListener()
+            }
+            .fullScreenCover(isPresented: $showCalendar) { CalenderView() }
+            .fullScreenCover(isPresented: $showNavigationModal) {
+                if let joinedEvent = appState.currentJoinedEvent {
+                    EventNavigationModal(event: joinedEvent)
                 }
-                .onChange(of: appState.isVisible) { _, isVisible in
-                    if isVisible {
-                        isFadingOutAnnotations = false
-                        startVisibleUsersListener()
-                        // Show onboarding card if user hasn't seen it and there are visible users
-                        if !hasSeenVisibilityUserAnnotationOnboarding && !visibleUsers.isEmpty {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                showVisibilityUserAnnotationOnboarding = true
-                            }
-                        }
-                    } else {
-                        // Fade out annotations before clearing
-                        isFadingOutAnnotations = true
-                        showVisibilityUserAnnotationOnboarding = false
-                        stopVisibleUsersListener()
-                        
-                        // Clear users after fade animation completes
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            visibleUsers = []
-                            isFadingOutAnnotations = false
-                        }
-                    }
+            }
+            .fullScreenCover(isPresented: $showAnchorNavigationModal) {
+                if let anchor = selectedAnchor {
+                    AnchorNavigationModal(anchor: anchor)
                 }
-                .onChange(of: visibleUsers) { _, users in
-                    // Show onboarding when users first appear
-                    if appState.isVisible && !hasSeenVisibilityUserAnnotationOnboarding && !users.isEmpty {
+            }
+    }
+    
+    private var contentWithChangeHandlers: some View {
+        contentWithBasicModifiers
+            .onChange(of: appState.showTutorial) { _, shouldShow in
+                if shouldShow {
+                    showTutorialOverlay = true
+                }
+            }
+            .onChange(of: appState.isVisible) { _, isVisible in
+                if isVisible {
+                    isFadingOutAnnotations = false
+                    startVisibleUsersListener()
+                    if !hasSeenVisibilityUserAnnotationOnboarding && locationService.lastKnown != nil {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             showVisibilityUserAnnotationOnboarding = true
                         }
                     }
-                }
-                .onChange(of: selectedUserProfile) { _, profile in
-                    // Dismiss onboarding when user taps on a user annotation
-                    if profile != nil && showVisibilityUserAnnotationOnboarding {
-                        hasSeenVisibilityUserAnnotationOnboarding = true
-                        showVisibilityUserAnnotationOnboarding = false
+                } else {
+                    isFadingOutAnnotations = true
+                    showVisibilityUserAnnotationOnboarding = false
+                    stopVisibleUsersListener()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        visibleUsers = []
+                        isFadingOutAnnotations = false
                     }
                 }
-                .sheet(item: $selectedUserProfile) { user in
-                    UserProfileSheetView(user: user)
-                        .presentationDetents([.height(600), .large])
-                        .presentationDragIndicator(.visible)
-                }
-                .sheet(isPresented: $showVisibilityInfo) {
-                    VisibilityInfoSheet {
-                        hasSeenVisibilityInfo = true
-                        // Proceed with toggling visibility
-                        Task {
-                            guard let userId = FirebaseManager.shared.getCurrentUserId() else {
-                                return
-                            }
-                            
-                            do {
-                                try await VisibilityService.shared.toggleVisibility(userId: userId)
-                                
-                                let updatedProfile = try await UserProfileService.shared.fetchProfile(userId: userId)
-                                
-                                await MainActor.run {
-                                    appState.sessionUser = updatedProfile
-                                    appState.isVisible = updatedProfile.isVisible
-                                }
-                            } catch {
-                                // Handle error silently or show user feedback
-                            }
-                        }
+            }
+            .onChange(of: locationCoordinateString) { _, _ in
+                if appState.isVisible && !hasSeenVisibilityUserAnnotationOnboarding && locationService.lastKnown != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showVisibilityUserAnnotationOnboarding = true
                     }
                 }
-                .onChange(of: selectedRegion) { _, newRegion in
-                    Task {
-                        await loadFirebaseEvents(region: newRegion)
-                    }
+            }
+            .onChange(of: selectedUserProfile) { _, profile in
+                if profile != nil && showVisibilityUserAnnotationOnboarding {
+                    hasSeenVisibilityUserAnnotationOnboarding = true
+                    showVisibilityUserAnnotationOnboarding = false
                 }
-                .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
-                    removeExpiredEvents()
-                    Task {
-                        // Commented out temporarily
-                        // await anchorService.updateActiveAnchors()
-                        // // Track anchor activations for analytics
-                        // for anchor in anchorService.activeAnchors {
-                        //     if let coordinate = anchor.coordinates {
-                        //         let zone = coordinate.geohash(precision: 4)
-                        //         AnalyticsService.shared.trackAnchorActivated(
-                        //             anchorId: anchor.id,
-                        //             anchorName: anchor.name,
-                        //             location: anchor.location,
-                        //             zone: zone
-                        //         )
-                        //     }
-                        // }
-                    }
+            }
+            .onChange(of: selectedRegion) { _, newRegion in
+                Task {
+                    await loadFirebaseEvents(region: newRegion)
                 }
-                .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { notification in
-                    handleEventDeleted(notification)
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .navigateToEventFromNotification)) { notification in
-                    handleNavigateToEvent(notification)
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .showHostSheetFromNotification)) { _ in
-                    showHostSheet = true
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .testNewEventBanner)) { notification in
-                    if let event = notification.object as? CrowdEvent {
-                        newEventBanner = event
-                        startBannerDismissTimer()
-                    }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .userBlocked)) { notification in
-                    if let blockedUserId = notification.object as? String {
-                        Task {
-                            await loadModerationData()
-                        }
-                    }
-                }
-                .onReceive(NotificationCenter.default.publisher(for: .eventHidden)) { notification in
-                    if let hiddenEventId = notification.object as? String {
-                        Task {
-                            await loadModerationData()
-                        }
-                    }
-                }
-                .fullScreenCover(isPresented: $showCalendar) { CalenderView() }
-                .fullScreenCover(isPresented: $showNavigationModal) {
-                    if let joinedEvent = appState.currentJoinedEvent {
-                        EventNavigationModal(event: joinedEvent)
-                    }
-                }
-                .fullScreenCover(isPresented: $showAnchorNavigationModal) {
-                    if let anchor = selectedAnchor {
-                        AnchorNavigationModal(anchor: anchor)
-                    }
-                }
-                .onChange(of: appState.currentJoinedEvent) { _, newEvent in
-                    if let event = newEvent {
-                        liveAttendeeCount = event.attendeeCount
-                        startEventListener(for: event)
-                        // Restart timer to check for event end
-                        startEventEndCheckTimer()
-                    } else {
-                        eventListener?.remove()
-                        eventListener = nil
-                        liveAttendeeCount = 0
-                        stopEventEndCheckTimer()
-                    }
-                }
-                .onAppear {
-                    if let joinedEvent = appState.currentJoinedEvent {
-                        liveAttendeeCount = joinedEvent.attendeeCount
-                        startEventListener(for: joinedEvent)
-                    }
+            }
+            .onChange(of: appState.currentJoinedEvent) { _, newEvent in
+                if let event = newEvent {
+                    liveAttendeeCount = event.attendeeCount
+                    startEventListener(for: event)
+                    // Restart timer to check for event end
                     startEventEndCheckTimer()
-                    
-                    // Sync selected region with stored campus ID
-                    syncRegionWithCampus()
-                }
-                .onDisappear {
+                } else {
+                    eventListener?.remove()
+                    eventListener = nil
+                    liveAttendeeCount = 0
                     stopEventEndCheckTimer()
                 }
-                // Listen for campus changes from onboarding
-                .onReceive(NotificationCenter.default.publisher(for: .campusChanged)) { notification in
-                    if let newCampusId = notification.object as? String {
-                        handleCampusChange(newCampusId)
+            }
+    }
+    
+    private var contentWithNotificationHandlers: some View {
+        contentWithLifecycleHandlers
+            .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+                removeExpiredEvents()
+                Task {
+                    // Commented out temporarily
+                    // await anchorService.updateActiveAnchors()
+                    // // Track anchor activations for analytics
+                    // for anchor in anchorService.activeAnchors {
+                    //     if let coordinate = anchor.coordinates {
+                    //         let zone = coordinate.geohash(precision: 4)
+                    //         AnalyticsService.shared.trackAnchorActivated(
+                    //             anchorId: anchor.id,
+                    //             anchorName: anchor.name,
+                    //             location: anchor.location,
+                    //             zone: zone
+                    //         )
+                    //     }
+                    // }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .eventDeleted)) { notification in
+                handleEventDeleted(notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .navigateToEventFromNotification)) { notification in
+                handleNavigateToEvent(notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showHostSheetFromNotification)) { _ in
+                showHostSheet = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .testNewEventBanner)) { notification in
+                if let event = notification.object as? CrowdEvent {
+                    newEventBanner = event
+                    startBannerDismissTimer()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .userBlocked)) { notification in
+                if let blockedUserId = notification.object as? String {
+                    Task {
+                        await loadModerationData()
                     }
                 }
-        }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .eventHidden)) { notification in
+                if let hiddenEventId = notification.object as? String {
+                    Task {
+                        await loadModerationData()
+                    }
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .campusChanged)) { notification in
+                if let newCampusId = notification.object as? String {
+                    handleCampusChange(newCampusId)
+                }
+            }
+    }
+    
+    private var contentWithLifecycleHandlers: some View {
+        contentWithChangeHandlers
+            .task {
+                await loadFirebaseEvents()
+                await loadUpcomingEvents()
+                await preloadCalendarEvents()
+                await loadModerationData()
+                if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
+                    try? await firebaseRepo.deleteExpiredEvents()
+                }
+                setupNewEventListeners()
+            }
+            .onAppear {
+                if let joinedEvent = appState.currentJoinedEvent {
+                    liveAttendeeCount = joinedEvent.attendeeCount
+                    startEventListener(for: joinedEvent)
+                }
+                startEventEndCheckTimer()
+                
+                // Sync selected region with stored campus ID
+                syncRegionWithCampus()
+            }
+            .onDisappear {
+                stopNewEventListeners()
+                bannerDismissTimer?.invalidate()
+                bannerDismissTimer = nil
+                stopVisibleUsersListener()
+                stopEventEndCheckTimer()
+            }
     }
     
     // MARK: - Event Listener for Joined Event
@@ -1309,7 +1285,7 @@ struct CrowdHomeView: View {
         let camera = currentCamera
         
         // Get blocked user IDs
-        let blockedUserIds = blockedUserIds
+        let blockedUserIds = self.blockedUserIds
         
         // Set up listener
         visibleUsersListener = VisibilityService.shared.listenToVisibleUsers(
@@ -1701,26 +1677,21 @@ struct CrowdHomeView: View {
                         .zIndex(4)
                     }
                     
-                    // Visibility User Annotation Onboarding Card - positioned above "teni" mock user
-                    if showVisibilityUserAnnotationOnboarding && appState.isVisible {
-                        // Find the mock user "teni" in visible users
-                        let mockUserTeni = visibleUsers.first { $0.id == "mock_teni" }
-                        
-                        if mockUserTeni != nil {
-                            GeometryReader { geometry in
-                                VStack {
-                                    Spacer()
-                                    
-                                    VisibilityUserAnnotationOnboardingCard()
-                                        .padding(.horizontal, 20)
-                                        .padding(.bottom, geometry.size.height * 0.4) // Position above mock user annotation area
-                                }
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    // Visibility User Annotation Onboarding Card - positioned above user's own annotation
+                    if showVisibilityUserAnnotationOnboarding && appState.isVisible && locationService.lastKnown != nil {
+                        GeometryReader { geometry in
+                            VStack {
+                                Spacer()
+                                
+                                VisibilityUserAnnotationOnboardingCard()
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, geometry.size.height * 0.5) // Position above user's own annotation area
                             }
-                            .zIndex(1000)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: showVisibilityUserAnnotationOnboarding)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         }
+                        .zIndex(1000)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: showVisibilityUserAnnotationOnboarding)
                     }
 
                     Spacer(minLength: 0)
@@ -1915,22 +1886,15 @@ struct CrowdHomeView: View {
                     zone: zone
                 )
                 
+                // Host is automatically part of their own event - no need to join
+                // Skip join operation for hosts since Firebase rules prevent it
                 if let userId = FirebaseManager.shared.getCurrentUserId() {
-                    do {
-                        try await env.eventRepo.join(eventId: event.id, userId: userId)
-                        
-                        let db = FirebaseManager.shared.db
-                        let attendanceData: [String: Any] = [
-                            "userId": userId,
-                            "eventId": event.id,
-                            "joinedAt": FieldValue.serverTimestamp()
-                        ]
-                        try await db.collection("userAttendances").addDocument(data: attendanceData)
-                        
-                        AttendedEventsService.shared.addAttendedEvent(event)
-                        AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title, zone: zone)
-                    } catch {
-                    }
+                    // Host is already part of the event they created
+                    // Just add to attended events locally for UI state
+                    AttendedEventsService.shared.addAttendedEvent(event)
+                    
+                    // Track analytics (but don't try to join via Firebase since host can't join own event)
+                    AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title, zone: zone)
                 }
                 
                 await MainActor.run {
@@ -1959,74 +1923,58 @@ struct CrowdHomeView: View {
     @ViewBuilder
     private var hostEventSheet: some View {
         HostEventSheet(defaultRegion: selectedRegion, initialTitle: initialEventTitle) { event in
-            Task {
-                // Check if this is the first event creation
-                let isFirstEvent = hostedEvents.isEmpty
-                
-                do {
-                    try await env.eventRepo.create(event: event)
-                    
-                    // Track analytics with zone
-                    let coordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
-                    let zone = coordinate.geohash(precision: 4)
-                    AnalyticsService.shared.trackEventCreated(
-                        eventId: event.id,
-                        title: event.title,
-                        category: event.category,
-                        zone: zone
-                    )
-                    
-                    // Automatically join the user to the event they created
-                    if let userId = FirebaseManager.shared.getCurrentUserId() {
-                        do {
-                            try await env.eventRepo.join(eventId: event.id, userId: userId)
-                            
-                            // Create attendance record
-                            let db = FirebaseManager.shared.db
-                            let attendanceData: [String: Any] = [
-                                "userId": userId,
-                                "eventId": event.id,
-                                "joinedAt": FieldValue.serverTimestamp()
-                            ]
-                            try await db.collection("userAttendances").addDocument(data: attendanceData)
-                            
-                            // Add to attended events
-                            AttendedEventsService.shared.addAttendedEvent(event)
-                            
-                            // Track analytics
-                            AnalyticsService.shared.trackEventJoined(eventId: event.id, title: event.title, zone: zone)
-                        } catch {
-                        }
-                    }
-                    
-                    await MainActor.run {
-                        hostedEvents.append(event)
-                        showConfetti = true
-                        Haptics.light()
-                        
-                        // Set current joined event and show navigation modal
-                        appState.currentJoinedEvent = event
-                        showNavigationModal = true
-                        
-                        // Request app rating if this is the first event
-                        if isFirstEvent {
-                            AppRatingService.shared.requestRatingIfNeeded(isFirstEvent: true)
-                        }
-                        
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                            showConfetti = false
-                        }
-                    }
-                } catch {
-                    await MainActor.run {
-                        hostedEvents.append(event)
-                    }
-                }
+            // Events are now created from SparkCrowdCard only
+            // This callback is kept for backward compatibility but doesn't create events
+            // Close the sheet and show SparkCrowdCard instead
+            showHostSheet = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                showSparkCard = true
             }
         }
         .onDisappear {
             // Clear initialEventTitle after sheet is dismissed
             initialEventTitle = nil
+        }
+    }
+    
+    @ViewBuilder
+    private var sparkCardOverlay: some View {
+        if showSparkCard {
+            ZStack {
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            showSparkCard = false
+                        }
+                    }
+                    .transition(.opacity.animation(.easeOut(duration: 0.2)))
+                
+                SparkCrowdCard(
+                    defaultRegion: selectedRegion,
+                    onIgnite: { title, coord, locationName in
+                        createEventFromSparkCard(title: title, coord: coord, locationName: locationName)
+                    },
+                    onClose: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            showSparkCard = false
+                        }
+                    }
+                )
+                .environmentObject(appState)
+                .frame(maxWidth: 420)
+                .background(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(Color(hex: 0xF5F7FA))
+                        .shadow(color: Color.black.opacity(0.07), radius: 15, x: 0, y: 3)
+                        .shadow(color: Color.black.opacity(0.14), radius: 7, x: 0, y: 1.5)
+                )
+                .padding(.horizontal, 24)
+                .scaleEffect(showSparkCard ? 1 : 0.85)
+                .opacity(showSparkCard ? 1 : 0)
+                .animation(.spring(response: 0.45, dampingFraction: 0.75), value: showSparkCard)
+            }
+            .zIndex(999)
         }
     }
     
@@ -2665,7 +2613,7 @@ struct VisibilityUserAnnotationOnboardingCard: View {
                 .foregroundStyle(.primary)
             
             // Description
-            Text("Tap on any user annotation on the map to see their profile and connect with them.")
+            Text("Tap on any user pin on the map to see their profile.")
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(.primary.opacity(0.8))
                 .fixedSize(horizontal: false, vertical: true)

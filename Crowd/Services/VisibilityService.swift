@@ -16,86 +16,8 @@ final class VisibilityService {
     
     private let db: Firestore
     
-    // MARK: - Mock Users for Testing
-    private var mockUsersEnabled = true // Enabled - constant mock user for onboarding
-    
-    // Fixed reference point: UNT campus center
-    private let untCampusCenter = CLLocationCoordinate2D(
-        latitude: 33.210081,
-        longitude: -97.147700
-    )
-    
-    // Cached mock users with fixed coordinates
-    private lazy var cachedMockUsers: [UserProfile] = {
-        generateMockUsers()
-    }()
-    
     private init() {
         self.db = FirebaseManager.shared.db
-    }
-    
-    // Generate constant mock user for onboarding
-    private func generateMockUsers() -> [UserProfile] {
-        let bruceHallCoordinate = CLLocationCoordinate2D(
-            latitude: 33.2087,
-            longitude: -97.1524
-        )
-        
-        // Parse the date from the provided data (January 19, 2026 at 10:13:51 PM UTC-6)
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        dateFormatter.timeZone = TimeZone(identifier: "America/Chicago")
-        let createdAtDate = dateFormatter.date(from: "2026-01-19 22:13:51") ?? Date()
-        let lastActiveDate = createdAtDate
-        let lastLocationUpdateDate = dateFormatter.date(from: "2026-01-19 22:14:19") ?? Date()
-        let lastTokenUpdateDate = dateFormatter.date(from: "2026-01-14 18:53:08") ?? Date()
-        
-        return [
-            UserProfile(
-                id: "mock_teni",
-                displayName: "teni",
-                handle: "@teni",
-                bio: "",
-                campus: "UNT",
-                interests: [
-                    "Music",
-                    "Basketball",
-                    "Gym Life",
-                    "Adventure",
-                    "Foodie",
-                    "Coding",
-                    "AI & Tech",
-                    "Startups",
-                    "Entrepreneurship",
-                    "Esports",
-                    "Campus Events",
-                    "Travel",
-                    "Beach Days",
-                    "Chill Spots"
-                ],
-                auraPoints: 0,
-                avatarColorHex: "#85C1E2",
-                profileImageURL: "https://i.pinimg.com/236x/a6/65/6f/a6656f5d7f2d0074993dca19278d6774.jpg",
-                hostedCount: 0,
-                joinedCount: 0,
-                friendsCount: 0,
-                lastActive: lastActiveDate,
-                createdAt: createdAtDate,
-                fcmToken: nil, // Not needed for mock
-                lastTokenUpdate: lastTokenUpdateDate,
-                latitude: bruceHallCoordinate.latitude,
-                longitude: bruceHallCoordinate.longitude,
-                geohash: "9vfuvm",
-                lastLocationUpdate: lastLocationUpdateDate,
-                notificationCooldowns: nil,
-                lastNotificationSent: nil,
-                eventStatus: ["wunna-them-nights-feat-gunna-live"],
-                termsAccepted: true,
-                blockedUsers: nil,
-                isVisible: true,
-                visibilityExpiresAt: Date().addingTimeInterval(6 * 60 * 60)
-            )
-        ]
     }
     
     // MARK: - Toggle Visibility
@@ -182,11 +104,13 @@ final class VisibilityService {
             
             // Skip current user
             if userId == currentUserId {
+                print("👁️ DEBUG: Skipping current user: \(userId)")
                 continue
             }
             
             // Skip blocked users
             if blockedUserIds.contains(userId) {
+                print("👁️ DEBUG: Skipping blocked user: \(userId)")
                 continue
             }
             
@@ -228,18 +152,14 @@ final class VisibilityService {
             do {
                 let profile = try UserProfileService.shared.parseProfile(from: data, userId: userId)
                 profiles.append(profile)
+                print("👁️ DEBUG: Added visible user from Firestore: \(userId) (\(profile.displayName))")
             } catch {
                 print("⚠️ Failed to parse user profile for \(userId): \(error)")
             }
         }
         
-        print("👁️ Fetching visible users in region, found \(profiles.count) real users")
-        
-        // Add constant mock user for onboarding
-        if mockUsersEnabled {
-            profiles.append(contentsOf: cachedMockUsers)
-            print("👁️ Added \(cachedMockUsers.count) constant mock user for onboarding")
-        }
+        print("👁️ Fetching visible users in region, found \(profiles.count) real users from Firestore")
+        print("👁️ DEBUG: Total visible users: \(profiles.count)")
         
         return profiles
     }
@@ -290,11 +210,13 @@ final class VisibilityService {
                     
                     // Skip current user
                     if userId == currentUserId {
+                        print("👁️ DEBUG: Skipping current user: \(userId)")
                         continue
                     }
                     
                     // Skip blocked users
                     if blockedUserIds.contains(userId) {
+                        print("👁️ DEBUG: Skipping blocked user: \(userId)")
                         continue
                     }
                     
@@ -331,15 +253,14 @@ final class VisibilityService {
                     do {
                         let profile = try UserProfileService.shared.parseProfile(from: data, userId: userId)
                         profiles.append(profile)
+                        print("👁️ DEBUG: Added visible user from Firestore: \(userId) (\(profile.displayName))")
                     } catch {
                         print("⚠️ Failed to parse user profile for \(userId): \(error)")
                     }
                 }
                 
-                // Add constant mock user for onboarding
-                if self.mockUsersEnabled {
-                    profiles.append(contentsOf: self.cachedMockUsers)
-                }
+                print("👁️ DEBUG: Found \(profiles.count) real users from Firestore listener")
+                print("👁️ DEBUG: Total visible users: \(profiles.count)")
                 
                 onChange(profiles)
             }

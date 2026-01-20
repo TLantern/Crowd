@@ -18,9 +18,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         print("🚀 AppDelegate: App did finish launching")
         
-        // Firebase is already configured in FirebaseManager.shared
-        // Just ensure it's initialized
+        // CRITICAL: Configure Firebase FIRST before any other services
+        if FirebaseApp.app() == nil {
+            print("🔧 AppDelegate: Configuring Firebase...")
+            FirebaseApp.configure()
+            print("✅ AppDelegate: Firebase configured")
+        } else {
+            print("✅ AppDelegate: Firebase already configured")
+        }
+        
+        // Now initialize FirebaseManager (it will detect Firebase is already configured)
         _ = FirebaseManager.shared
+        
+        // Ensure permanent mock user exists
+        Task {
+            await UserProfileService.shared.ensurePermanentMockUser()
+        }
         
         // Configure Superwall
         // Note: StoreKit "No active account" errors are expected when no Apple ID is signed in

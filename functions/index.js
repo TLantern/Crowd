@@ -1,7 +1,10 @@
 const functions = require('firebase-functions');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 admin.initializeApp();
+
+const geocodeApiKey = defineSecret('GEOCODE_API_KEY');
 
 const db = admin.firestore();
 
@@ -80,10 +83,15 @@ function deriveLocationString(doc) {
   return null;
 }
 
-// Call Google Geocoding API with server key in functions config: geocode.api_key
+// Call Google Geocoding API with server key from params: GEOCODE_API_KEY
 async function geocodeLocation(locationName) {
-  const key = functions.config().geocode && functions.config().geocode.api_key;
-  if (!key) throw new Error('Missing geocode.api_key config');
+  let key = geocodeApiKey.value();
+  // Fallback to legacy config for v1 functions
+  if (!key) {
+    const legacyConfig = functions.config().geocode;
+    key = legacyConfig && legacyConfig.api_key;
+  }
+  if (!key) throw new Error('Missing GEOCODE_API_KEY param or geocode.api_key config');
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationName)}&key=${key}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Geocode HTTP ${res.status}`);
@@ -1198,7 +1206,10 @@ exports.getTodaysEvents = functions.https.onCall(async (data, context) => {
 });
 
 // === Callable: Geocode a single official raw event (events_from_official_raw) if it lacks coords ===
-exports.geocodeEventIfNeeded = onCall({ enforceAppCheck: false }, async (request) => {
+exports.geocodeEventIfNeeded = onCall({ 
+  enforceAppCheck: false,
+  secrets: [geocodeApiKey]
+}, async (request) => {
   try {
     const { id } = request.data || {};
     if (!id) throw new HttpsError('invalid-argument', 'id is required');
@@ -1219,33 +1230,63 @@ exports.geocodeEventIfNeeded = onCall({ enforceAppCheck: false }, async (request
     const cacheKey = normalizeLocationKey(locStr);
     let cached = null;
     if (cacheKey) {
-      const cachedDoc = await db.collection('geocoding_cache').doc(cacheKey).get();
-      if (cachedDoc.exists) cached = cachedDoc.data();
+      try {
+        const cachedDoc = await db.collection('geocoding_cache').doc(cacheKey).get();
+        if (cachedDoc.exists) cached = cachedDoc.data();
+      } catch (cacheError) {
+        console.warn(`Cache read failed for ${cacheKey}:`, cacheError.message);
+      }
     }
 
     let geo = cached;
     if (!geo) {
-      geo = await geocodeLocation(locStr);
-      if (cacheKey) {
-        await db.collection('geocoding_cache').doc(cacheKey).set({
-          name: locStr,
-          normalized: cacheKey,
-          latitude: geo.latitude,
-          longitude: geo.longitude,
-          placeId: geo.placeId || null,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+      try {
+        geo = await geocodeLocation(locStr);
+        if (!geo || typeof geo.latitude !== 'number' || typeof geo.longitude !== 'number') {
+          throw new Error('Invalid geocoding result');
+        }
+        if (cacheKey) {
+          try {
+            await db.collection('geocoding_cache').doc(cacheKey).set({
+              name: locStr,
+              normalized: cacheKey,
+              latitude: geo.latitude,
+              longitude: geo.longitude,
+              placeId: geo.placeId || null,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          } catch (cacheWriteError) {
+            console.warn(`Cache write failed for ${cacheKey}:`, cacheWriteError.message);
+          }
+        }
+      } catch (geocodeError) {
+        console.error(`Geocoding failed for event ${id}, location "${locStr}":`, geocodeError.message);
+        throw new HttpsError('failed-precondition', `Geocoding failed: ${geocodeError.message}`);
       }
+    }
+
+    if (!geo || typeof geo.latitude !== 'number' || typeof geo.longitude !== 'number') {
+      throw new HttpsError('failed-precondition', 'Invalid geocoding data');
     }
 
     latitude = geo.latitude;
     longitude = geo.longitude;
     geohash = geohashEncode(latitude, longitude, 6);
-    await ref.set({ latitude, longitude, geohash }, { merge: true });
+    
+    try {
+      await ref.set({ latitude, longitude, geohash }, { merge: true });
+    } catch (writeError) {
+      console.error(`Firestore write failed for event ${id}:`, writeError.message);
+      throw new HttpsError('failed-precondition', `Failed to save coordinates: ${writeError.message}`);
+    }
+    
     return { success: true, latitude, longitude, geohash };
   } catch (error) {
-    console.error('❌ geocodeEventIfNeeded failed:', error);
-    throw new HttpsError('internal', error.message);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error(`❌ geocodeEventIfNeeded failed for ${request.data?.id || 'unknown'}:`, error);
+    throw new HttpsError('internal', error.message || 'Unknown error');
   }
 });
 
