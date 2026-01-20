@@ -48,10 +48,10 @@ extension TutorialStep {
         ),
         TutorialStep(
             id: 3,
-            title: "Visibility Mode 👻",
-            description: "Tap the ghost icon to see other users on the map and share your location.",
-            cardPosition: .topCenter,
-            arrowDirection: .bottom
+            title: "Visibility Mode 👁️",
+            description: "Tap the eye icon to see other users on the map and share your location.",
+            cardPosition: .custom(x: 0, y: 0), // Will be positioned near eye icon at top right
+            arrowDirection: .top
         ),
         TutorialStep(
             id: 4,

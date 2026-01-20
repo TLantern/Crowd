@@ -236,15 +236,17 @@ struct CrowdApp: App {
                     showAccountCreation = false
                 }
                 
-                // Save interests to UserDefaults
+                // Save interest IDs to UserDefaults (for local reference)
                 let interestIds = interests.map { $0.id }
                 UserDefaults.standard.set(interestIds, forKey: "selectedInterestIds")
                 
                 // ACTUALLY CREATE ACCOUNT IN FIREBASE
+                // Note: Firebase stores interest NAMES, not IDs
+                let interestNames = interests.map { $0.name }
                 Task {
                     await createFirebaseAccount(
                         name: name,
-                        interests: interestIds,
+                        interests: interestNames,
                         profileImage: profileImage
                     )
                 }

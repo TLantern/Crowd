@@ -81,8 +81,15 @@ struct TutorialOverlayView: View {
                 x: width / 2,
                 y: height / 2
             )
-        case .custom(let x, let y):
-            return CGPoint(x: x, y: y)
+        case .custom(_, _):
+            // Special handling for step 3 (Visibility Mode) - position near eye icon at top right
+            if currentStep.id == 3 {
+                return CGPoint(
+                    x: width / 2,
+                    y: safeTop + 140  // Position below the eye icon
+                )
+            }
+            return CGPoint(x: width / 2, y: safeTop + 120)
         }
     }
     
