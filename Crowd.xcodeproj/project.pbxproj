@@ -580,6 +580,7 @@
 				DEVELOPMENT_TEAM = 8254DAMG44;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Crowd uses the microphone for voice and audio features when you choose to record or speak.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Crowd needs access to your location to show you nearby events and help you discover what's happening around campus, even when the app is in the background.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Crowd needs access to your location to show you nearby events and help you discover what's happening around campus.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -617,6 +618,7 @@
 				DEVELOPMENT_TEAM = 8254DAMG44;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Crowd uses the microphone for voice and audio features when you choose to record or speak.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Crowd needs access to your location to show you nearby events and help you discover what's happening around campus, even when the app is in the background.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Crowd needs access to your location to show you nearby events and help you discover what's happening around campus.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
