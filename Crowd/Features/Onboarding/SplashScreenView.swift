@@ -5,6 +5,7 @@
 //  Initial splash screen showing Crowd logo with "Join the Crowd" button.
 //  Features typewriter animation showing "Crowd" in different languages.
 //  English "Crowd" appears every other word for emphasis.
+//  iPad compatible with responsive sizing.
 //
 
 import SwiftUI
@@ -18,62 +19,74 @@ struct SplashScreenView: View {
     let onComplete: () -> Void
     
     var body: some View {
-        ZStack {
-            // Background
-            Image("Background")
-                .resizable()
-                .scaledToFill()
-                .ignoresSafeArea()
-            
-            // Content
-            VStack(spacing: 30) {
-                Spacer()
+        GeometryReader { geometry in
+            ZStack {
+                // Background
+                Image("Background")
+                    .resizable()
+                    .scaledToFill()
+                    .ignoresSafeArea()
                 
-                // Logo and Typewriter Text
-                VStack(spacing: 16) {
-                    // Flickering flame logo - larger for more impact
-                    FlickeringLogoView()
-                        .frame(width: 250, height: 250)
+                // Content
+                VStack(spacing: geometry.size.height * 0.04) {
+                    Spacer()
+                        .frame(height: geometry.size.height * 0.1)
                     
-                    // Typewriter "Crowd" in different languages (replaces CrowdText image)
-                    CrowdTypewriterView()
-                        .frame(height: 80)
-                }
-                .scaleEffect(logoScale)
-                
-                Spacer()
-                
-                // Join the Crowd button
-                Button(action: {
-                    // Fade out and transition
-                    isTransitioning = true
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        contentOpacity = 0
-                    }
-                    
-                    // Complete after fade animation
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        onComplete()
-                    }
-                }) {
-                    Text("Join the Crowd")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color(hex: 0x02853E))
+                    // Logo and Typewriter Text
+                    VStack(spacing: geometry.size.height * 0.02) {
+                        // Flickering flame logo - sized for device
+                        FlickeringLogoView()
+                            .frame(
+                                width: min(geometry.size.width * 0.35, 350),
+                                height: min(geometry.size.width * 0.35, 350)
+                            )
+                        
+                        // Typewriter "Crowd" in different languages
+                        CrowdTypewriterView(
+                            baseFontSize: min(geometry.size.width * 0.08, 72)
                         )
+                        .frame(height: min(geometry.size.width * 0.1, 90))
+                    }
+                    .scaleEffect(logoScale)
+                    
+                    Spacer()
+                    
+                    // Join the Crowd button - always visible with proper constraints
+                    Button(action: {
+                        // Fade out and transition
+                        isTransitioning = true
+                        withAnimation(.easeInOut(duration: 0.5)) {
+                            contentOpacity = 0
+                        }
+                        
+                        // Complete after fade animation
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            onComplete()
+                        }
+                    }) {
+                        Text("Join the Crowd")
+                            .font(.system(
+                                size: min(geometry.size.width * 0.04, 24),
+                                weight: .bold
+                            ))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: min(geometry.size.width * 0.5, 400))
+                            .padding(.vertical, min(geometry.size.height * 0.025, 20))
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color(hex: 0x02853E))
+                            )
+                    }
+                    .padding(.horizontal, 40)
+                    .opacity(buttonOpacity)
+                    .disabled(isTransitioning)
+                    .padding(.bottom, geometry.size.height * 0.08)
+                    
+                    Spacer()
+                        .frame(height: geometry.size.height * 0.08)
                 }
-                .padding(.horizontal, 40)
-                .opacity(buttonOpacity)
-                .disabled(isTransitioning)
-                
-                Spacer()
-                    .frame(height: 60)
+                .opacity(contentOpacity)
             }
-            .opacity(contentOpacity)
         }
         .onAppear {
             // Animate logo in
@@ -89,6 +102,7 @@ struct SplashScreenView: View {
             }
         }
         .preferredColorScheme(.light)
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 
@@ -145,6 +159,8 @@ struct CrowdTypewriterView: View {
     @State private var textOpacity: Double = 1.0
     @State private var textScale: CGFloat = 1.0
     
+    let baseFontSize: CGFloat
+    
     // "Crowd" in different languages with colors
     // Pattern: English appears EVERY OTHER word for emphasis
     private let translations: [(text: String, color: Color, isEnglish: Bool)] = [
@@ -184,10 +200,18 @@ struct CrowdTypewriterView: View {
         translations[currentIndex % translations.count]
     }
     
+    private var englishFontSize: CGFloat {
+        baseFontSize
+    }
+    
+    private var otherFontSize: CGFloat {
+        baseFontSize * 0.9
+    }
+    
     var body: some View {
         Text(displayedText)
             .font(.system(
-                size: currentTranslation.isEnglish ? 72 : 64,
+                size: currentTranslation.isEnglish ? englishFontSize : otherFontSize,
                 weight: currentTranslation.isEnglish ? .black : .bold,
                 design: .rounded
             ))
@@ -248,4 +272,5 @@ struct CrowdTypewriterView: View {
     SplashScreenView {
         print("Splash complete")
     }
+    .frame(width: 768, height: 1024) // iPad preview size
 }

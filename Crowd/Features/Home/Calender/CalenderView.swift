@@ -1151,7 +1151,7 @@ struct SchoolEventCardView: View {
             }
             .padding(16)
         }
-        .frame(maxWidth: 350, minHeight: 450)
+        .frame(maxWidth: 500, minHeight: 450)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)
@@ -1652,7 +1652,7 @@ struct PartyCardView: View {
             }
             .padding(16)
         }
-        .frame(maxWidth: 350, minHeight: 450)
+        .frame(maxWidth: 500, minHeight: 450)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)

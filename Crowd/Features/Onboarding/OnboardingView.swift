@@ -26,32 +26,32 @@ struct OnboardingView: View {
                 VStack(spacing: 0) {
                     Spacer(minLength: 60)
 
-                    // Logo text
+                    // Logo text - responsive sizing for iPad
                     Image("CrowdText")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 190, height: 120)
+                        .frame(width: min(geo.size.width * 0.25, 250), height: min(geo.size.height * 0.12, 140))
                         .padding(.bottom, 12)
 
-                    // People + fire graphic
+                    // People + fire graphic - responsive sizing for iPad
                     Image("Logo")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 300, height: 255)
+                        .frame(width: min(geo.size.width * 0.4, 380), height: min(geo.size.height * 0.28, 320))
                         .padding(.bottom, 48)
 
                     Spacer(minLength: 0)
 
-                    // Main glass card - pinned to bottom
+                    // Main glass card - pinned to bottom - responsive sizing
                     VStack(spacing: 16) {
                         Text("Welcome to Crowd")
-                            .font(.system(size: 24, weight: .semibold, design: .rounded))
+                            .font(.system(size: min(geo.size.width * 0.04, 28), weight: .semibold, design: .rounded))
                             .foregroundColor(.black)
 
                         Button(action: onContinue) {
                             HStack(spacing: 8) {
                                 Text("Jump In")
-                                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                    .font(.system(size: min(geo.size.width * 0.025, 24), weight: .semibold, design: .rounded))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
@@ -64,7 +64,7 @@ struct OnboardingView: View {
                         }
 
                         Text("By clicking continue, you agree to our Terms of Service and Privacy Policy.")
-                            .font(.system(size: 11, weight: .regular))
+                            .font(.system(size: min(geo.size.width * 0.014, 14)))
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
@@ -75,7 +75,7 @@ struct OnboardingView: View {
                             .fill(.ultraThinMaterial)
                             .shadow(color: Color.black.opacity(0.2), radius: 24, y: 10)
                     )
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, min(geo.size.width * 0.08, 40))
                     .padding(.bottom, max(34, safeAreaInsets.bottom + 34))
                 }
                 .frame(height: availableHeight)
@@ -89,6 +89,6 @@ struct OnboardingView: View {
     OnboardingView {
         print("Continue tapped")
     }
+    .frame(width: 768, height: 1024) // iPad preview size
 }
-
 
