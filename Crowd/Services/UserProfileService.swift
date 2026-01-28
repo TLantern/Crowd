@@ -110,7 +110,7 @@ final class UserProfileService {
     }
     
     func updateProfile(userId: String, updates: [String: Any]) async throws {
-        try await db.collection("users").document(userId).updateData(updates)
+        try await db.collection("users").document(userId).setData(updates, merge: true)
         
         // Clear cache to force refresh
         profileCache.removeValue(forKey: userId)
@@ -338,9 +338,9 @@ final class UserProfileService {
     }
     
     func acceptTerms(userId: String) async throws {
-        try await db.collection("users").document(userId).updateData([
+        try await db.collection("users").document(userId).setData([
             "termsAccepted": true
-        ])
+        ], merge: true)
         
         // Update cache if exists
         if var cached = profileCache[userId] {

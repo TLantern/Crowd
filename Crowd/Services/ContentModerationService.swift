@@ -120,9 +120,9 @@ final class ContentModerationService {
     func blockUser(blockedUserId: String, currentUserId: String) async throws {
         let userRef = db.collection("users").document(currentUserId)
         
-        try await userRef.updateData([
+        try await userRef.setData([
             "blockedUsers": FieldValue.arrayUnion([blockedUserId])
-        ])
+        ], merge: true)
         
         // Update cache
         blockedUsersCache.insert(blockedUserId)
@@ -133,9 +133,9 @@ final class ContentModerationService {
     func unblockUser(blockedUserId: String, currentUserId: String) async throws {
         let userRef = db.collection("users").document(currentUserId)
         
-        try await userRef.updateData([
+        try await userRef.setData([
             "blockedUsers": FieldValue.arrayRemove([blockedUserId])
-        ])
+        ], merge: true)
         
         // Update cache
         blockedUsersCache.remove(blockedUserId)

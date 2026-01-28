@@ -44,15 +44,7 @@ struct CrowdApp: App {
     private let env = AppEnvironment.current
     
     init() {
-        // CRITICAL: Configure Firebase FIRST before any other services
-        // This ensures Firebase is ready even if AppDelegate hasn't run yet
-        if FirebaseApp.app() == nil {
-            print("🔧 CrowdApp: Configuring Firebase...")
-            FirebaseApp.configure()
-            print("✅ CrowdApp: Firebase configured")
-        }
-        
-        // Initialize FirebaseManager (Firebase is now configured)
+        // Initialize FirebaseManager (it configures Firebase + App Check)
         _ = FirebaseManager.shared
         
         // Configure push notifications (Firebase is now configured)

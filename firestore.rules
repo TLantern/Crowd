@@ -41,13 +41,44 @@ service cloud.firestore {
     
     function isValidUserDataForUpdate() {
       // For updates/merges, validate fields that are present but don't require all fields
-      return (!('displayName' in request.resource.data) || request.resource.data.displayName is string) &&
+      return request.resource.data.keys().hasOnly([
+               'displayName',
+               'handle',
+               'bio',
+               'campus',
+               'interests',
+               'auraPoints',
+               'avatarColorHex',
+               'profileImageURL',
+               'hostedCount',
+               'joinedCount',
+               'friendsCount',
+               'lastActive',
+               'createdAt',
+               'updatedAt',
+               'termsAccepted',
+               'isVisible',
+               'visibilityExpiresAt',
+               'blockedUsers'
+             ]) &&
+             (!('displayName' in request.resource.data) || request.resource.data.displayName is string) &&
+             (!('handle' in request.resource.data) || request.resource.data.handle is string) &&
+             (!('bio' in request.resource.data) || request.resource.data.bio is string) &&
+             (!('campus' in request.resource.data) || request.resource.data.campus is string) &&
+             (!('interests' in request.resource.data) || request.resource.data.interests is list) &&
              (!('auraPoints' in request.resource.data) || request.resource.data.auraPoints is int) &&
+             (!('avatarColorHex' in request.resource.data) || request.resource.data.avatarColorHex is string) &&
+             (!('profileImageURL' in request.resource.data) || request.resource.data.profileImageURL is string) &&
+             (!('hostedCount' in request.resource.data) || request.resource.data.hostedCount is int) &&
+             (!('joinedCount' in request.resource.data) || request.resource.data.joinedCount is int) &&
+             (!('friendsCount' in request.resource.data) || request.resource.data.friendsCount is int) &&
+             (!('lastActive' in request.resource.data) || request.resource.data.lastActive is timestamp) &&
              (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp) &&
              (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp) &&
-             (!('interests' in request.resource.data) || request.resource.data.interests is list) &&
+             (!('termsAccepted' in request.resource.data) || request.resource.data.termsAccepted is bool) &&
              (!('isVisible' in request.resource.data) || request.resource.data.isVisible is bool) &&
-             (!('visibilityExpiresAt' in request.resource.data) || request.resource.data.visibilityExpiresAt is timestamp);
+             (!('visibilityExpiresAt' in request.resource.data) || request.resource.data.visibilityExpiresAt is timestamp) &&
+             (!('blockedUsers' in request.resource.data) || request.resource.data.blockedUsers is list);
     }
     
     function isValidEventData() {
@@ -138,14 +169,9 @@ service cloud.firestore {
       // Users can read any user profile
       allow read: if true;
       
-      // Users can create their own profile OR create with just visibility fields
-      allow create: if isOwner(userId) && isValidUserDataForCreate();
-      
-      // ✅ ALSO allow creating user doc with ONLY visibility fields (for setData merge on non-existent doc)
-      allow create: if request.resource.data.keys().hasOnly(['isVisible', 'visibilityExpiresAt']);
-      
-      // ✅ Allow ALL updates for testing visibility
-      allow update: if true;
+      // Users can create/update ONLY their own profile (supports setData(..., merge:true) on first write)
+      allow create: if isOwner(userId) && isValidUserDataForUpdate();
+      allow update: if isOwner(userId) && isValidUserDataForUpdate();
       
       allow delete: if isOwner(userId);
     }

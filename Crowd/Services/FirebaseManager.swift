@@ -12,6 +12,7 @@ import FirebaseFunctions
 import FirebaseAuth
 import FirebaseAnalytics
 import FirebaseMessaging
+import FirebaseAppCheck
 
 final class FirebaseManager {
     static let shared = FirebaseManager()
@@ -25,6 +26,15 @@ final class FirebaseManager {
         
         // CRITICAL: Configure Firebase first
         if FirebaseApp.app() == nil {
+            #if DEBUG
+            AppCheck.setAppCheckProviderFactory(DebugAppCheckProviderFactory())
+            #else
+            if #available(iOS 14.0, *) {
+                AppCheck.setAppCheckProviderFactory(AppAttestProviderFactory())
+            } else {
+                AppCheck.setAppCheckProviderFactory(DeviceCheckProviderFactory())
+            }
+            #endif
             print("🔧 FirebaseManager: Configuring Firebase...")
             FirebaseApp.configure()
             print("✅ FirebaseManager: Firebase configured")

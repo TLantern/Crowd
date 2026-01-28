@@ -218,7 +218,7 @@ struct CalenderView: View {
                 Spacer()
             }
         }
-        .padding(.top, 5)
+        .padding(.top, 16)
         .padding(.horizontal, 20)
     }
     
@@ -1008,6 +1008,10 @@ struct SchoolEventCardView: View {
     @State private var goingCount = 0
     @State private var showMoreInfoSheet = false
     
+    private var isIPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Event Image - Top to Middle (Optimized)
@@ -1166,7 +1170,7 @@ struct SchoolEventCardView: View {
             }
             .padding(16)
         }
-        .frame(maxWidth: 500, minHeight: 450)
+        .frame(maxWidth: isIPad ? 500 : 350, minHeight: 450)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)
@@ -1490,6 +1494,10 @@ struct PartyCardView: View {
     @State private var goingCount = 0
     @State private var showMoreInfoSheet = false
     
+    private var isIPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Event Image - Top to Middle
@@ -1667,7 +1675,7 @@ struct PartyCardView: View {
             }
             .padding(16)
         }
-        .frame(maxWidth: 500, minHeight: 450)
+        .frame(maxWidth: isIPad ? 500 : 350, minHeight: 450)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white)

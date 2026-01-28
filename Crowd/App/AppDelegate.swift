@@ -17,17 +17,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         print("🚀 AppDelegate: App did finish launching")
-        
-        // CRITICAL: Configure Firebase FIRST before any other services
-        if FirebaseApp.app() == nil {
-            print("🔧 AppDelegate: Configuring Firebase...")
-            FirebaseApp.configure()
-            print("✅ AppDelegate: Firebase configured")
-        } else {
-            print("✅ AppDelegate: Firebase already configured")
-        }
-        
-        // Now initialize FirebaseManager (it will detect Firebase is already configured)
+
+        // Initialize FirebaseManager (it configures Firebase + App Check)
         _ = FirebaseManager.shared
         
         // Ensure permanent mock user exists

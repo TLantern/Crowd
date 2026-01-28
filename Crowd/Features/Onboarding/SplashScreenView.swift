@@ -25,6 +25,78 @@ struct SplashScreenView: View {
     }
     
     var body: some View {
+        if isIPad {
+            iPadView
+        } else {
+            iPhoneView
+        }
+    }
+    
+    // MARK: - iPhone View (Simple Layout)
+    
+    private var iPhoneView: some View {
+        ZStack {
+            // Background
+            Image("Background")
+                .resizable()
+                .scaledToFill()
+                .ignoresSafeArea()
+            
+            // Content
+            VStack(spacing: 30) {
+                Spacer()
+                
+                // Logo and Typewriter Text
+                VStack(spacing: 16) {
+                    FlickeringLogoView()
+                        .frame(width: 250, height: 250)
+                    
+                    CrowdTypewriterView(baseFontSize: 72)
+                        .frame(height: 80)
+                }
+                .scaleEffect(logoScale)
+                
+                Spacer()
+                
+                // Join the Crowd button
+                Button(action: {
+                    isTransitioning = true
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        contentOpacity = 0
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        onComplete()
+                    }
+                }) {
+                    Text("Join the Crowd")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(hex: 0x02853E))
+                        )
+                }
+                .padding(.horizontal, 40)
+                .disabled(isTransitioning)
+                
+                Spacer()
+                    .frame(height: 60)
+            }
+            .opacity(contentOpacity)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5)) {
+                logoScale = 1.0
+            }
+        }
+        .preferredColorScheme(.light)
+    }
+    
+    // MARK: - iPad View (Responsive Layout)
+    
+    private var iPadView: some View {
         GeometryReader { geometry in
             let screenBounds = UIScreen.main.bounds
             let safeW = max(1, geometry.size.width)

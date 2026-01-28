@@ -27,7 +27,7 @@ final class AnchorService: ObservableObject {
     // MARK: - Load Anchors
     
     func loadAnchors() async {
-        // Load from local JSON FIRST (fast, deterministic, works offline)
+        // Load from local JSON ONLY (fast, deterministic, works offline)
         if let localAnchors = await loadAnchorsFromJSON() {
             await MainActor.run {
                 self.anchors = localAnchors
@@ -35,20 +35,10 @@ final class AnchorService: ObservableObject {
             await geocodeAnchors()
             await updateActiveAnchors()
             
-            // Best-effort: seed Firebase so future launches can pull dynamic updates
-            await syncWithFirebase()
+            print("✅ AnchorService: Loaded \(localAnchors.count) anchors from JSON only")
+        } else {
+            print("❌ AnchorService: Failed to load anchors from JSON")
         }
-        
-        // Then try Firebase (allows dynamic updates without rebuild). If it has data, prefer it.
-        let firebaseAnchors = await loadAnchorsFromFirebase()
-        
-        if !firebaseAnchors.isEmpty {
-            await geocodeAnchors()
-            await updateActiveAnchors()
-        }
-        
-        // Set up real-time listener for Firebase changes
-        setupFirebaseListener()
     }
     
     private func loadAnchorsFromJSON() async -> [Anchor]? {
