@@ -27,24 +27,21 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
     func configure() {
         print("📱 NotificationService: Configuring push notifications...")
         
-        // Set delegates
+        // Set delegates only. Do NOT request permission or register here.
+        // requestPermission() is deferred to AppState.bootstrap() when the main app
+        // has loaded. Requesting at launch (during CrowdApp.init) can cause the app
+        // to become unresponsive on iPad after the user dismisses the system
+        // notification dialog, due to timing with SwiftUI's first layout/transition.
         UNUserNotificationCenter.current().delegate = self
         Messaging.messaging().delegate = self
         
-        // Request permission
-        requestPermission()
-        
-        // Register for remote notifications
-        DispatchQueue.main.async {
-            UIApplication.shared.registerForRemoteNotifications()
-        }
-        
-        print("✅ NotificationService: Configuration complete")
+        print("✅ NotificationService: Configuration complete (permission deferred to main app)")
     }
     
     // MARK: - Permission Request
     
     func requestPermission() {
+        print("📱 [NotificationService] requestPermission called (system dialog may appear)")
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if let error = error {
                 print("❌ NotificationService: Permission error - \(error.localizedDescription)")

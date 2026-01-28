@@ -69,14 +69,10 @@ struct Anchor: Identifiable, Codable, Hashable {
         guard daysActive.contains(weekdayAbbreviation) else { return false }
         
         // Parse time strings (HH:mm format)
-        guard let time = parseTimeString(anchorStartLocal) else {
-            return false
-        }
+        guard let time = parseTimeString(anchorStartLocal) else { return false }
         let startMinutes = time.hour * 60 + time.minute
         
-        guard let time = parseTimeString(anchorEndLocal) else {
-            return false
-        }
+        guard let time = parseTimeString(anchorEndLocal) else { return false }
         let endMinutes = time.hour * 60 + time.minute
         
         let currentMinutes = (chicagoNow.hour ?? 0) * 60 + (chicagoNow.minute ?? 0)

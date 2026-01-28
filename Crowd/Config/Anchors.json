@@ -1,28 +1,14 @@
 {
   "anchors": [
     {
-      "id": "gym_pohl_rec",
-      "name": "Gym Buddies",
-      "emoji": "🏋️",
-      "location": "Pohl Recreation Center",
-      "type": "anchor",
-      "days_active": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-      "anchor_start_local": "08:00",
-      "anchor_end_local": "22:00",
-      "send_notification": false,
-      "notification_time_local": null,
-      "notification_message": null,
-      "description": "Steady gym traffic all day. Lifters, cardio, crews warming up. Easy place to find a workout partner or jump into a set. Always a few people in here between classes."
-    },
-    {
       "id": "willis_floor_2",
       "name": "Study Buddies",
       "emoji": "📚",
       "location": "Willis Library, Floor 2",
       "type": "anchor",
-      "days_active": ["Mon", "Tue", "Wed", "Thu", "Sun"],
-      "anchor_start_local": "10:00",
-      "anchor_end_local": "23:00",
+      "days_active": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "anchor_start_local": "00:00",
+      "anchor_end_local": "23:59",
       "send_notification": true,
       "notification_time_local": "19:00",
       "notification_message": "Willis is filling up for night study. Slide in before seats disappear.",
@@ -34,27 +20,13 @@
       "emoji": "🏫",
       "location": "University Union – Main Floor",
       "type": "anchor",
-      "days_active": ["Mon", "Tue", "Wed", "Thu", "Fri"],
-      "anchor_start_local": "10:00",
-      "anchor_end_local": "19:00",
+      "days_active": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "anchor_start_local": "00:00",
+      "anchor_end_local": "23:59",
       "send_notification": true,
       "notification_time_local": "11:30",
       "notification_message": "Union is heating up for lunch. Good spot to link or chill between classes.",
       "description": "Lunch crowds, clubs tabling, people chilling between classes. Good spot to find friends, link for food, or meet someone fast."
-    },
-    {
-      "id": "eagle_landing_lunch",
-      "name": "Let's Grab Lunch",
-      "emoji": "🦅",
-      "location": "Eagle Landing Dining Hall",
-      "type": "anchor",
-      "days_active": ["Mon", "Tue", "Wed", "Thu", "Fri"],
-      "anchor_start_local": "11:30",
-      "anchor_end_local": "14:00",
-      "send_notification": true,
-      "notification_time_local": "12:00",
-      "notification_message": "Lunch rush starting at Eagle Landing. If you're grabbing food, people are already here.",
-      "description": "Lunch rush. High movement, lots of tables full. Good time to meet new people or grab food with someone nearby."
     },
     {
       "id": "basketball_runs_rec",
@@ -63,26 +35,12 @@
       "location": "Pohl Rec Center – Basketball Courts",
       "type": "anchor",
       "days_active": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-      "anchor_start_local": "15:00",
-      "anchor_end_local": "22:00",
+      "anchor_start_local": "00:00",
+      "anchor_end_local": "23:59",
       "send_notification": true,
       "notification_time_local": "17:00",
       "notification_message": "Pickup runs forming at the Rec. Courts are getting active.",
       "description": "Pickup runs throughout the day. People warming up, games forming, waiting list building. Easy to hop in."
-    },
-    {
-      "id": "eagle_landing_dinner",
-      "name": "Dinner Time",
-      "emoji": "🍽️",
-      "location": "Eagle Landing Dining Hall",
-      "type": "anchor",
-      "days_active": ["Mon", "Tue", "Wed", "Thu", "Sun"],
-      "anchor_start_local": "16:00",
-      "anchor_end_local": "19:30",
-      "send_notification": true,
-      "notification_time_local": "18:00",
-      "notification_message": "Dinner crowd warming up at Eagle Landing. Find a seat and meet some new people now.",
-      "description": "Dinner warm-up phase. People rolling in after classes, light chatter, more open tables. Easy opportunity to sit with others."
     }
   ]
 }

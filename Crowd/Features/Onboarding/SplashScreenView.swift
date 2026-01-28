@@ -9,96 +9,156 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct SplashScreenView: View {
     @State private var logoScale: CGFloat = 0.8
-    @State private var buttonOpacity: Double = 0
     @State private var isTransitioning: Bool = false
     @State private var contentOpacity: Double = 1.0
     
     let onComplete: () -> Void
     
+    private var isIPad: Bool {
+        let result = UIDevice.current.userInterfaceIdiom == .pad
+        print("🎯 [SplashScreenView] isIPad check: \(result), idiom: \(UIDevice.current.userInterfaceIdiom.rawValue)")
+        return result
+    }
+    
     var body: some View {
         GeometryReader { geometry in
+            let screenBounds = UIScreen.main.bounds
+            let safeW = max(1, geometry.size.width)
+            let safeH = max(1, geometry.size.height)
+            let fullScreenH = screenBounds.height
+            let _ = print("📐 [SplashScreenView] GeometryReader size: \(geometry.size.width)x\(geometry.size.height), safeArea: \(geometry.safeAreaInsets)")
+            let _ = print("📐 [SplashScreenView] Calculated safeW=\(safeW), safeH=\(safeH), fullScreenH=\(fullScreenH)")
             ZStack {
                 // Background
                 Image("Background")
                     .resizable()
                     .scaledToFill()
                     .ignoresSafeArea()
+                    .onAppear {
+                        print("🖼️ [SplashScreenView] Background image appeared")
+                    }
                 
-                // Content
-                VStack(spacing: geometry.size.height * 0.04) {
+                // Logo and typewriter – upper portion
+                VStack(spacing: safeH * 0.02) {
                     Spacer()
-                        .frame(height: geometry.size.height * 0.1)
+                        .frame(height: safeH * 0.08)
                     
-                    // Logo and Typewriter Text
-                    VStack(spacing: geometry.size.height * 0.02) {
-                        // Flickering flame logo - sized for device
+                    VStack(spacing: safeH * 0.02) {
                         FlickeringLogoView()
                             .frame(
-                                width: min(geometry.size.width * 0.35, 350),
-                                height: min(geometry.size.width * 0.35, 350)
+                                width: min(safeW * 0.35, 350),
+                                height: min(safeW * 0.35, 350)
                             )
                         
-                        // Typewriter "Crowd" in different languages
                         CrowdTypewriterView(
-                            baseFontSize: min(geometry.size.width * 0.08, 72)
+                            baseFontSize: min(safeW * 0.08, 72)
                         )
-                        .frame(height: min(geometry.size.width * 0.1, 90))
+                        .frame(height: min(safeW * 0.1, 90))
                     }
                     .scaleEffect(logoScale)
                     
+                    Spacer(minLength: 0)
+                }
+                .opacity(contentOpacity)
+                
+                // Join the Crowd – centered on screen
+                VStack {
                     Spacer()
-                    
-                    // Join the Crowd button - always visible with proper constraints
                     Button(action: {
-                        // Fade out and transition
+                        print("📱 [SplashScreenView] Join the Crowd tapped")
                         isTransitioning = true
                         withAnimation(.easeInOut(duration: 0.5)) {
                             contentOpacity = 0
                         }
-                        
-                        // Complete after fade animation
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             onComplete()
                         }
                     }) {
+                        let fontSize = isIPad ? min(safeW * 0.04, 32) : min(safeW * 0.04, 24)
+                        let maxWidth = max(280, min(safeW * 0.5, 480))
+                        let verticalPadding = isIPad ? 18 : min(safeH * 0.025, 20)
+                        let _ = print("🔘 [SplashScreenView] Button config - isIPad: \(isIPad), fontSize: \(fontSize), maxWidth: \(maxWidth), verticalPadding: \(verticalPadding)")
+                        
                         Text("Join the Crowd")
                             .font(.system(
-                                size: min(geometry.size.width * 0.04, 24),
+                                size: fontSize,
                                 weight: .bold
                             ))
                             .foregroundColor(.white)
-                            .frame(maxWidth: min(geometry.size.width * 0.5, 400))
-                            .padding(.vertical, min(geometry.size.height * 0.025, 20))
+                            .frame(maxWidth: maxWidth)
+                            .frame(minHeight: 56)
+                            .padding(.vertical, verticalPadding)
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
                                     .fill(Color(hex: 0x02853E))
                             )
+                            .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)
                     }
-                    .padding(.horizontal, 40)
-                    .opacity(buttonOpacity)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, isIPad ? 56 : 40)
                     .disabled(isTransitioning)
-                    .padding(.bottom, geometry.size.height * 0.08)
-                    
+                    .background(GeometryReader { buttonGeometry in
+                        Color.clear.onAppear {
+                            let globalFrame = buttonGeometry.frame(in: .global)
+                            let screenBounds = UIScreen.main.bounds
+                            let scale = UIScreen.main.scale
+                            print("🔘 [SplashScreenView] Button geometry - size: \(buttonGeometry.size)")
+                            print("🔘 [SplashScreenView] Button global frame: \(globalFrame)")
+                            print("🔘 [SplashScreenView] Screen bounds: \(screenBounds), scale: \(scale)")
+                            print("🔘 [SplashScreenView] Button visible check - Y: \(globalFrame.minY), screen height: \(screenBounds.height), button bottom: \(globalFrame.maxY)")
+                            print("🔘 [SplashScreenView] Button visibility: minY(\(globalFrame.minY)) < screenHeight(\(screenBounds.height)) = \(globalFrame.minY < screenBounds.height), maxY(\(globalFrame.maxY)) < screenHeight = \(globalFrame.maxY < screenBounds.height)")
+                        }
+                    })
                     Spacer()
-                        .frame(height: geometry.size.height * 0.08)
                 }
-                .opacity(contentOpacity)
+                .background(Color.clear)
+                .onAppear {
+                    print("🟢 [SplashScreenView] Button VStack appeared - isIPad: \(isIPad), isTransitioning: \(isTransitioning)")
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(true)
+                .background(GeometryReader { vStackGeometry in
+                    Color.clear.onAppear {
+                        print("📦 [SplashScreenView] Button VStack geometry - size: \(vStackGeometry.size), frame: \(vStackGeometry.frame(in: .global))")
+                    }
+                })
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(GeometryReader { zStackGeometry in
+                Color.clear.onAppear {
+                    let screenBounds = UIScreen.main.bounds
+                    print("📦 [SplashScreenView] ZStack geometry - size: \(zStackGeometry.size), frame: \(zStackGeometry.frame(in: .global)), safeArea: \(zStackGeometry.safeAreaInsets)")
+                    print("📦 [SplashScreenView] Screen bounds comparison - ZStack height: \(zStackGeometry.size.height), Screen height: \(screenBounds.height)")
+                }
+            })
         }
+        .background(GeometryReader { mainGeometry in
+            Color.clear.onAppear {
+                print("📦 [SplashScreenView] Main GeometryReader - size: \(mainGeometry.size), frame: \(mainGeometry.frame(in: .global)), safeArea: \(mainGeometry.safeAreaInsets)")
+            }
+        })
         .onAppear {
-            // Animate logo in
+            let bounds = UIScreen.main.bounds
+            let window = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first { $0.isKeyWindow }
+            let safeAreaInsets = window?.safeAreaInsets ?? .zero
+            
+            print("📱 [SplashScreenView] onAppear START")
+            print("📱 [SplashScreenView]   UIScreen.bounds=\(bounds.size.width)x\(bounds.size.height)")
+            print("📱 [SplashScreenView]   idiom=\(UIDevice.current.userInterfaceIdiom.rawValue) (\(UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"))")
+            print("📱 [SplashScreenView]   window safeAreaInsets=\(safeAreaInsets)")
+            print("📱 [SplashScreenView]   isIPad=\(isIPad)")
+            print("📱 [SplashScreenView]   contentOpacity=\(contentOpacity)")
+            print("📱 [SplashScreenView]   isTransitioning=\(isTransitioning)")
+            
             withAnimation(.easeOut(duration: 0.5)) {
                 logoScale = 1.0
-            }
-            
-            // Fade in button after logo animation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    buttonOpacity = 1.0
-                }
             }
         }
         .preferredColorScheme(.light)

@@ -34,6 +34,7 @@ final class AppState: ObservableObject {
     private var attendedEventsCancellable: AnyCancellable?
 
     func bootstrap() async {
+        print("📱 [AppState] bootstrap started")
         // Clean up expired attended events first
         AttendedEventsService.shared.refreshAttendedEvents()
         
@@ -63,6 +64,13 @@ final class AppState: ObservableObject {
             // Start chat notification service
             ChatNotificationService.shared.start()
             
+            // Request notification permission now that the main app is loaded.
+            // Deferred from launch to avoid the app becoming unresponsive on iPad
+            // after the user dismisses the system notification dialog (timing
+            // with SwiftUI's first layout during init).
+            print("📱 [AppState] calling NotificationService.requestPermission()")
+            NotificationService.shared.requestPermission()
+            
             // Check if tutorial should be shown
             await MainActor.run {
                 if TutorialManager.shared.shouldShowTutorial() {
@@ -73,8 +81,9 @@ final class AppState: ObservableObject {
                     }
                 }
             }
+            print("📱 [AppState] bootstrap completed")
         } catch {
-            print("⚠️ Firebase auth failed: \(error.localizedDescription)")
+            print("⚠️ [AppState] Firebase auth failed: \(error.localizedDescription)")
         }
         // preload regions, request location (soft), warm caches
     }

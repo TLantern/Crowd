@@ -66,6 +66,7 @@ struct CrowdApp: App {
                 if hasSeenOnboarding && !hasCompletedCampusSelection {
                     // Migrate existing users - they already completed onboarding
                     Color.clear.onAppear {
+                        print("📱 [CrowdApp] flow=migration (existing user)")
                         hasSeenSplashScreen = true
                         hasCompletedCampusSelection = true
                         hasCompletedPartiesOnboarding = true
@@ -81,6 +82,7 @@ struct CrowdApp: App {
                         }
                     }
                     .onAppear {
+                        print("📱 [CrowdApp] flow=splash (SplashScreenView shown)")
                         AnalyticsService.shared.track("app_opened", props: ["flow": "new_onboarding"])
                         AnalyticsService.shared.logToFirestore(eventName: "app_opened")
                     }
@@ -100,6 +102,7 @@ struct CrowdApp: App {
                             showPartiesOnboarding = true
                         }
                     }
+                    .onAppear { print("📱 [CrowdApp] flow=campus (CampusSelectionView shown)") }
                     .transition(.opacity)
                 }
                 // STEP 3: Main app (after all onboarding steps complete)
@@ -116,6 +119,7 @@ struct CrowdApp: App {
                         isCheckingTerms = false
                     }
                     .onAppear {
+                        print("📱 [CrowdApp] flow=legacy (OnboardingFlowView shown)")
                         AnalyticsService.shared.track("app_opened", props: ["flow": "legacy_onboarding"])
                         AnalyticsService.shared.logToFirestore(eventName: "app_opened")
                     }
@@ -154,6 +158,7 @@ struct CrowdApp: App {
     private var mainAppView: some View {
         ZStack {
             CrowdHomeView()
+                .onAppear { print("📱 [CrowdApp] flow=main (CrowdHomeView shown)") }
                 .environmentObject(appState)
                 .environmentObject(onboardingCoordinator)
                 .environment(\.appEnvironment, env)

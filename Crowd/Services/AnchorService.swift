@@ -27,24 +27,25 @@ final class AnchorService: ObservableObject {
     // MARK: - Load Anchors
     
     func loadAnchors() async {
-        // Try loading from Firebase first (allows dynamic updates without app rebuild)
-        let firebaseAnchors = await loadAnchorsFromFirebase()
-        
-        if firebaseAnchors.isEmpty {
-            // Fallback to local JSON if Firebase is empty or fails
-            if let localAnchors = await loadAnchorsFromJSON() {
-                await MainActor.run {
-                    self.anchors = localAnchors
-                }
-                await geocodeAnchors()
-                await syncWithFirebase()
+        // Load from local JSON FIRST (fast, deterministic, works offline)
+        if let localAnchors = await loadAnchorsFromJSON() {
+            await MainActor.run {
+                self.anchors = localAnchors
             }
-        } else {
-            // Firebase loaded successfully
             await geocodeAnchors()
+            await updateActiveAnchors()
+            
+            // Best-effort: seed Firebase so future launches can pull dynamic updates
+            await syncWithFirebase()
         }
         
-        await updateActiveAnchors()
+        // Then try Firebase (allows dynamic updates without rebuild). If it has data, prefer it.
+        let firebaseAnchors = await loadAnchorsFromFirebase()
+        
+        if !firebaseAnchors.isEmpty {
+            await geocodeAnchors()
+            await updateActiveAnchors()
+        }
         
         // Set up real-time listener for Firebase changes
         setupFirebaseListener()
@@ -157,13 +158,13 @@ final class AnchorService: ObservableObject {
         for (index, anchor) in anchors.enumerated() {
             // Skip if already geocoded
             if anchor.latitude != nil && anchor.longitude != nil {
-                print("   ✓ \(anchor.name) already has coordinates")
+                print("   ✓ \(anchor.name) already has coordinates: (\(anchor.latitude!), \(anchor.longitude!))")
                 continue
             }
             
             // Check cache first
             if let cached = coordinateCache[anchor.location] {
-                print("   ✓ \(anchor.name) found in cache")
+                print("   ✓ \(anchor.name) found in cache: (\(cached.latitude), \(cached.longitude))")
                 updates.append((index, cached))
                 continue
             }
@@ -266,6 +267,7 @@ final class AnchorService: ObservableObject {
     func updateActiveAnchors() async {
         await MainActor.run {
             let allAnchorsWithCoords = self.anchors.filter { $0.coordinates != nil }
+            
             let active = allAnchorsWithCoords.filter { $0.isActive }
             
             print("📍 AnchorService: Total anchors: \(self.anchors.count)")

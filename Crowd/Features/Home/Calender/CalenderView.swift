@@ -50,6 +50,8 @@ struct CalenderView: View {
         case parties
         case schoolEvents
     }
+    
+    private let tabSwipeThreshold: CGFloat = 60
     @State private var showEventCreationFlow = false
     @State private var currentPartyImageURL: String?
     @State private var currentSchoolEventImageURL: String?
@@ -303,6 +305,19 @@ struct CalenderView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.clear)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                        .onEnded { value in
+                            guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                            guard abs(value.translation.width) > tabSwipeThreshold else { return }
+                            
+                            if value.translation.width < 0 {
+                                withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .schoolEvents }
+                            } else {
+                                withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .parties }
+                            }
+                        }
+                )
                 .zIndex(1)
                 
                 // Custom navigation bar

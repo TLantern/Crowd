@@ -78,8 +78,7 @@ struct CrowdHomeView: View {
     @State private var showNavigationModal = false
     
     // MARK: - Anchors
-    // Commented out temporarily
-    // @StateObject private var anchorService = AnchorService.shared
+    @StateObject private var anchorService = AnchorService.shared
     @State private var selectedAnchor: Anchor?
     @State private var showAnchorNavigationModal = false
     @State private var expandedAnchorGroupId: String? = nil // Track which anchor group is expanded
@@ -105,10 +104,9 @@ struct CrowdHomeView: View {
     @State private var showVisibilityUserAnnotationOnboarding = false
     @State private var isFadingOutAnnotations = false
     
-    // Commented out temporarily
-    // private var anchorsToDisplay: [Anchor] {
-    //     anchorService.activeAnchors
-    // }
+    private var anchorsToDisplay: [Anchor] {
+        anchorService.activeAnchors
+    }
     
     // Group anchors by location (same coordinates)
     private func groupAnchorsByLocation(_ anchors: [Anchor]) -> [[Anchor]] {
@@ -116,7 +114,9 @@ struct CrowdHomeView: View {
         var processedIds = Set<String>()
         
         for anchor in anchors {
-            guard let coord = anchor.coordinates, !processedIds.contains(anchor.id) else { continue }
+            guard let coord = anchor.coordinates, !processedIds.contains(anchor.id) else {
+                continue
+            }
             
             // Find all anchors at the same location (within 5 meters)
             var group: [Anchor] = [anchor]
@@ -571,7 +571,7 @@ struct CrowdHomeView: View {
     
     // Helper struct to represent combined groups for rendering
     // Commented out temporarily - starts here
-    /*
+    
     
     func expandedAnchorAnnotations(group: [Anchor], center: CLLocationCoordinate2D, groupId: String) -> some MapContent {
         ForEach(Array(group), id: \.id) { anchor in
@@ -689,13 +689,15 @@ struct CrowdHomeView: View {
         }
         
         // Return standalone groups
-        return anchorGroups.enumerated().compactMap { index, group in
+        let standalone: [StandaloneAnchorGroup] = anchorGroups.enumerated().compactMap { (index, group) -> StandaloneAnchorGroup? in
             if processedAnchorIndices.contains(index) {
                 return nil
             }
             let groupId = anchorGroupId(for: group)
             return StandaloneAnchorGroup(id: groupId, group: group)
         }
+        
+        return standalone
     }
     
     @MapContentBuilder
@@ -726,10 +728,7 @@ struct CrowdHomeView: View {
             anchorGroupAnnotations(group: standaloneGroup.group)
         }
     }
-    */
     
-    // Commented out temporarily
-    /*
     @MapContentBuilder
     func combinedGroupExpandedAnnotations(
         anchorGroup: [Anchor],
@@ -739,7 +738,7 @@ struct CrowdHomeView: View {
     ) -> some MapContent {
         // Render expanded anchors
         ForEach(Array(anchorGroup), id: \.id) { anchor in
-            let displayCoord = expandedAnchorCoordinateInCombined(
+            let displayCoord = self.expandedAnchorCoordinateInCombined(
                 anchor: anchor,
                 anchorGroup: anchorGroup,
                 cluster: cluster,
@@ -751,7 +750,7 @@ struct CrowdHomeView: View {
                 AnchorAnnotationView(
                     anchor: anchor,
                     onTap: {
-                        handleAnchorTap(anchor)
+                        self.handleAnchorTap(anchor)
                     }
                 )
                 .zIndex(selectedAnchor?.id == anchor.id ? 200 : 10)
@@ -761,7 +760,7 @@ struct CrowdHomeView: View {
         
         // Render expanded events
         ForEach(Array(cluster.events), id: \.id) { event in
-            let displayCoord = expandedEventCoordinateInCombined(
+            let displayCoord = self.expandedEventCoordinateInCombined(
                 event: event,
                 anchorGroup: anchorGroup,
                 cluster: cluster,
@@ -777,7 +776,7 @@ struct CrowdHomeView: View {
                 )
                 .zIndex(selectedEvent?.id == event.id ? 200 : 10)
                 .onTapGesture {
-                    handleEventTap(event)
+                    self.handleEventTap(event)
                 }
             }
             .annotationTitles(.hidden)
@@ -799,14 +798,13 @@ struct CrowdHomeView: View {
                     anchor: firstAnchor,
                     count: totalCount > 1 ? totalCount : nil,
                     onTap: {
-                        handleCombinedGroupTap(anchorGroup: anchorGroup, cluster: cluster, groupId: groupId)
+                        self.handleCombinedGroupTap(anchorGroup: anchorGroup, cluster: cluster, groupId: groupId)
                     }
                 )
             }
             .annotationTitles(.hidden)
         }
     }
-    */
     
     // Compute clusters that don't overlap with anchors
     private var standaloneClusters: [EventCluster] {
@@ -824,10 +822,9 @@ struct CrowdHomeView: View {
         for (index, cluster) in clusters.enumerated().prefix(5) {
             print("   Cluster \(index): \(cluster.eventCount) events at (\(cluster.centerCoordinate.latitude), \(cluster.centerCoordinate.longitude))")
         }
-        return clusters
-        /*
+        
+        // Filter out clusters that overlap with anchors (they'll be handled by combined groups)
         let anchorGroups = groupAnchorsByLocation(anchorsToDisplay)
-        let clusters = currentEventsClusters
         var processedClusters = Set<String>()
         
         // Mark clusters that overlap with anchors
@@ -840,17 +837,12 @@ struct CrowdHomeView: View {
             }
         }
         
-        // Return clusters that don't overlap
+        // Return clusters that don't overlap with anchors
         return clusters.filter { !processedClusters.contains($0.id) }
-        */
     }
     
     // MARK: - Map View
     private var mapView: some View {
-        let _ = print("🗺️ DEBUG: Map View rendering with \(standaloneClusters.count) clusters")
-        let _ = print("   Camera center: (\(currentCamera.centerCoordinate.latitude), \(currentCamera.centerCoordinate.longitude))")
-        let _ = print("   Camera distance: \(currentCamera.distance)m")
-        
         return Map(position: $cameraPosition) {
             // Event clusters (rendered first, but skip ones that overlap with anchors)
             ForEach(standaloneClusters) { cluster in
@@ -862,8 +854,7 @@ struct CrowdHomeView: View {
             }
             
             // Anchor annotations (includes combined groups)
-            // Commented out temporarily
-            // anchorAnnotations()
+            anchorAnnotations()
             
             // UNT location annotation
             untLocationAnnotation()
@@ -927,8 +918,6 @@ struct CrowdHomeView: View {
                     } else if showSearchResults {
                         isSearchFocused = false
                         showSearchResults = false
-                    // Commented out anchor-related tap handlers
-                    /*
                     } else if expandedCombinedGroupId != nil {
                         // Collapse expanded combined groups when tapping on map
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -939,7 +928,6 @@ struct CrowdHomeView: View {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             expandedAnchorGroupId = nil
                         }
-                    */
                     } else if expandedClusterId != nil {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                             expandedClusterId = nil
@@ -1197,6 +1185,7 @@ struct CrowdHomeView: View {
                 await loadUpcomingEvents()
                 await preloadCalendarEvents()
                 await loadModerationData()
+                await anchorService.loadAnchors()
                 if let firebaseRepo = env.eventRepo as? FirebaseEventRepository {
                     try? await firebaseRepo.deleteExpiredEvents()
                 }
@@ -2289,8 +2278,7 @@ struct CrowdHomeView: View {
     }
     
     // MARK: - Anchor Handlers
-    // Commented out temporarily
-    /*
+    
     func handleAnchorGroupTap(group: [Anchor], groupId: String) {
         // If single anchor, open modal directly
         if group.count == 1, let anchor = group.first {
@@ -2360,7 +2348,7 @@ struct CrowdHomeView: View {
             }
         }
     }
-    */
+    
     
     // MARK: - Campus Selection Integration
     

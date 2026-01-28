@@ -9,6 +9,7 @@
 
 import SwiftUI
 import CoreLocation
+import UIKit
 
 struct CampusSelectionView: View {
     @AppStorage("selectedCampusId") private var selectedCampusId: String = "UNT"
@@ -42,6 +43,10 @@ struct CampusSelectionView: View {
             campus.location.localizedCaseInsensitiveContains(searchText)
         }
     }
+
+    private var isIPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
     
     var body: some View {
         ZStack {
@@ -51,116 +56,118 @@ struct CampusSelectionView: View {
                 .scaledToFill()
                 .ignoresSafeArea()
             
-            VStack(spacing: 0) {
-                // Header
-                VStack(spacing: 12) {
-                    Image("CrowdText")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 140, height: 90)
-                    
-                    Text("Join the Crowd")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.black)
-                    
-                    Text("Select your campus to get started")
-                        .font(.system(size: 16))
-                        .foregroundColor(.black.opacity(0.7))
-                }
-                .padding(.top, 60)
-                .padding(.bottom, 24)
-                
-                // Main content card
-                VStack(spacing: 16) {
-                    // Auto-detect button
-                    Button(action: detectLocation) {
-                        HStack(spacing: 12) {
-                            if isDetectingLocation {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            } else {
-                                Image(systemName: "location.fill")
-                                    .font(.system(size: 18))
-                            }
-                            Text(isDetectingLocation ? "Detecting..." : "Use My Location")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color(hex: 0x02853E))
-                        )
-                        .foregroundColor(.white)
-                    }
-                    .disabled(isDetectingLocation)
-                    
-                    // Divider
-                    HStack {
-                        Rectangle()
-                            .fill(Color.black.opacity(0.2))
-                            .frame(height: 1)
-                        Text("or search")
-                            .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.5))
-                        Rectangle()
-                            .fill(Color.black.opacity(0.2))
-                            .frame(height: 1)
-                    }
-                    
-                    // Search field
-                    HStack(spacing: 12) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.black.opacity(0.5))
-                        TextField("Search schools...", text: $searchText)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(spacing: 12) {
+                        Image("CrowdText")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: isIPad ? 200 : 140, height: isIPad ? 120 : 90)
+                        
+                        Text("Join the Crowd")
+                            .font(.system(size: isIPad ? 34 : 28, weight: .bold))
                             .foregroundColor(.black)
+                        
+                        Text("Select your campus to get started")
+                            .font(.system(size: isIPad ? 18 : 16))
+                            .foregroundColor(.black.opacity(0.7))
                     }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.white.opacity(0.6))
-                    )
+                    .padding(.top, isIPad ? 550 : 60)
+                    .padding(.bottom, isIPad ? 32 : 24)
                     
-                    // Campus list
-                    ScrollView {
-                        LazyVStack(spacing: 8) {
-                            ForEach(filteredCampuses) { campus in
-                                CampusRowView(
-                                    campus: campus,
-                                    isSelected: selectedCampusId == campus.id,
-                                    onSelect: {
-                                        if campus.isAvailable {
-                                            selectCampus(campus)
-                                        }
-                                    }
-                                )
+                    // Main content card
+                    VStack(spacing: 16) {
+                        // Auto-detect button
+                        Button(action: detectLocation) {
+                            HStack(spacing: 12) {
+                                if isDetectingLocation {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                } else {
+                                    Image(systemName: "location.fill")
+                                        .font(.system(size: isIPad ? 20 : 18))
+                                }
+                                Text(isDetectingLocation ? "Detecting..." : "Use My Location")
+                                    .font(.system(size: isIPad ? 18 : 16, weight: .semibold))
                             }
-                        }
-                    }
-                    .frame(maxHeight: 280)
-                    
-                    // Continue button
-                    Button(action: completeSelection) {
-                        Text("Continue")
-                            .font(.system(size: 18, weight: .semibold))
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, isIPad ? 18 : 14)
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color.black)
+                                    .fill(Color(hex: 0x02853E))
                             )
                             .foregroundColor(.white)
+                        }
+                        .disabled(isDetectingLocation)
+                        
+                        // Divider
+                        HStack {
+                            Rectangle()
+                                .fill(Color.black.opacity(0.2))
+                                .frame(height: 1)
+                            Text("or search")
+                                .font(.system(size: isIPad ? 15 : 14))
+                                .foregroundColor(.black.opacity(0.5))
+                            Rectangle()
+                                .fill(Color.black.opacity(0.2))
+                                .frame(height: 1)
+                        }
+                        
+                        // Search field
+                        HStack(spacing: 12) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.black.opacity(0.5))
+                            TextField("Search schools...", text: $searchText)
+                                .foregroundColor(.black)
+                        }
+                        .padding(isIPad ? 18 : 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.6))
+                        )
+                        
+                        // Campus list
+                        ScrollView {
+                            LazyVStack(spacing: 8) {
+                                ForEach(filteredCampuses) { campus in
+                                    CampusRowView(
+                                        campus: campus,
+                                        isSelected: selectedCampusId == campus.id,
+                                        onSelect: {
+                                            if campus.isAvailable {
+                                                selectCampus(campus)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                .frame(maxHeight: isIPad ? 480 : 280)
+                        
+                        // Continue button – stays in the scrollable card so it's always reachable on iPad
+                        Button(action: completeSelection) {
+                            Text("Continue")
+                                .font(.system(size: isIPad ? 20 : 18, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, isIPad ? 18 : 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.black)
+                                )
+                                .foregroundColor(.white)
+                        }
                     }
+                    .padding(isIPad ? 32 : 24)
+                    .background(
+                        RoundedRectangle(cornerRadius: 32)
+                            .fill(.ultraThinMaterial)
+                            .shadow(color: .black.opacity(0.15), radius: 20, y: 10)
+                    )
+                    .padding(.horizontal, isIPad ? 56 : 20)
+                    
+                    Spacer(minLength: isIPad ? 56 : 40)
                 }
-                .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: 32)
-                        .fill(.ultraThinMaterial)
-                        .shadow(color: .black.opacity(0.15), radius: 20, y: 10)
-                )
-                .padding(.horizontal, 20)
-                
-                Spacer()
             }
         }
         .alert("Location Error", isPresented: $showLocationError) {
@@ -169,11 +176,13 @@ struct CampusSelectionView: View {
             Text("Unable to detect your location. Please select your campus manually.")
         }
         .preferredColorScheme(.light)
+        .onAppear { print("📱 [CampusSelectionView] onAppear idiom=\(UIDevice.current.userInterfaceIdiom.rawValue)") }
     }
     
     // MARK: - Actions
     
     private func detectLocation() {
+        print("📱 [CampusSelectionView] detectLocation started")
         isDetectingLocation = true
         
         // Use LocationService to get current location
@@ -231,6 +240,7 @@ struct CampusSelectionView: View {
     }
     
     private func completeSelection() {
+        print("📱 [CampusSelectionView] Continue tapped campusId=\(selectedCampusId)")
         hasCompletedCampusSelection = true
         
         // Track analytics
