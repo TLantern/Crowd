@@ -26,7 +26,7 @@ final class FirebaseManager {
         
         // CRITICAL: Configure Firebase first
         if FirebaseApp.app() == nil {
-            #if DEBUG
+            #if DEBUG || targetEnvironment(simulator) || targetEnvironment(macCatalyst)
             AppCheck.setAppCheckProviderFactory(AppCheckDebugProviderFactory())
             #else
             if #available(iOS 14.0, *) {
